@@ -360,12 +360,19 @@ def test_cli_errors(tmp_path, monkeypatch, capsys):
     assert main(["errors", "--traceback"]) == 0
     out = capsys.readouterr().out
     lines = out.splitlines()
-    assert lines[0] == "1 error group(s), 4 event(s) in the last 24h (before: 0); 1 new"
-    assert "4  new     TimeoutError: POST http://inventory/SKU-<n> timed out after <n>s" in lines[3]
-    assert "raised     app/inventory.py:9 in reserve() (in httpx)" in out
-    assert "logged     app/checkout.py:9  'payment failed for order %s'" in out
-    assert "path       checkout.charge → inventory.reserve → httpx" in out
-    assert "example    logsite trace 00000000000000000000000000000003" in out
+    assert lines[0] == "4 errors in the last 24h · 1 group(s) · 1 new · before: 0"
+    # the overview table: one aligned row per group
+    assert lines[2].split() == ["#", "TREND", "COUNT", "ERROR", "RAISED", "AT", "LOGGED", "AT"]
+    row = lines[4]
+    assert row.startswith("  1  new        4  TimeoutError: POST http://inventory/SKU-<n>")
+    assert row.endswith("inventory.py:9  checkout.py:9")
+    # the card
+    assert "━━ 1. TimeoutError: POST http://inventory/SKU-<n> timed out after <n>s ━" in out
+    assert "   Raised at    app/inventory.py:9  reserve()  (in httpx)" in out
+    assert "   Logged at    app/checkout.py:9" in out
+    assert '9 │ logger.error("payment failed for order %s", order.id, exc_info=True)' in out
+    assert "   Call path    checkout.charge › inventory.reserve › httpx" in out
+    assert "   Example      logsite trace 00000000000000000000000000000003" in out
     assert "  TimeoutError: POST http://inventory/SKU-3 timed out after 3.5s" in out
     assert '▶   File "/srv/app/inventory.py", line 9, in reserve' in out  # the project's frame
     assert '    File "/usr/lib/python3.12/site-packages/httpx/' in out  # a library frame: no ▶
@@ -373,9 +380,16 @@ def test_cli_errors(tmp_path, monkeypatch, capsys):
 
     assert main(["errors", "--traceback", "--color", "always"]) == 0
     colored = capsys.readouterr().out
-    assert "\033[1;31mnew" in colored  # a new group in red
+    assert "\033[1;97;41m NEW \033[0m" in colored  # a new group: a red badge
+    assert "\033[1;4;36mapp/inventory.py:9\033[0m" in colored  # your code: underlined cyan
+    assert "\033[1;34mapp/checkout.py:9\033[0m" in colored  # your log call: blue
+    assert "\033[35mhttpx\033[0m" in colored  # the library: magenta
     assert '\033[1;36m  File "/srv/app/inventory.py", line 9' in colored  # own frame highlighted
-    assert '\033[2m  File "/usr/lib/python3.12/site-packages/httpx/' in colored  # library dim
+    assert '\033[90m  File "/usr/lib/python3.12/site-packages/httpx/' in colored  # library gray
+
+    assert main(["errors", "--brief"]) == 0
+    brief = capsys.readouterr().out
+    assert "TimeoutError" in brief and "━━" not in brief  # the table only
 
     assert main(["errors", "--format", "json"]) == 0
     data = json.loads(capsys.readouterr().out)
@@ -390,7 +404,7 @@ def test_cli_errors_since_deploy(repo, monkeypatch, capsys):
     monkeypatch.chdir(repo)
     at = (NOW - timedelta(minutes=30)).isoformat()
     assert main(["errors", "--since-deploy", "HEAD", "--deployed-at", at]) == 0
-    assert "4 event(s) since HEAD (" in capsys.readouterr().out
+    assert "4 errors since HEAD (" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="can't be combined"):
         main(["errors", "--since-deploy", "HEAD", "--hours", "1"])
     with pytest.raises(SystemExit, match="--deployed-at needs since_deploy"):

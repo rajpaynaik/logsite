@@ -379,23 +379,36 @@ order id, another timeout, the code moved down two lines. `logsite errors` group
 cause and ranks the groups: new ones first, then the ones that spiked, then the biggest.
 
 ```
-3 error group(s), 3,263 event(s) in the last 24h (before: 257, 12.7x); 1 new
+820 errors in the last 24h · 3 group(s) · 3 new · before: 0
 
- #    COUNT  TREND   ERROR
- 1    3,000  new     TimeoutError: POST http://inventory/SKU-<n> timed out after <n>s  [e3d8651a]
-                   raised    app/inventory.py:9 in reserve() (in httpx)
-                   logged    app/checkout.py:13  'payment failed for order %s'
-                   path      checkout.charge → inventory.reserve → httpx
-                   seen      2026-10-17 00:32 → 2026-10-17 06:17 UTC · checkout
-                   example   logsite trace 376ebcaa1bec8d42764f92c32dd63566
- 2      201  1.0x    app.checkout.PaymentError: can't price order <n>  [ec780636]
-                   caused by KeyError: <str>
-                   raised    app/pricing.py:2 in convert()
-                   logged    app/checkout.py:22  'pricing failed'
-                   path      checkout.price → pricing.convert
- 3       62  1.1x    shipping label service returned <n> for order <n>  [b6e7b7be]
-                   logged    app/checkout.py:25  'shipping label service returned 503 for order %s'
+  #  TREND  COUNT  ERROR                                                  RAISED AT                  LOGGED AT
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  1  new      400  IllegalStateException: Payment authorization failed   BankGatewayClient.java:58  —
+  2  new      400  Record processing failed topic=payment-events part…   —                          PaymentEventListener.java:91
+  3  new       20  Consumer lag increasing group=payment-processor la…   —                          PaymentEventListener.java:96
+
+━━ 1. IllegalStateException: Payment authorization failed ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 400 · new
+   Root cause   SocketTimeoutException: Read timed out  (java.net)
+   Chain        ListenerExecutionFailedException › IllegalStateException › ResourceAccessException › SocketTimeoutException
+   Raised at    src/main/java/com/example/payment/BankGatewayClient.java:58  sendAuthorization()
+                58 │ return restTemplate.postForObject(bankUrl + "/authorize", request, AuthResponse.class);
+   Call path    PaymentEventListener.consume › PaymentProcessor.process › AuthorizationService.authorize › BankGatewayClient.sendAuthorization › java.net
+   Seen         2026-10-17 19:22 → 20:21 UTC  (60 min)
+   Example      logsite trace tr-6e6948
+
+━━ 2. Record processing failed topic=payment-events partition=<n> offset=<n> ━━━━━━━━━━━━━━━━━━━━━ 400 · new
+   Logged at    src/main/java/com/example/payment/PaymentEventListener.java:91
+                91 │ log.error("Record processing failed topic={} partition={} offset={}", record.topic(), …
+   Seen         2026-10-17 19:22 → 20:22 UTC  (60 min)
 ```
+
+An overview table first (one row per group), then a card per group with the same fields in
+the same order: the **root cause** and the library it came from, the exception **chain**
+(framework wrappers like Spring Kafka's `ListenerExecutionFailedException` are noted, not
+headlined), where it was **raised** in your code with the line itself, where it was
+**logged**, the **call path**, when it was **seen** and an **example** trace id. In a terminal,
+new groups are red, spikes yellow and your code highlighted; `--brief` prints only the table,
+`--traceback` adds a sample trace with your frames marked `▶` and library frames dimmed.
 
 - **One group per cause**: the exception types in the chain plus the frames in *your*
   code. Line numbers, library frames and the values in the message don't split a group;

@@ -11,13 +11,25 @@ from typing import TextIO
 _CODES = {
     "bold": "1",
     "dim": "2",
+    "gray": "90",
     "red": "31",
     "green": "32",
     "yellow": "33",
+    "blue": "34",
+    "magenta": "35",
     "cyan": "36",
+    "white": "97",
+    "bold_white": "1;97",
     "bold_red": "1;31",
     "bold_cyan": "1;36",
+    "bold_blue": "1;34",
     "bold_green": "1;32",
+    "bold_yellow": "1;33",
+    "code": "92",  # bright green: source lines
+    "yours": "1;4;36",  # bold underlined cyan: the project's own code
+    "badge_red": "1;97;41",  # white on red: new
+    "badge_yellow": "1;30;43",  # black on yellow: spiking
+    "badge_gray": "30;47",  # black on light gray: steady
 }
 
 

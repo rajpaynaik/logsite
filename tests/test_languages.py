@@ -365,3 +365,35 @@ def test_spring_boot_trace_in_plain_text(tmp_path):
     assert order.logged_at.id == "src/main/java/com/example/orders/OrderController.java:6"
     assert order.sample["ids"] == {"trace_id": "8fa23bc1", "span_id": "91ac42"}
     assert retry.title == "Retry failed for order ORD-78291"  # Spring's prefix is gone
+
+
+def test_kafka_listener_failure_is_headlined_by_the_real_exception():
+    """Spring Kafka wraps the listener's exception; the headline is what the listener threw,
+    the wrapper is noted, and a JDK socket timeout is attributed to java.net, not sun.nio."""
+    trace = (JAVA / "kafka-trace.txt").read_text()
+    record = LogRecord(
+        None,
+        "2026-10-17 16:20:31.481 ERROR [payment-consumer] [traceId=tr-91ac72] "
+        "[container-3-C-1] o.s.k.l.KafkaMessageListenerContainer : Error handler threw\n" + trace,
+    )
+    app = AppFiles(
+        [
+            f"src/main/java/com/example/payment/{name}.java"
+            for name in ("PaymentEventListener", "PaymentProcessor", "AuthorizationService",
+                         "BankGatewayClient")
+        ]
+    )  # fmt: skip
+    (g,) = group_errors([record], [], app).values()
+    assert g.title == "java.lang.IllegalStateException: Payment authorization failed"
+    assert g.wrapped_in == ["ListenerExecutionFailedException"]
+    assert g.causes[0] == "java.net.SocketTimeoutException: Read timed out"  # root first
+    assert g.raised_at == "src/main/java/com/example/payment/BankGatewayClient.java:58"
+    assert g.origin == "java.net"
+    assert g.path == [
+        "PaymentEventListener.consume",
+        "PaymentProcessor.process",
+        "AuthorizationService.authorize",
+        "BankGatewayClient.sendAuthorization",
+        "java.net",
+    ]
+    assert g.sample["ids"] == {"trace_id": "tr-91ac72"}

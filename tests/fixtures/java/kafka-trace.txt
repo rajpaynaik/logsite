@@ -1,0 +1,25 @@
+org.springframework.kafka.listener.ListenerExecutionFailedException: Listener method 'public void com.example.payment.PaymentEventListener.consume(PaymentEvent)' threw exception
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.decorateException(KafkaMessageListenerContainer.java:2981)
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.doInvokeOnMessage(KafkaMessageListenerContainer.java:2887)
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.invokeOnMessage(KafkaMessageListenerContainer.java:2852)
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.doInvokeRecordListener(KafkaMessageListenerContainer.java:2765)
+Caused by: java.lang.IllegalStateException: Payment authorization failed
+	at com.example.payment.PaymentEventListener.consume(PaymentEventListener.java:76)
+	at org.springframework.messaging.handler.invocation.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:169)
+	at org.springframework.kafka.listener.adapter.MessagingMessageListenerAdapter.invokeHandler(MessagingMessageListenerAdapter.java:380)
+	... 4 more
+Caused by: org.springframework.web.client.ResourceAccessException: I/O error on POST request for "https://bank.example.com/authorize": Read timed out
+	at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:905)
+	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:885)
+	at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:790)
+	at com.example.payment.BankGatewayClient.sendAuthorization(BankGatewayClient.java:58)
+	at com.example.payment.AuthorizationService.authorize(AuthorizationService.java:91)
+	at com.example.payment.PaymentProcessor.process(PaymentProcessor.java:124)
+	at com.example.payment.PaymentEventListener.consume(PaymentEventListener.java:73)
+	... 6 more
+Caused by: java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:288)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:312)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:353)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+	... 41 more

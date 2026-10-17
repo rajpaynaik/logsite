@@ -29,6 +29,14 @@ from .timeline import SERVICE_FIELDS
 from .tracebacks import ErrorInfo, Frame, extract_error, level_of
 
 ID_FIELDS = ("trace_id", "request_id", "span_id")
+# Exceptions that only say "something inside failed": the headline is the first real one.
+WRAPPERS = {
+    "ListenerExecutionFailedException", "UndeclaredThrowableException",
+    "InvocationTargetException", "ExecutionException", "CompletionException",
+    "UncheckedExecutionException", "NestedServletException", "ExceptionInInitializerError",
+    "UncheckedIOException",
+}  # fmt: skip
+_JDK_INTERNALS = ("sun.", "jdk.", "com.sun.")
 # "2026-10-14 10:00:05,123 ERROR " at the start of a plain-text line: noise in a title.
 _PLAIN_PREFIX = re.compile(
     r"^\[?\d{4}-\d{2}-\d{2}[ T][\d:.,]+\S*\]?\s+(?:\[?(?:ERROR|CRITICAL|FATAL|EXCEPTION)\]?:?\s+)?"
@@ -106,6 +114,7 @@ class ErrorGroup:
     services: Counter[str] = field(default_factory=Counter)
     levels: Counter[str] = field(default_factory=Counter)
     sample: dict = field(default_factory=dict)
+    wrapped_in: list[str] = field(default_factory=list)  # framework wrappers around it
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -185,6 +194,8 @@ def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
         group.raised_at, group.raised_in = f"{p}:{f.line}", f.function
     if root.frames and (root.frames[-1].is_library or app.resolve(root.frames[-1]) is None):
         group.origin = root.frames[-1].library  # the driver / client that threw it
+        if group.origin and group.origin.startswith(_JDK_INTERNALS) and "." in root.type:
+            group.origin = root.type.rsplit(".", 1)[0]  # sun.nio -> java.net: what it means
     # The cause's frames run from the entry point to where it was raised.
     group.path = [f"{Path(p).stem}.{f.function}" for p, f in own]
     if group.origin:
@@ -208,15 +219,22 @@ def group_errors(
         group = groups.get(fp)
         first_line = record.message.split("\n", 1)[0]
         if group is None:
+            wrapped: list[str] = []
             if info is not None:
-                title = info.final.title
-                causes = [e.title for e in info.chain[:-1]]
-                exc_type = info.final.type
+                # chain is root cause first; skip the wrappers at the outer end
+                head = len(info.chain) - 1
+                while head > 0 and info.chain[head].type.rsplit(".", 1)[-1] in WRAPPERS:
+                    wrapped.append(info.chain[head].type.rsplit(".", 1)[-1])
+                    head -= 1
+                title = info.chain[head].title
+                causes = [e.title for e in info.chain[:head]]
+                exc_type = info.chain[head].type
             else:
                 title = _LOGGER_PREFIX.sub("", _PLAIN_PREFIX.sub("", first_line))
                 causes, exc_type = [], None
             group = groups[fp] = ErrorGroup(fp, redact(title, leaks), exc_type, causes)
             group.causes = [redact(c, leaks) for c in causes]
+            group.wrapped_in = wrapped
             _describe(group, info, app)
             group.sample = _sample(record, info, leaks, sample_fields)
         group.count += 1
@@ -282,7 +300,8 @@ def rank(groups: Iterable[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
 
     def key(g: ErrorGroup):
         spiking = g.previous is not None and is_spike(g.count, g.previous, cfg)
-        return (0 if g.is_new else 1 if spiking else 2, -g.count, g.title)
+        # ties: a group with a stack trace explains more than a line of text
+        return (0 if g.is_new else 1 if spiking else 2, -g.count, g.exc_type is None, g.title)
 
     return sorted(groups, key=key)
 
@@ -356,6 +375,7 @@ def group_json(g: ErrorGroup) -> dict:
         "type": g.exc_type,
         "causes": g.causes,
         "root_cause": g.causes[0] if g.causes else None,  # flat, for tables
+        "wrapped_in": g.wrapped_in,
         "example_trace": trace,
         "count": g.count,
         "previous": g.previous,
