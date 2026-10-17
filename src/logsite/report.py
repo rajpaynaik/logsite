@@ -31,7 +31,7 @@ def short_class(text: str) -> str:
 
 
 def short_place(where: str | None) -> str:
-    """``src/main/java/com/x/BankGatewayClient.java:58`` -> ``BankGatewayClient.java:58``"""
+    """``src/main/java/com/x/CarrierApiClient.java:58`` -> ``CarrierApiClient.java:58``"""
     return where.rsplit("/", 1)[-1] if where else "—"
 
 
@@ -144,7 +144,7 @@ def overview(groups: list[ErrorGroup], pal: Palette, width: int, spiking) -> lis
         return out
 
     rule = "─" * (sum(widths) + 2 * (len(head) - 1))
-    lines = ["  " + pal.bold(pal.gray("  ".join(cells(head)))), "  " + pal.gray(rule)]
+    lines = ["  " + pal.bold(pal.gray("  ".join(cells(head)).rstrip())), "  " + pal.gray(rule)]
     for g, row in zip(groups, rows, strict=True):
         n, trend, count, error, raised, logged = cells(row)
         word = trend.rstrip()
@@ -278,3 +278,73 @@ def headline(summary: ErrorSummary, label: str, pal: Palette) -> str:
 
 def terminal_width(default: int = 120) -> int:
     return max(shutil.get_terminal_size((default, 24)).columns, 80)
+
+
+def incident_card(
+    n: int, inc, *, pal: Palette, width: int, root: Path, spiking, trace_field: str
+) -> list[str]:
+    """One incident: its cause, what followed, the deploy before it and suspect commits."""
+    style = Style(pal, spiking)
+    cause = inc.cause
+    started = _when(inc.started)
+    span = _span(inc.started, inc.last_seen)
+    duration = span.split("(", 1)[1].rstrip(")") if "(" in span else ""
+    head = f"Incident {n} · since {started[11:] or started} UTC"
+    if duration:
+        head += f" ({duration})"
+    head += f" · {inc.events:,} errors · {len(inc.groups)} group(s)"
+    tag = pal.badge_red(" NEW ") if inc.is_new and pal.enabled else ("new" if inc.is_new else "")
+    bar = max(width - len(head) - 12, 3)
+    paint = pal.red if inc.is_new else pal.yellow
+    lines = ["", f"{paint('━━')} {pal.bold_white(head)} {paint('━' * bar)} {tag}".rstrip()]
+    rows: list[tuple[str, str]] = []
+    rows.append(
+        ("Cause", f"{pal.bold_white(short_class(cause.title))}  {pal.gray(f'({cause.count:,})')}")
+    )
+    if cause.causes:
+        name, sep, message = short_class(cause.causes[0]).partition(": ")
+        text = pal.bold_red(name) + (pal.red(f"{sep}{message}") if sep else "")
+        if cause.origin:
+            text += "  " + pal.magenta(f"({cause.origin})")
+        rows.append(("Root cause", text))
+    if cause.raised_at:
+        rows.append(("Raised at", pal.yours(cause.raised_at)))
+        rows += _code(root, cause.raised_at, pal)
+    elif cause.logged_at:
+        rows.append(("Logged at", pal.bold_blue(cause.logged_at.id)))
+    for i, g in enumerate(inc.effects):
+        when = _when(g.first_seen)[11:] if g.first_seen else "     "
+        why = inc.reasons.get(g.id)
+        text = (
+            f"{pal.gray(when)}  {pal.white(_cut(short_class(g.title), width - 50))}  "
+            f"{pal.gray(f'({g.count:,})')}  {style.badge(g)}"
+        )
+        if why:
+            text += "  " + pal.gray(why)
+        rows.append(("Then" if i == 0 else "", text))
+    if inc.deploy:
+        ref, at = inc.deploy
+        minutes = (inc.started - at).total_seconds() / 60 if inc.started else 0
+        gap = f"{minutes:.0f} min" if minutes < 120 else f"{minutes / 60:.1f}h"
+        rows.append(
+            (
+                "Deploy",
+                pal.bold_yellow(ref)
+                + " "
+                + pal.gray(f"at {_when(at)} UTC, {gap} before it started"),
+            )
+        )
+    for i, c in enumerate(inc.suspects):
+        rows.append(
+            (
+                "Suspects" if i == 0 else "",
+                f"{pal.yellow(c.sha[:8])} {pal.gray(f'{c.date:%Y-%m-%d}')} {c.author}: {c.summary}",
+            )
+        )
+    ids = cause.sample.get("ids") or {}
+    trace = ids.get(trace_field) or ids.get("trace_id")
+    if trace:
+        rows.append(("Example", pal.gray("logsite trace ") + pal.bold_yellow(trace)))
+    for label, value in rows:
+        lines.append(f"   {pal.gray(label.ljust(LABEL_WIDTH))}   {value}")
+    return lines

@@ -32,8 +32,9 @@ from .timeline import find_timeline, timeline_json
 INSTRUCTIONS = """\
 logsite maps production logs back to the Python log calls that emitted them.
 Log calls are identified as "PATH:LINE" (PATH relative to the project root).
-For "what's failing in production?", start with `error_summary`: errors grouped by cause,
-with where each was raised and a sample trace id.
+For "what's failing in production?", start with `investigate`: errors linked into incidents,
+each with its cause, effects, the deploy before it and suspect commits; `error_summary` lists
+the groups themselves.
 To follow one failed request across services, use `request_timeline` with its trace id.
 After a release, start with `compare_deploy` (a git tag or sha): it reports lines that
 spiked or started erroring since the deploy, with the release's commits that touched them.
@@ -300,6 +301,51 @@ def build_server(cfg: Config) -> MCPServer:
         except Exception as exc:
             raise ToolError(f"couldn't query the {b.name} backend: {exc}") from exc
         return summary_json(summary, top)
+
+    @mcp.tool(annotations=READ_ONLY)
+    def investigate(
+        hours: float | None = None,
+        since_deploy: str | None = None,
+        deployed_at: str | None = None,
+        limit: int = 5000,
+    ) -> dict[str, Any]:
+        """Production errors linked into incidents: "what's the outage, and what caused it?".
+
+        Error groups that the same requests ran into, or that started together while new or
+        spiking, are one incident. Each has its cause (the earliest group with an exception:
+        root cause, the line of this project that raised it), its effects in the order they
+        started, the deploy (git tag) just before it started, and suspect commits that
+        changed the code around the line that raised it. Steady background errors are
+        listed separately as "ongoing". Pass an example trace id to `request_timeline` to
+        follow one failed request.
+        """
+        from datetime import datetime, timezone
+
+        from .incidents import add_context, find_incidents, incident_json
+
+        try:
+            window, _ = error_window(cfg.root, hours or window_default, since_deploy, deployed_at)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        b = backend()
+        app = AppFiles.scan(cfg.root, DEFAULT_EXCLUDES | set(cfg.excludes))
+        fields = dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"])
+        try:
+            summary = summarize_errors(
+                b, sites(), app, window, window.previous(), cfg.lint, cfg.leaks, limit, fields
+            )
+        except Exception as exc:
+            raise ToolError(f"couldn't query the {b.name} backend: {exc}") from exc
+        incidents, ongoing = find_incidents(summary.groups, cfg.lint)
+        now = datetime.now(timezone.utc)
+        for inc in incidents:
+            add_context(inc, cfg.root, now)
+        from .errors import group_json
+
+        return {
+            "incidents": [incident_json(i) for i in incidents],
+            "ongoing": [group_json(g) for g in ongoing[:20]],
+        }
 
     @mcp.tool(name="find_leaks", annotations=READ_ONLY)
     def find_leaks_tool(hours: float | None = None, limit: int = 5000) -> dict[str, Any]:

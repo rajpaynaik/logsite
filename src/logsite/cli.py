@@ -456,7 +456,8 @@ def _when(ts) -> str:
     return f"{ts:%Y-%m-%d %H:%M}"
 
 
-def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
+def _error_summary(args: argparse.Namespace, cfg: Config):
+    """The summary for the window the arguments ask for: ``(summary, label, app)``."""
     backend = _backend_or_exit(cfg)
     sites = _sites(cfg, None)
     app = AppFiles.scan(cfg.root, DEFAULT_EXCLUDES | set(cfg.excludes))
@@ -482,10 +483,32 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
         )
     except Exception as exc:
         sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
+    return summary, label, app
+
+
+def _gate(args: argparse.Namespace, summary, cfg: Config, label: str) -> int:
+    """The CI gate: 1 when --fail-on-new / --fail-on-spike find what they look for."""
+    new = [g for g in summary.groups if g.is_new] if args.fail_on_new else []
+    spikes = (
+        [g for g in summary.groups if not g.is_new and g.previous is not None
+         and is_spike(g.count, g.previous, cfg.lint)]
+        if args.fail_on_spike
+        else []
+    )  # fmt: skip
+    if not (new or spikes):
+        return 0
+    parts = [f"{len(new)} new error group(s)"] if new else []
+    parts += [f"{len(spikes)} spiking"] if spikes else []
+    print(f"logsite: FAIL: {' and '.join(parts)} {label}", file=sys.stderr)
+    return 1
+
+
+def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
+    summary, label, app = _error_summary(args, cfg)
     if args.format == "json":
         json.dump(summary_json(summary, args.top), sys.stdout, indent=2)
         print()
-        return 0
+        return _gate(args, summary, cfg, label)
     if not summary.groups:
         print(f"no errors {label}", file=sys.stderr)
         return 0
@@ -523,6 +546,57 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
             "(raise --limit)",
             file=sys.stderr,
         )
+    return _gate(args, summary, cfg, label)
+
+
+def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
+    from datetime import datetime
+
+    from .incidents import add_context, find_incidents, incident_json
+
+    summary, label, _ = _error_summary(args, cfg)
+    incidents, ongoing = find_incidents(summary.groups, cfg.lint, args.link_minutes)
+    now = datetime.now(timezone.utc)
+    for inc in incidents:
+        add_context(inc, cfg.root, now)
+    if args.format == "json":
+        out = {
+            "window": summary_json(summary)["window"],
+            "incidents": [incident_json(i) for i in incidents],
+            "ongoing": [summary_json(summary)["groups"][summary.groups.index(g)] for g in ongoing],
+        }
+        json.dump(out, sys.stdout, indent=2)
+        print()
+        return 0
+    if not summary.groups:
+        print(f"no errors {label}", file=sys.stderr)
+        return 0
+    pal = palette(args.color, sys.stdout)
+    width = report.terminal_width() if pal.enabled else 120
+
+    def spiking(g):
+        return g.previous is not None and is_spike(g.count, g.previous, cfg.lint)
+
+    count = f"{len(incidents)} incident(s)" if incidents else "no incidents"
+    print(
+        f"{pal.bold_white(count)} {pal.white(label)}"
+        + pal.gray(f" · {summary.events:,} errors in {len(summary.groups)} group(s)")
+    )
+    for n, inc in enumerate(incidents, 1):
+        card = report.incident_card(
+            n, inc, pal=pal, width=width, root=cfg.root, spiking=spiking,
+            trace_field=cfg.timeline.field_name,
+        )  # fmt: skip
+        print("\n".join(card))
+    if ongoing:
+        print()
+        print(pal.gray(f"Ongoing, not part of an incident ({len(ongoing)} group(s), steady):"))
+        for g in ongoing[:5]:
+            trend = g.trend or ""
+            print(f"   {pal.gray(f'{g.count:>7,}')}  {pal.gray(trend.ljust(5))}  "
+                  f"{report.short_class(g.title)[: width - 20]}")  # fmt: skip
+        if len(ongoing) > 5:
+            print(pal.gray(f"   … {len(ongoing) - 5} more: logsite errors"))
     return 0
 
 
@@ -881,6 +955,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--traceback", action="store_true", help="show a sample traceback per group")
     p.add_argument("--brief", action="store_true", help="only the overview table")
     p.add_argument(
+        "--fail-on-new", action="store_true", help="exit 1 if there's a new error group (CI)"
+    )
+    p.add_argument(
+        "--fail-on-spike", action="store_true", help="exit 1 if an error group spiked (CI)"
+    )
+    p.add_argument(
         "--color",
         choices=["auto", "always", "never"],
         default="auto",
@@ -922,6 +1002,20 @@ def main(argv: list[str] | None = None) -> int:
         help="a dashboard for any project (for the grafana.com catalog): no config needed",
     )
     p.set_defaults(func=cmd_grafana)
+
+    p = sub.add_parser(
+        "investigate", help="error groups linked into incidents, with the deploy and commits"
+    )
+    p.add_argument("--hours", type=float)
+    p.add_argument("--since-deploy", metavar="REF", help="since a release (git tag/sha)")
+    p.add_argument("--deployed-at", metavar="TIME", help="real deploy time, ISO 8601")
+    p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")
+    p.add_argument(
+        "--link-minutes", type=float, default=10.0, help="groups starting this close are linked"
+    )
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_investigate)
 
     p = sub.add_parser(
         "alert-server", help="receive Grafana alerts and send the error summary with them"

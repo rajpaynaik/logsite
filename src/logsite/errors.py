@@ -29,6 +29,7 @@ from .timeline import SERVICE_FIELDS
 from .tracebacks import ErrorInfo, Frame, extract_error, level_of
 
 ID_FIELDS = ("trace_id", "request_id", "span_id")
+MAX_TRACE_IDS = 500  # per group, to link groups that the same requests ran into
 # Exceptions that only say "something inside failed": the headline is the first real one.
 WRAPPERS = {
     "ListenerExecutionFailedException", "UndeclaredThrowableException",
@@ -115,6 +116,7 @@ class ErrorGroup:
     levels: Counter[str] = field(default_factory=Counter)
     sample: dict = field(default_factory=dict)
     wrapped_in: list[str] = field(default_factory=list)  # framework wrappers around it
+    trace_ids: set[str] = field(default_factory=set, repr=False)  # up to MAX_TRACE_IDS
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -249,6 +251,10 @@ def group_errors(
         if site is not None:
             group._logged[site.id] += 1
             group._sites[site.id] = site
+        if len(group.trace_ids) < MAX_TRACE_IDS:
+            trace = _trace_id(record)
+            if trace:
+                group.trace_ids.add(trace)
         service = _service(record)
         if service:
             group.services[service] += 1
@@ -270,6 +276,16 @@ def _normalize_title(title: str) -> str:
     """``"KeyError: 'EUR'"`` -> ``"KeyError: <str>"``: the type stays, values are masked."""
     exc_type, sep, message = title.partition(": ")
     return f"{exc_type}{sep}{normalize(message)}" if sep else title
+
+
+def _trace_id(record: LogRecord) -> str | None:
+    """The record's trace / request id: a field, or ``traceId=...`` in plain text."""
+    for name in ("trace_id", "request_id"):
+        value = get_field(record, name)
+        if value is not None and not isinstance(value, (dict, list)):
+            return str(value)
+    m = _TEXT_ID.search(record.message.split("\n", 1)[0])
+    return m.group(2) if m and "span" not in m.group(1).lower() else None
 
 
 def _sample(

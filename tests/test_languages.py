@@ -373,27 +373,27 @@ def test_kafka_listener_failure_is_headlined_by_the_real_exception():
     trace = (JAVA / "kafka-trace.txt").read_text()
     record = LogRecord(
         None,
-        "2026-10-17 16:20:31.481 ERROR [payment-consumer] [traceId=tr-91ac72] "
+        "2026-10-17 16:20:31.481 ERROR [shipping-consumer] [traceId=tr-91ac72] "
         "[container-3-C-1] o.s.k.l.KafkaMessageListenerContainer : Error handler threw\n" + trace,
     )
     app = AppFiles(
         [
-            f"src/main/java/com/example/payment/{name}.java"
-            for name in ("PaymentEventListener", "PaymentProcessor", "AuthorizationService",
-                         "BankGatewayClient")
+            f"src/main/java/com/example/shipping/{name}.java"
+            for name in ("ShipmentEventListener", "ShipmentProcessor", "CarrierService",
+                         "CarrierApiClient")
         ]
     )  # fmt: skip
     (g,) = group_errors([record], [], app).values()
-    assert g.title == "java.lang.IllegalStateException: Payment authorization failed"
+    assert g.title == "java.lang.IllegalStateException: Shipping label request failed"
     assert g.wrapped_in == ["ListenerExecutionFailedException"]
     assert g.causes[0] == "java.net.SocketTimeoutException: Read timed out"  # root first
-    assert g.raised_at == "src/main/java/com/example/payment/BankGatewayClient.java:58"
+    assert g.raised_at == "src/main/java/com/example/shipping/CarrierApiClient.java:58"
     assert g.origin == "java.net"
     assert g.path == [
-        "PaymentEventListener.consume",
-        "PaymentProcessor.process",
-        "AuthorizationService.authorize",
-        "BankGatewayClient.sendAuthorization",
+        "ShipmentEventListener.consume",
+        "ShipmentProcessor.process",
+        "CarrierService.createLabel",
+        "CarrierApiClient.requestLabel",
         "java.net",
     ]
     assert g.sample["ids"] == {"trace_id": "tr-91ac72"}

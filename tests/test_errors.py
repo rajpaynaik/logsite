@@ -33,8 +33,8 @@ The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
   File "/srv/app/checkout.py", line 19, in price
-    raise PaymentError(f"can't price order {order['id']}") from e
-app.checkout.PaymentError: can't price order 9001
+    raise PricingError(f"can't price order {order['id']}") from e
+app.checkout.PricingError: can't price order 9001
 """
 
 
@@ -70,7 +70,7 @@ def test_parse_traceback_reads_the_chain_root_cause_first():
             "/srv/app/pricing.py", 2, "convert", 'return order["amount"] * RATES[order["currency"]]'
         )
     ]  # the ^^^^ marker line isn't mistaken for code
-    assert final.type == "app.checkout.PaymentError" and final.message == "can't price order 9001"
+    assert final.type == "app.checkout.PricingError" and final.message == "can't price order 9001"
 
 
 def test_parse_traceback_of_a_real_exception():
@@ -98,7 +98,7 @@ def test_library_frames():
 
 def test_extract_error_from_every_shape():
     text = extract_error(rec(exc_info=CHAINED))
-    assert text.final.type == "app.checkout.PaymentError" and text.text == CHAINED
+    assert text.final.type == "app.checkout.PricingError" and text.text == CHAINED
     assert extract_error(rec(message="failed\n" + CHAINED)).root.type == "KeyError"
     ecs = extract_error(rec(**{"error.type": "KeyError", "error.message": "'EUR'"}))
     assert ecs.final.title == "KeyError: 'EUR'" and ecs.text is None
@@ -108,7 +108,7 @@ def test_extract_error_from_every_shape():
         rec(
             exception=[
                 {
-                    "exc_type": "PaymentError",
+                    "exc_type": "PricingError",
                     "exc_value": "can't price",
                     "frames": [{"filename": "/srv/app/checkout.py", "lineno": 19, "name": "price"}],
                 },
@@ -116,7 +116,7 @@ def test_extract_error_from_every_shape():
             ]
         )
     )
-    assert [e.type for e in structlog.chain] == ["KeyError", "PaymentError"]  # root first
+    assert [e.type for e in structlog.chain] == ["KeyError", "PricingError"]  # root first
     assert extract_error(rec(message="ok")) is None
 
 
@@ -161,7 +161,7 @@ def test_join_multiline_puts_a_plain_text_traceback_back_together():
     events = list(join_multiline(lines))
     assert events[0] == "2026-10-17 12:00:00 INFO start"
     assert events[1].startswith("2026-10-17 12:00:01 ERROR pricing failed\nTraceback")
-    assert events[1].endswith("app.checkout.PaymentError: can't price order 9001")
+    assert events[1].endswith("app.checkout.PricingError: can't price order 9001")
     assert events[2:] == ["2026-10-17 12:00:02 INFO next", '{"message": "json lines stay whole"}']
     assert len(parse_traceback(events[1])) == 2
 
@@ -205,7 +205,7 @@ def test_different_causes_are_different_groups():
     assert sorted(g.title for g in groups.values()) == [
         "TimeoutError: POST http://inventory/SKU-1 timed out after 3.5s",
         "TimeoutError: POST http://inventory/SKU-1 timed out after 3.5s",
-        "app.checkout.PaymentError: can't price order 9001",
+        "app.checkout.PricingError: can't price order 9001",
     ]
     chained = next(g for g in groups.values() if g.causes)
     assert chained.causes == ["KeyError: 'EUR'"] and chained.raised_at == "app/pricing.py:2"
@@ -275,7 +275,7 @@ def test_summarize_ranks_new_then_spiking_then_count(tmp_path):
     assert [(g.title.split(":")[0], g.count, g.previous) for g in s.groups] == [
         ("TimeoutError", 3, 0),
         ("disk full", 30, 3),
-        ("app.checkout.PaymentError", 40, 40),
+        ("app.checkout.PricingError", 40, 40),
     ]
     assert s.events == 73 and s.previous_events == 44 and s.resolved == 1 and not s.truncated
     assert s.groups[0].is_new and s.groups[1].trend == "10.0x"
@@ -286,7 +286,7 @@ def test_file_backend_reads_multiline_plain_text(tmp_path):
         "INFO start\nERROR pricing failed\n" + CHAINED + "INFO next\n"
     )
     records = FileBackend(tmp_path / "app.log").query_errors(TimeRange.last(1))
-    assert len(records) == 1 and extract_error(records[0]).final.type.endswith("PaymentError")
+    assert len(records) == 1 and extract_error(records[0]).final.type.endswith("PricingError")
 
 
 def test_loki_filters_errors_server_side():
@@ -427,8 +427,8 @@ def test_mcp_error_summary(tmp_path):
 
 def test_plain_text_lines_get_their_leading_timestamp():
     assert parse_line("2026-10-14 10:00:05,123 ERROR app boom").timestamp == datetime(
-        2026, 10, 14, 10, 0, 5, 123000
-    )
+        2026, 10, 14, 10, 0, 5, 123000, tzinfo=timezone.utc
+    )  # no zone in the line: UTC
     assert parse_line("[2026-10-14T10:00:05Z] ERROR boom").timestamp == datetime(
         2026, 10, 14, 10, 0, 5, tzinfo=timezone.utc
     )

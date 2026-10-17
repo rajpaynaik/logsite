@@ -10,7 +10,7 @@ public class Lint {
         log.info("charging order {} for {} cents", order.getId(), order.getTotal());
         try {
             gateway.charge(cardNumber);
-        } catch (PaymentException e) {
+        } catch (CheckoutException e) {
             log.error("payment failed for order {}: {}", order.getId(), e.getMessage());
             throw e;
         }

@@ -152,9 +152,10 @@ def _leading_ts(raw: str) -> datetime | None:
     if not m:
         return None
     try:
-        return parse_iso(m.group(1).replace(",", "."))
+        ts = parse_iso(m.group(1).replace(",", "."))
     except ValueError:
         return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
 
 def _loguru_record(rec: dict, raw: str, timestamp: datetime | None) -> LogRecord:

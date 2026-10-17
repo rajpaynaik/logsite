@@ -161,6 +161,25 @@ def previous_tag(root: str | Path, ref: str) -> str | None:
     return out.strip() if out else None
 
 
+def tags_by_date(root: str | Path) -> list[tuple[str, datetime]]:
+    """Every tag with its release time (tagger date, or the commit date), oldest first."""
+    out = _git(
+        root,
+        "for-each-ref",
+        "--sort=creatordate",
+        "--format=%(refname:short)%09%(creatordate:iso-strict)",
+        "refs/tags",
+    )
+    tags = []
+    for line in (out or "").splitlines():
+        name, _, when = line.partition("\t")
+        try:
+            tags.append((name, parse_iso(when)))
+        except ValueError:
+            continue
+    return tags
+
+
 def rev_list(root: str | Path, *revs: str) -> list[str]:
     """Commit shas in ``revs`` (e.g. ``"v1.3..v1.4"``, or ``"--since=...", "v1.4"``)."""
     out = _git(root, "rev-list", *revs)
