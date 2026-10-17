@@ -23,6 +23,7 @@ It doesn't depend on any one vendor: Loki, OpenSearch / Elasticsearch and CloudW
 - **MCP server**: AI assistants (Claude Code, Claude Desktop, Cursor, …) can ask "which log lines spiked after the last deploy, and what changed?" See [MCP server](#mcp-server).
 - **Cost per line**: bytes and estimated monthly spend for every log call (`$420/mo` in the editor, `logsite cost` in the terminal), so you fix the few lines that make up most of the bill.
 - **Error summary**: `logsite errors` turns thousands of production errors and tracebacks into a short list of groups, new and spiking ones first, each with where it was raised in your code, the log call that logged it, and a sample trace id. In the editor, the line that raised an error shows how often it did. See [Error summary](#error-summary).
+- **Alert enrichment**: when a Grafana alert fires, `logsite alert-server` posts the error summary to Slack or a webhook: the root cause, the line of code that raised it, an example trace. See [Alerts](#alerts-the-error-summary-in-the-notification).
 - **Grafana and Alloy**: `logsite grafana` writes a Grafana dashboard of log cost and errors per code line, live from Loki, with each row linked to its source line; `logsite pipeline` writes Grafana Alloy rules that drop or sample the noisy lines before they're shipped. See [Grafana and Alloy](#grafana-and-alloy).
 - **Request timeline**: `logsite trace <trace_id>` shows every log line for one request across services, in order, with this repo's lines linked to the code that wrote them and the first warning flagged as a likely cause.
 - **Leak scanning**: finds secrets (API keys, tokens, passwords, private keys) and personal data (emails, card numbers, IBANs, SSNs) in what your services *actually* logged, and points at the log call that wrote each one. Values are always masked in the report.
@@ -70,6 +71,7 @@ logsite errors             # production errors grouped by cause, new and spiking
 logsite errors --since-deploy v1.4.0   # what started failing after a release
 logsite pipeline --max-per-window 100000 --drop-level debug -o logsite.alloy   # Alloy drop/sample rules
 logsite grafana -o dashboard.json   # Grafana dashboard: cost and errors per code line (Loki)
+logsite alert-server       # send the error summary with Grafana alerts (Slack / webhook)
 logsite history app/checkout.py:7   # commits that touched the code around a log line
 logsite leaks              # secrets / personal data in production logs, per log call (exit 1 if any)
 logsite trace 4bf92f35...  # every log line for one request, across services, in order
@@ -446,6 +448,56 @@ Message templates are baked in, so regenerate it when log calls change.
 code link as dashboard variables instead; it's in
 [`integrations/grafana`](integrations/grafana) for the grafana.com catalog.
 
+### Alerts: the error summary in the notification
+
+When a Grafana alert fires, `logsite alert-server` sends the error summary with it, so whoever
+is on call sees what broke and on which line without opening a single stack trace:
+
+```
+🔴 order-service errors: order-service is logging more than 10 errors in 5 minutes (firing since 16:49 UTC)
+758 error(s) in 2 group(s) · Open in Grafana · Silence
+
+1. com.example.orders.exception.OrderProcessingException: Unable to save order ORD-<n>  ·  561  ·  new
+    root cause: org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout (org.postgresql)
+    raised: src/main/java/com/example/orders/repository/OrderRepository.java:87  `return jpa.save(order);`
+    logged: src/main/java/com/example/orders/OrderController.java:56
+    example: `logsite trace 77064c2c`
+
+2. Retry failed for order ORD-<n>  ·  197  ·  1.0x
+    logged: src/main/java/com/example/orders/service/OrderService.java:170
+```
+
+That's a real run: a Grafana 13 alert rule on Loki, its webhook contact point, and logsite
+summarizing the Spring Boot traces in the alert's window.
+
+1. Run it next to your checkout (it reads the code to tell your frames from library ones):
+
+   ```bash
+   export LOGSITE_ALERT_TOKEN=$(openssl rand -hex 16) SLACK_WEBHOOK_URL=https://hooks.slack.com/...
+   logsite alert-server --host 0.0.0.0 --port 8085
+   ```
+
+2. In Grafana: **Alerting → Contact points → Add → Webhook**, URL
+   `http://<logsite host>:8085/grafana/alert`, **Authorization header** scheme `Bearer`,
+   credentials = the token. Route your alerts' notification policy to it (it can sit next to
+   your existing Slack / PagerDuty contact point).
+
+For each firing alert, logsite summarizes from `lookback_minutes` before it started until now,
+compared with the same span just before, narrowed to the alerted service with the alert's
+labels (`selector_labels`, for Loki). It posts to `slack_webhook` and/or `webhook` (the
+summary as JSON) and returns it in the response. `GET /errors?from=&to=` serves the same
+summary for any range (Grafana's `${__from}` / `${__to}` work), for an "Error groups" panel.
+
+```toml
+[alerts]
+slack_webhook_env = "SLACK_WEBHOOK_URL"
+# webhook = "https://example.com/hooks/logsite"   # gets {alert, labels, text, summary}
+token_env = "LOGSITE_ALERT_TOKEN"   # required unless it only listens on localhost
+lookback_minutes = 30
+top = 3                             # groups per alert
+selector_labels = ["service_name"]  # alert labels that narrow the Loki selector
+```
+
 ### Alloy rules: drop or sample noisy lines before they're shipped
 
 ```bash
@@ -591,6 +643,8 @@ class LogBackend(ABC):
 - [x] Error summary: production errors grouped by cause (`logsite errors`, the `error_summary` MCP tool, and a code lens on the line that raised), new and spiking first, with `--since-deploy`
 - [x] Grafana dashboard generator: `logsite grafana` writes a dashboard of log cost and errors per code line from Loki, with source links
 - [x] Grafana Alloy rules: `logsite pipeline` drops or samples noisy log calls before they're shipped, sized and priced from production volume
+- [x] Alert enrichment: `logsite alert-server` receives Grafana's webhook contact point and posts the error summary for the alert's window to Slack or a webhook
+- [ ] "Error groups" dashboard panel reading `logsite alert-server`'s `/errors`
 - [ ] Grafana app plugin: the same views as pages inside Grafana, listed in the plugin catalog
 - [ ] Incident investigation: `logsite investigate <error group>` and an MCP tool that gather the evidence for one error in a single call: when it started and the deploy just before, commits in that release touching the code where it's raised, other errors that started at the same time, affected services / tenants, and a few full request timelines
 - [ ] CI gate after a deploy: `logsite errors --since-deploy <ref> --fail-on-new` exits non-zero when new error groups appear, to stop or roll back a bad release

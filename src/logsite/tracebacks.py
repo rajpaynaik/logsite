@@ -354,8 +354,10 @@ def is_error(record: LogRecord) -> bool:
         levelno = record.fields.get("levelno")
         if isinstance(levelno, int) and levelno >= 40:
             return True
-        if not record.fields and _TEXT_LEVEL.search(record.message[:200]):
-            return True  # plain text: "2026-10-17 12:00:01 ERROR app: payment failed"
+        # Plain text, perhaps with stream labels as fields (Loki): the level is in the text,
+        # "2026-10-17 12:00:01 ERROR app: payment failed"
+        if _TEXT_LEVEL.search(record.message.split("\n", 1)[0][:200]):
+            return True
     return extract_error(record, fields) is not None
 
 

@@ -1,0 +1,55 @@
+{
+    "receiver": "logsite",
+    "status": "firing",
+    "alerts": [
+        {
+            "status": "firing",
+            "labels": {
+                "alertname": "order-service errors",
+                "grafana_folder": "logsite-demo",
+                "service_name": "order-service",
+                "severity": "critical"
+            },
+            "annotations": {
+                "summary": "order-service is logging more than 10 errors in 5 minutes"
+            },
+            "startsAt": "2026-10-17T12:49:30-04:00",
+            "endsAt": "0001-01-01T00:00:00Z",
+            "generatorURL": "http://localhost:31300/alerting/grafana/order-errors/view?orgId=1",
+            "fingerprint": "8a24eb908f346c84",
+            "silenceURL": "http://localhost:31300/alerting/silence/new?alertmanager=grafana&matcher=__alert_rule_uid__%3Dorder-errors&matcher=service_name%3Dorder-service&matcher=severity%3Dcritical&orgId=1",
+            "dashboardURL": "",
+            "panelURL": "",
+            "ruleUID": "order-errors",
+            "values": {
+                "A": 90,
+                "B": 90,
+                "C": 1
+            },
+            "valueString": "[ var='A' labels={} type='query' value=90 ], [ var='B' labels={} type='reduce' value=90 ], [ var='C' labels={} type='threshold' value=1 ]",
+            "orgId": 1
+        }
+    ],
+    "groupLabels": {
+        "alertname": "order-service errors",
+        "severity": "critical"
+    },
+    "commonLabels": {
+        "alertname": "order-service errors",
+        "grafana_folder": "logsite-demo",
+        "service_name": "order-service",
+        "severity": "critical"
+    },
+    "commonAnnotations": {
+        "summary": "order-service is logging more than 10 errors in 5 minutes"
+    },
+    "externalURL": "http://localhost:31300/",
+    "appVersion": "13.2.4",
+    "version": "1",
+    "groupKey": "{}:{alertname=\"order-service errors\", severity=\"critical\"}",
+    "truncatedAlerts": 0,
+    "orgId": 1,
+    "title": "[FIRING:1] order-service errors critical (logsite-demo order-service)",
+    "state": "alerting",
+    "message": "**Firing**\n\nValue: A=90, B=90, C=1\nLabels:\n - alertname = order-service errors\n - grafana_folder = logsite-demo\n - service_name = order-service\n - severity = critical\nAnnotations:\n - summary = order-service is logging more than 10 errors in 5 minutes\nSource: http://localhost:31300/alerting/grafana/order-errors/view?orgId=1\nSilence: http://localhost:31300/alerting/silence/new?alertmanager=grafana&matcher=__alert_rule_uid__%3Dorder-errors&matcher=service_name%3Dorder-service&matcher=severity%3Dcritical&orgId=1\n"
+}

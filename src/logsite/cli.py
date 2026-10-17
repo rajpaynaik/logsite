@@ -755,6 +755,88 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
+    import time
+
+    from .alerts import Enricher, make_server, post_json, with_selector
+
+    acfg = cfg.alerts
+    if args.slack_webhook:
+        acfg.slack_webhook = args.slack_webhook
+    token = args.token or acfg.token
+    if args.host not in ("127.0.0.1", "localhost", "::1") and not token:
+        sys.exit(
+            f"logsite: listening on {args.host} needs a token: set [alerts] token_env or --token"
+        )
+    _backend_or_exit(cfg)  # fail at start, not on the first alert
+    excludes = DEFAULT_EXCLUDES | set(cfg.excludes)
+    cache: dict = {}
+
+    def project():  # re-indexed every 5 minutes, so it follows deploys of the checkout
+        if not cache or time.monotonic() - cache["at"] > 300:
+            cache.update(
+                at=time.monotonic(), sites=_sites(cfg, None), app=AppFiles.scan(cfg.root, excludes)
+            )
+        return cache["sites"], cache["app"]
+
+    fields = list(dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"]))
+
+    def summarize(start, end, labels):
+        backend = _backend_or_exit(cfg, with_selector(cfg.backend, labels, acfg.selector_labels))
+        sites, app = project()
+        window = TimeRange(start, end)
+        summary = summarize_errors(
+            backend, sites, app, window, window.previous(), cfg.lint, cfg.leaks, args.limit, fields
+        )
+        return summary_json(summary)
+
+    url_template = source_url(cfg.root)
+    ref = resolve_ref(cfg.root, "HEAD") or "HEAD"
+
+    def split(location):
+        path, _, line = location.rpartition(":")
+        return path, int(line) if line.isdigit() else 0
+
+    def code_line(location):
+        return source_line(cfg.root, *split(location))
+
+    def code_url(location):
+        if not url_template:
+            return None
+        path, line = split(location)
+        return url_template.format(ref=ref, path=path, line=line)
+
+    def dry_run(url, body):
+        print(f"--- would POST to {url.split('?')[0]}:\n{body.get('text', '')}\n", flush=True)
+
+    enricher = Enricher(
+        acfg,
+        summarize,
+        code_line=code_line,
+        code_url=code_url,
+        trace_field=cfg.timeline.field_name,
+        send=dry_run if args.dry_run else post_json,
+    )
+    server = make_server(args.host, args.port, enricher, token)
+    host, port = server.server_address[:2]
+    targets = [n for n, v in (("Slack", acfg.slack_webhook), ("webhook", acfg.webhook)) if v]
+    print(
+        f"logsite alert-server on http://{host}:{port}\n"
+        "  Grafana: Alerting → Contact points → Webhook, "
+        f"URL http://<this host>:{port}/grafana/alert"
+        + (", Authorization header: Bearer <your token>" if token else "")
+        + f"\n  sends to: {', '.join(targets) or 'nobody (returns the summary only)'}"
+        + (" (dry run: printed, not sent)" if args.dry_run else ""),
+        file=sys.stderr,
+        flush=True,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def cmd_history(args: argparse.Namespace, cfg: Config) -> int:
     try:
         path, line = parse_target(args.target, cfg.root)
@@ -903,6 +985,17 @@ def main(argv: list[str] | None = None) -> int:
         help="a dashboard for any project (for the grafana.com catalog): no config needed",
     )
     p.set_defaults(func=cmd_grafana)
+
+    p = sub.add_parser(
+        "alert-server", help="receive Grafana alerts and send the error summary with them"
+    )
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8085)
+    p.add_argument("--token", help="shared secret Grafana sends (default: [alerts] token)")
+    p.add_argument("--slack-webhook", help="Slack incoming webhook URL (default: [alerts])")
+    p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")
+    p.add_argument("--dry-run", action="store_true", help="print messages instead of sending")
+    p.set_defaults(func=cmd_alert_server)
 
     p = sub.add_parser("cost", help="bytes and estimated monthly spend per log call")
     p.add_argument("--hours", type=float)

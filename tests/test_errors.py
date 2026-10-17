@@ -426,3 +426,10 @@ def test_plain_text_titles_drop_the_timestamp_and_level():
     r = LogRecord(None, "2026-10-14 10:00:05,123 ERROR app.checkout payment failed")
     (g,) = group_errors([r], [], APP).values()
     assert g.title == "app.checkout payment failed"
+
+
+def test_plain_text_errors_from_loki_carry_stream_labels():
+    """Loki returns the stream's labels as fields; the level is still in the text."""
+    record = LogRecord(None, "2026-10-17 12:00:01 ERROR [svc] c.a.S : Retry failed", {"app": "x"})
+    assert is_error(record)
+    assert not is_error(LogRecord(None, "2026-10-17 12:00:01 INFO retry ok", {"app": "x"}))
