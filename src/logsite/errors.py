@@ -33,6 +33,13 @@ ID_FIELDS = ("trace_id", "request_id", "span_id")
 _PLAIN_PREFIX = re.compile(
     r"^\[?\d{4}-\d{2}-\d{2}[ T][\d:.,]+\S*\]?\s+(?:\[?(?:ERROR|CRITICAL|FATAL|EXCEPTION)\]?:?\s+)?"
 )
+# What Logback / Spring Boot put before the message: "[app,trace,span] [thread] 1234 ---
+# com.acme.Logger : " (or " - ").
+_LOGGER_PREFIX = re.compile(r"^(?:\[[^\]]*\]\s*|\d+\s+---\s+)*(?:[\w$]+\.)+[\w$]+\s+[:-]\s+")
+# trace / request ids written into plain text: "traceId=8fa23bc1", "request_id: abc"
+_TEXT_ID = re.compile(
+    r"\b(trace_?id|span_?id|request_?id|correlation_?id)[=:]\s*([\w-]{6,})", re.IGNORECASE
+)
 TRACEBACK_CHARS = 4000  # of the sample traceback kept for display
 
 _VALUES = [
@@ -166,13 +173,18 @@ def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
     if info is None:
         return
     root = info.root
-    own = [(app.resolve(f), f) for f in root.frames]
-    own = [(p, f) for p, f in own if p]
+    # Where it was raised in the project: the root cause's deepest own frame, or, when the
+    # root cause is all library code (a database driver), the nearest cause that has one.
+    own: list = []
+    for exc in info.chain:
+        own = [(p, f) for p, f in ((app.resolve(f), f) for f in exc.frames) if p]
+        if own:
+            break
     if own and not root.logged_only:
         p, f = own[-1]
         group.raised_at, group.raised_in = f"{p}:{f.line}", f.function
-    if root.frames and root.frames[-1].is_library:
-        group.origin = root.frames[-1].library
+    if root.frames and (root.frames[-1].is_library or app.resolve(root.frames[-1]) is None):
+        group.origin = root.frames[-1].library  # the driver / client that threw it
     # The cause's frames run from the entry point to where it was raised.
     group.path = [f"{Path(p).stem}.{f.function}" for p, f in own]
     if group.origin:
@@ -201,7 +213,8 @@ def group_errors(
                 causes = [e.title for e in info.chain[:-1]]
                 exc_type = info.final.type
             else:
-                title, causes, exc_type = _PLAIN_PREFIX.sub("", first_line), [], None
+                title = _LOGGER_PREFIX.sub("", _PLAIN_PREFIX.sub("", first_line))
+                causes, exc_type = [], None
             group = groups[fp] = ErrorGroup(fp, redact(title, leaks), exc_type, causes)
             group.causes = [redact(c, leaks) for c in causes]
             _describe(group, info, app)
@@ -249,6 +262,10 @@ def _sample(
         value = get_field(record, name)
         if value is not None and not isinstance(value, (dict, list)):
             ids[name] = str(value)
+    if not ids:  # plain text: "[order-service,traceId=8fa23bc1,spanId=91ac42]"
+        for m in _TEXT_ID.finditer(record.message.split("\n", 1)[0]):
+            key = re.sub(r"(?<=[a-z])_?(id)$", "_id", m.group(1).lower())
+            ids.setdefault(key, m.group(2))
     text = info.text if info and info.text else None
     if text and len(text) > TRACEBACK_CHARS:
         text = "…" + text[-TRACEBACK_CHARS:]  # the end says where it was raised

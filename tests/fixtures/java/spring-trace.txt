@@ -1,0 +1,29 @@
+com.example.orders.exception.OrderProcessingException: Unable to save order ORD-78291
+	at com.example.orders.service.OrderService.submitOrder(OrderService.java:142)
+	at com.example.orders.service.OrderService$$SpringCGLIB$$0.process(<generated>)
+	at org.springframework.cglib.proxy.MethodProxy.invoke(MethodProxy.java:218)
+	at org.springframework.aop.framework.CglibAopProxy.invokeMethod(CglibAopProxy.java:386)
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:392)
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+	at org.springframework.security.authorization.method.AuthorizationManagerBeforeMethodInterceptor.invoke(AuthorizationManagerBeforeMethodInterceptor.java:198)
+	at com.example.orders.OrderController.submit(OrderController.java:55)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:166)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: org.springframework.dao.QueryTimeoutException: JDBC statement timed out
+	at org.springframework.jdbc.support.SQLExceptionSubclassTranslator.doTranslate(SQLExceptionSubclassTranslator.java:106)
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:246)
+	at org.springframework.data.jpa.repository.support.SimpleJpaRepository.save(SimpleJpaRepository.java:642)
+	at com.example.orders.repository.OrderRepository.save(OrderRepository.java:87)
+	at com.example.orders.service.OrderService.submitOrder(OrderService.java:141)
+	... 27 common frames omitted
+Caused by: org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout
+  Detail: Query execution exceeded configured timeout of 5000 ms.
+  SQLState: 57014
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372)
+	at org.postgresql.jdbc.PgPreparedStatement.executeUpdate(PgPreparedStatement.java:152)
+	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java:61)
+	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:197)
+	... 41 common frames omitted

@@ -310,3 +310,58 @@ def test_cli_on_a_go_project(tmp_path, monkeypatch, capsys):
     assert main(["counts", "--hours", str(24 * 365 * 10)]) == 0
     counts = capsys.readouterr().out
     assert re.search(r"1\s+internal/checkout/checkout.go:23", counts)
+
+
+SPRING_CONTROLLER = """package com.example.orders;
+import org.slf4j.Logger;
+class OrderController {
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+    void submit(Order o) { try { service.submitOrder(o); } catch (OrderProcessingException e) {
+        log.error("Failed to process order", e);
+    } }
+}
+"""
+
+
+def test_spring_boot_trace_in_plain_text(tmp_path):
+    """A Spring Boot error with three exceptions, proxies, `... N common frames omitted`
+    and a PostgreSQL root cause with indented Detail / SQLState lines."""
+    trace = (JAVA / "spring-trace.txt").read_text()
+    lines = [
+        "2026-10-17 12:18:42.391 ERROR [order-service,traceId=8fa23bc1,spanId=91ac42] "
+        "[http-nio-8080-exec-42] com.example.orders.OrderController : Failed to process order",
+        *trace.splitlines(),
+        "2026-10-17 12:18:42.398 WARN [order-service] c.e.o.OrderService : Retrying attempt=2",
+        "2026-10-17 12:18:47.402 ERROR [order-service] com.example.orders.service.OrderService "
+        ": Retry failed for order ORD-78291",
+    ]
+    events = list(join_multiline(lines))
+    assert len(events) == 3 and events[0].endswith("... 41 common frames omitted")
+    (tmp_path / "app.log").write_text("\n".join(lines) + "\n")
+    records = FileBackend(tmp_path / "app.log").query_errors(TimeRange.last(24 * 365 * 10))
+    info = extract_error(records[0])
+    assert [e.type.rsplit(".", 1)[-1] for e in info.chain] == [
+        "PSQLException", "QueryTimeoutException", "OrderProcessingException",
+    ]  # fmt: skip
+    assert info.root.message == "ERROR: canceling statement due to statement timeout"
+
+    app = AppFiles(
+        [
+            "src/main/java/com/example/orders/OrderController.java",
+            "src/main/java/com/example/orders/service/OrderService.java",
+            "src/main/java/com/example/orders/repository/OrderRepository.java",
+        ]
+    )
+    sites = index_source(SPRING_CONTROLLER, "src/main/java/com/example/orders/OrderController.java")
+    groups = sorted(group_errors(records, sites, app).values(), key=lambda g: -len(g.causes))
+    order, retry = groups
+    assert order.causes == [
+        "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout",
+        "org.springframework.dao.QueryTimeoutException: JDBC statement timed out",
+    ]
+    # the root cause is all driver code: raised at the nearest frame of the project's own
+    assert order.raised_at == "src/main/java/com/example/orders/repository/OrderRepository.java:87"
+    assert order.origin == "org.postgresql"
+    assert order.logged_at.id == "src/main/java/com/example/orders/OrderController.java:6"
+    assert order.sample["ids"] == {"trace_id": "8fa23bc1", "span_id": "91ac42"}
+    assert retry.title == "Retry failed for order ORD-78291"  # Spring's prefix is gone

@@ -362,11 +362,20 @@ def test_cli_errors(tmp_path, monkeypatch, capsys):
     lines = out.splitlines()
     assert lines[0] == "1 error group(s), 4 event(s) in the last 24h (before: 0); 1 new"
     assert "4  new     TimeoutError: POST http://inventory/SKU-<n> timed out after <n>s" in lines[3]
-    assert "raised    app/inventory.py:9 in reserve() (in httpx)" in out
-    assert "logged    app/checkout.py:9  'payment failed for order %s'" in out
-    assert "path      checkout.charge → inventory.reserve → httpx" in out
-    assert "example   logsite trace 00000000000000000000000000000003" in out
-    assert "| TimeoutError: POST http://inventory/SKU-3 timed out after 3.5s" in out
+    assert "raised     app/inventory.py:9 in reserve() (in httpx)" in out
+    assert "logged     app/checkout.py:9  'payment failed for order %s'" in out
+    assert "path       checkout.charge → inventory.reserve → httpx" in out
+    assert "example    logsite trace 00000000000000000000000000000003" in out
+    assert "  TimeoutError: POST http://inventory/SKU-3 timed out after 3.5s" in out
+    assert '▶   File "/srv/app/inventory.py", line 9, in reserve' in out  # the project's frame
+    assert '    File "/usr/lib/python3.12/site-packages/httpx/' in out  # a library frame: no ▶
+    assert "\033[" not in out  # captured output isn't a terminal: no colours
+
+    assert main(["errors", "--traceback", "--color", "always"]) == 0
+    colored = capsys.readouterr().out
+    assert "\033[1;31mnew" in colored  # a new group in red
+    assert '\033[1;36m  File "/srv/app/inventory.py", line 9' in colored  # own frame highlighted
+    assert '\033[2m  File "/usr/lib/python3.12/site-packages/httpx/' in colored  # library dim
 
     assert main(["errors", "--format", "json"]) == 0
     data = json.loads(capsys.readouterr().out)

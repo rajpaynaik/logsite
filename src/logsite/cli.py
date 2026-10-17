@@ -21,12 +21,14 @@ from .git import parse_target, resolve_ref, site_history, source_url
 from .grafana import LokiShape, build_dashboard, deployed_prefix, level_field
 from .index import DEFAULT_EXCLUDES, index_project
 from .leaks import KINDS, find_leaks
-from .lint import RULES, SITUATIONS, describe_trend, find_spikes, lint_paths, lint_volume
+from .lint import RULES, SITUATIONS, describe_trend, find_spikes, is_spike, lint_paths, lint_volume
 from .matching import sample_records
 from .models import parse_iso
 from .pipeline import make_plan, plan_json, to_alloy
 from .structure import production_score, score_project
+from .term import Palette, palette, source_line
 from .timeline import find_timeline, timeline_json
+from .tracebacks import is_exception_line, line_frame
 
 
 def _sites(cfg: Config, path: str | None):
@@ -455,19 +457,65 @@ def _when(ts) -> str:
     return f"{ts:%Y-%m-%d %H:%M}"
 
 
-def _print_group(i: int, g: ErrorGroup, args: argparse.Namespace, cfg: Config) -> None:
+def _code_row(cfg: Config, pal: Palette, location: str) -> tuple[str, str] | None:
+    """The source line at ``path:line``, as a row under "raised" / "logged"."""
+    path, _, line = location.rpartition(":")
+    code = source_line(cfg.root, path, int(line)) if line.isdigit() else None
+    if code is None:
+        return None
+    return ("", f"{pal.dim(f'{line:>5} │')} {pal.green(code[:110])}")
+
+
+def _print_traceback(text: str, app: AppFiles, pal: Palette, indent: str) -> None:
+    """The sample trace, with the project's own frames highlighted and library frames dim."""
+    own = False  # Python prints the source line under its frame: same colour as the frame
+    for line in text.splitlines():
+        frame = line_frame(line)
+        if frame is not None:
+            own = app.resolve(frame) is not None
+            body = pal.bold_cyan(line) if own else pal.dim(line)
+            print(f"{indent}{pal.bold_cyan('▶') if own else ' '} {body}")
+        elif is_exception_line(line):
+            own = False
+            print(f"{indent}  {pal.bold_red(line)}")
+        elif line[:1].isspace() and line.strip() and own:
+            print(f"{indent}  {pal.green(line)}")
+        else:
+            print(f"{indent}  {pal.dim(line)}")
+
+
+def _print_group(
+    i: int, g: ErrorGroup, args: argparse.Namespace, cfg: Config, app: AppFiles, pal: Palette
+) -> None:
     trend = "" if g.trend is None else ("new" if g.is_new else g.trend)
-    print(f"{i:>2}  {g.count:>7,}  {trend:<6}  {g.title[:110]}  [{g.id}]")
+    spiking = g.previous is not None and is_spike(g.count, g.previous, cfg.lint)
+    painted = (
+        pal.bold_red(f"{trend:<6}")
+        if g.is_new
+        else (pal.yellow(f"{trend:<6}") if spiking else f"{trend:<6}")
+    )
+    print(f"{i:>2}  {g.count:>7,}  {painted}  {pal.bold(g.title[:110])}  {pal.dim(f'[{g.id}]')}")
     rows = []
-    for cause in g.causes:
-        rows.append(("caused by", cause[:110]))
+    # Like a Java trace: the nearest cause first, the root cause last.
+    for i, cause in enumerate(reversed(g.causes)):
+        last = i == len(g.causes) - 1 and len(g.causes) > 1
+        rows.append(
+            ("root cause" if last else "caused by", pal.red(cause[:110]) if last else cause[:110])
+        )
     if g.raised_at:
-        origin = f" (in {g.origin})" if g.origin else ""
-        rows.append(("raised", f"{g.raised_at} in {g.raised_in}(){origin}"))
+        origin = pal.dim(f" (in {g.origin})") if g.origin else ""
+        rows.append(("raised", f"{pal.bold_cyan(g.raised_at)} in {g.raised_in}(){origin}"))
+        code = _code_row(cfg, pal, g.raised_at)
+        if code:
+            rows.append(code)
     elif g.origin:
         rows.append(("raised", f"in {g.origin}, no frame from this project"))
     if g.logged_at:
-        rows.append(("logged", f"{g.logged_at.id}  {g.logged_at.template!r}"[:120]))
+        template = f"{g.logged_at.template!r}"[:100]
+        rows.append(("logged", f"{pal.bold_cyan(g.logged_at.id)}  {pal.dim(template)}"))
+        code = _code_row(cfg, pal, g.logged_at.id)
+        if code:
+            rows.append(code)
     if len(g.path) > 1:
         rows.append(("path", " → ".join(g.path)))
     seen = []
@@ -478,16 +526,15 @@ def _print_group(i: int, g: ErrorGroup, args: argparse.Namespace, cfg: Config) -
     if seen:
         rows.append(("seen", " · ".join(seen)))
     ids = dict(g.sample.get("ids") or {})
-    trace = ids.pop(cfg.timeline.field_name, None)
+    trace = ids.pop(cfg.timeline.field_name, None) or ids.pop("trace_id", None)
     if trace:
         rows.append(("example", f"logsite trace {trace}"))
     if ids:
         rows.append(("ids", " ".join(f"{k}={v}" for k, v in ids.items())))
     for label, text in rows:
-        print(f"{'':>19}{label:<10}{text}")
+        print(f"{'':>19}{pal.dim(f'{label:<11}')}{text}")
     if args.traceback and g.sample.get("traceback"):
-        for line in g.sample["traceback"].splitlines():
-            print(f"{'':>19}| {line}")
+        _print_traceback(g.sample["traceback"], app, pal, " " * 19)
 
 
 def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
@@ -536,9 +583,10 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
         + (f"; {summary.resolved} gone since the window before" if summary.resolved else "")
         + "\n"
     )
-    print(f"{'#':>2}  {'COUNT':>7}  {'TREND':<6}  ERROR")
+    pal = palette(args.color, sys.stdout)
+    print(pal.dim(f"{'#':>2}  {'COUNT':>7}  {'TREND':<6}  ERROR"))
     for i, g in enumerate(summary.groups[: args.top], 1):
-        _print_group(i, g, args, cfg)
+        _print_group(i, g, args, cfg, app, pal)
     sys.stdout.flush()
     rest = len(summary.groups) - args.top
     if rest > 0:
@@ -818,6 +866,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")
     p.add_argument("--traceback", action="store_true", help="show a sample traceback per group")
+    p.add_argument(
+        "--color",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help="highlight your code (default: in a terminal; NO_COLOR turns it off)",
+    )
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.set_defaults(func=cmd_errors)
 

@@ -41,7 +41,8 @@ class Matcher:
         site = self._match_structured(record)
         if site is not None:
             return site
-        return self._match_template(record.message)
+        # A record with a stack trace attached: the message is its first line.
+        return self._match_template(record.message.split("\n", 1)[0])
 
     def _match_structured(self, record: LogRecord) -> LogSite | None:
         src, line = record.source_file, record.source_line

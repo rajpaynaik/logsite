@@ -168,14 +168,7 @@ def parse_java_trace(text: str) -> list[Exc]:
         stripped = line.strip()
         m = _JAVA_FRAME.match(line)
         if m and chain:
-            cls, src = m["cls"], m["src"]
-            package = cls.rsplit(".", 1)[0].split("$")[0] if "." in cls else ""
-            file, _, number = src.partition(":")
-            if not file.endswith((".java", ".kt", ".scala", ".groovy")):  # Native Method
-                file = cls.rsplit(".", 1)[-1].split("$")[0] + ".java"
-            path = f"{package.replace('.', '/')}/{file}" if package else file
-            method = m["method"]
-            chain[-1].frames.append(Frame(path, int(number) if number.isdigit() else 0, method))
+            chain[-1].frames.append(_java_frame(m["cls"], m["method"], m["src"]))
             continue
         if stripped.startswith(("...", "Suppressed:")):
             continue
@@ -184,7 +177,9 @@ def parse_java_trace(text: str) -> list[Exc]:
             chain.append(Exc(m["type"], (m["msg"] or "").strip()))
     for exc in chain:
         exc.frames.reverse()  # Java prints the innermost frame first
-    return [e for e in reversed(chain) if e.frames]
+    if not chain or not chain[0].frames:
+        return []  # a line that only looks like an exception, without a trace
+    return list(reversed(chain))
 
 
 def parse_go_trace(text: str, exc_type: str = "panic", message: str = "") -> list[Exc]:
@@ -219,6 +214,45 @@ def parse_go_trace(text: str, exc_type: str = "panic", message: str = "") -> lis
             func = line
     exc.frames.reverse()  # Go prints the innermost frame first
     return [exc] if exc.frames else []
+
+
+def _java_frame(cls: str, method: str, src: str) -> Frame:
+    """A Java frame; generated proxies (``Foo$$SpringCGLIB$$0``, ``<generated>``) count as
+    library code, since their file is the class they wrap."""
+    file, _, number = src.partition(":")
+    line = int(number) if number.isdigit() else 0
+    if "$$" in cls or file.startswith("<generated"):
+        return Frame("<generated>", line, method)
+    package = cls.rsplit(".", 1)[0].split("$")[0] if "." in cls else ""
+    if not file.endswith((".java", ".kt", ".scala", ".groovy")):  # Native Method
+        file = cls.rsplit(".", 1)[-1].split("$")[0] + ".java"
+    return Frame(f"{package.replace('.', '/')}/{file}" if package else file, line, method)
+
+
+def line_frame(line: str) -> Frame | None:
+    """The frame one line of a stack trace names (Python, Java or Go), for highlighting."""
+    m = _FRAME.match(line)
+    if m:
+        return Frame(m["file"], int(m["line"]), (m["func"] or "?").strip())
+    m = _JAVA_FRAME.match(line)
+    if m:
+        return _java_frame(m["cls"], m["method"], m["src"])
+    m = _GO_FILE.match(line)
+    if m:
+        return Frame(m["file"], int(m["line"]), "?")
+    return None
+
+
+def is_exception_line(line: str) -> bool:
+    """A line that names an exception: ``Caused by: ...``, ``KeyError: 'x'``, ``panic: ...``."""
+    stripped = line.strip()
+    if not stripped or line[:1].isspace():
+        return False
+    return bool(
+        stripped.startswith(("Caused by:", "panic:", TRACEBACK_START))
+        or _JAVA_EXC.match(stripped)
+        or (_EXC_LINE.match(stripped) and ":" in stripped)
+    )
 
 
 def _parse_any(value: str, f: _Fields) -> tuple[list[Exc], str] | None:
@@ -337,6 +371,7 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
     event: list[str] = []
     in_frames = False  # between "Traceback ..." and the exception line
     in_panic = False  # after a Go "panic: ..."
+    in_java = False  # inside a Java stack trace
     for raw in lines:
         line = raw.rstrip("\n")
         stripped = line.strip()
@@ -347,7 +382,9 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
         elif _JAVA_CONTINUATION.match(line) or (
             not line[:1].isspace() and _JAVA_THROWABLE.match(stripped)
         ):
-            continuation = True
+            continuation = in_java = True
+        elif in_java and stripped and line[:1].isspace():
+            continuation = True  # "  Detail: ...", "  SQLState: 57014" under a cause
         elif stripped.startswith(TRACEBACK_START):
             continuation, in_frames = True, True
         elif stripped in CHAIN_MARKERS:
@@ -367,6 +404,7 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
         if event:
             yield "\n".join(event)
         event = [line] if stripped else []
+        in_java = False
         in_frames = stripped.endswith(TRACEBACK_START)
         in_panic = bool(_GO_PANIC.search(stripped)) or (in_panic and not stripped)
     if event:
