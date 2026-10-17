@@ -36,7 +36,7 @@ assistants. See the [project README](https://github.com/rajpaynaik/logsite#readm
 
 ## Setup
 
-1. **Install the server** in your project's environment:
+1. **Install the server** ([logsite on PyPI](https://pypi.org/project/logsite/)) in your project's environment:
 
    ```bash
    pip install "logsite[lsp]"

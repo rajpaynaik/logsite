@@ -1,5 +1,11 @@
 # logsite
 
+[![PyPI](https://img.shields.io/pypi/v/logsite)](https://pypi.org/project/logsite/)
+[![Python](https://img.shields.io/pypi/pyversions/logsite)](https://pypi.org/project/logsite/)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/rajpaynaik.logsite?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
+[![CI](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **See how often each log line fires in production, and catch bad logging, right next to the `logger.info(...)` call in your editor.**
 
 ```python
@@ -49,9 +55,14 @@ It doesn't depend on any one vendor: Loki, OpenSearch / Elasticsearch and CloudW
 ## Install
 
 ```bash
-pip install "logsite[lsp]"        # editor support; add ,mcp for the MCP server
-                                  # until the first release is on PyPI: pip install -e ".[dev]"
+pip install logsite                # the CLI: lint, errors, cost, grafana, pipeline, alert-server…
+pip install "logsite[lsp,mcp]"     # + the editor language server and the MCP server
+pipx install "logsite[lsp]"        # or once for your user, e.g. for Java and Go projects
 ```
+
+**Editor:** install [logsite for VS Code](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
+(search "logsite" in the Extensions view). It uses the language server above; other editors
+(Neovim, JetBrains, Helix, Zed) can run `logsite serve` as an LSP server.
 
 ## Quick start
 
@@ -674,7 +685,8 @@ class LogBackend(ABC):
 ## Roadmap
 
 - [x] **v0.1**: log index, Loki + file backends, code-lens counts, quality linter, CLI
-- [ ] VS Code extension on the Marketplace and Open VSX ([`editors/vscode`](editors/vscode)): packaging and release workflow ready ([RELEASING.md](RELEASING.md)); waiting on the first `v0.1.0` tag
+- [x] **v0.1.0 released**: [PyPI](https://pypi.org/project/logsite/) and the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite) ([`editors/vscode`](editors/vscode); releases: [RELEASING.md](RELEASING.md))
+- [ ] Open VSX (VSCodium, Cursor, Windsurf)
 - [x] Git correlation: when a line spikes, show the commits that touched it
 - [x] MCP server: let AI assistants ask "which log lines spiked after the last deploy?"
 - [x] OpenSearch and CloudWatch Logs backends
