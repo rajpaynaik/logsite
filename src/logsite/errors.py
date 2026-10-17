@@ -348,11 +348,15 @@ def summarize_errors(
 
 
 def group_json(g: ErrorGroup) -> dict:
+    ids = g.sample.get("ids") or {}
+    trace = ids.get("trace_id") or next((v for k, v in ids.items() if "trace" in k.lower()), None)
     return {
         "id": g.id,
         "title": g.title,
         "type": g.exc_type,
         "causes": g.causes,
+        "root_cause": g.causes[0] if g.causes else None,  # flat, for tables
+        "example_trace": trace,
         "count": g.count,
         "previous": g.previous,
         "trend": g.trend,

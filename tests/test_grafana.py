@@ -30,7 +30,7 @@ def test_deployed_prefix_and_level_field():
     assert deployed_prefix([rec(pathname="app/api.py")], SITES) == ""
     assert level_field([rec(levelname="INFO"), rec(levelname="ERROR")]) == "levelname"
     assert level_field([rec(**{"log.level": "info"})]) == "log_level"  # Loki's json naming
-    assert level_field([]) == "level"
+    assert level_field([]) is None  # plain text: the level is a word in the line
 
 
 def test_queries():
@@ -189,3 +189,39 @@ def test_committed_catalog_dashboard_is_current():
     assert json.loads(committed.read_text()) == json.loads(json.dumps(fresh)), (
         "regenerate: logsite grafana --generic -o integrations/grafana/logsite-dashboard.json"
     )
+
+
+def test_error_groups_panel():
+    plain = build_dashboard(SITES, LokiShape('{app="shop"}'), title="shop")
+    d = build_dashboard(
+        SITES, LokiShape('{app="shop"}'), title="shop", error_groups_url="http://logsite:8085/"
+    )
+    panel = d["panels"][4]
+    assert panel["title"] == "Error groups" and panel["gridPos"]["y"] == 4
+    (target,) = panel["targets"]
+    assert target["datasource"] == {"type": "yesoreyeram-infinity-datasource", "uid": "${logsite}"}
+    assert target["url"] == "${logsite_url}/errors" and target["root_selector"] == "groups"
+    assert target["url_options"]["params"] == [
+        {"key": "from", "value": "${__from}"},
+        {"key": "to", "value": "${__to}"},
+    ]  # follows the dashboard's time range
+    order = panel["transformations"][0]["options"]["indexByName"]
+    assert list(order)[:5] == ["Trend", "Count", "Error", "Root cause", "Raised at"]
+    links = [o for o in panel["fieldConfig"]["overrides"] if o["matcher"]["options"] == "Raised at"]
+    assert links[0]["properties"][0]["value"][0]["url"] == "${__data.fields.raised_url}"
+    variables = {v["name"]: v for v in d["templating"]["list"]}
+    assert variables["logsite_url"]["query"] == "http://logsite:8085"  # trailing / dropped
+    assert variables["logsite"]["query"] == "yesoreyeram-infinity-datasource"
+    # everything below the totals moved down to make room
+    before = {p["title"]: p["gridPos"]["y"] for p in plain["panels"]}
+    after = {p["title"]: p["gridPos"]["y"] for p in d["panels"] if p["title"] != "Error groups"}
+    assert all(after[t] == y + (9 if y >= 4 else 0) for t, y in before.items())
+    generic = build_dashboard(
+        [], LokiShape(""), title="g", generic=True, error_groups_url="http://x"
+    )
+    assert any(r["id"] == "yesoreyeram-infinity-datasource" for r in generic["__requires"])
+
+
+def test_plain_text_records_match_the_level_in_the_line():
+    q = Queries(LokiShape('{app="orders"}', plain_text=True))
+    assert q.errors == '{app="orders"} |~ "\\\\b(ERROR|CRITICAL|FATAL)\\\\b"'

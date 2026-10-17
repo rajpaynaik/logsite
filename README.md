@@ -498,6 +498,38 @@ top = 3                             # groups per alert
 selector_labels = ["service_name"]  # alert labels that narrow the Loki selector
 ```
 
+#### The same summary on the dashboard
+
+`logsite grafana --error-groups http://<logsite host>:8085` adds an **Error groups** panel at
+the top of the dashboard: errors grouped by cause for the dashboard's time range, so whoever
+opens Grafana from the alert sees it first.
+
+| Trend | Count | Error | Root cause | Raised at | Code | Logged at |
+|---|---|---|---|---|---|---|
+| new | 1800 | OrderProcessingException: Unable to save order ORD-&lt;n&gt; | PSQLException: canceling statement due to statement timeout | OrderRepository.java:87 | `return jpa.save(order);` | OrderController.java:56 |
+| new | 640 | Retry failed for order ORD-&lt;n&gt; | | | | OrderService.java:170 |
+
+"Raised at" and "Logged at" link to the code. The panel reads `logsite alert-server`'s
+`/errors` through the free [Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/)
+data source plugin. Install it, then add an Infinity data source with the token as a header,
+so it never appears in a dashboard:
+
+```yaml
+# provisioning/datasources/logsite.yaml (or the same fields in the UI)
+apiVersion: 1
+datasources:
+  - name: logsite
+    type: yesoreyeram-infinity-datasource
+    jsonData:
+      httpHeaderName1: Authorization
+      allowedHosts: ["http://logsite:8085"]
+    secureJsonData:
+      httpHeaderValue1: Bearer <LOGSITE_ALERT_TOKEN>
+```
+
+Pick it in the dashboard's **logsite (Infinity)** variable. The panel is opt-in, so the
+catalog dashboard doesn't require the plugin.
+
 ### Alloy rules: drop or sample noisy lines before they're shipped
 
 ```bash
@@ -644,7 +676,7 @@ class LogBackend(ABC):
 - [x] Grafana dashboard generator: `logsite grafana` writes a dashboard of log cost and errors per code line from Loki, with source links
 - [x] Grafana Alloy rules: `logsite pipeline` drops or samples noisy log calls before they're shipped, sized and priced from production volume
 - [x] Alert enrichment: `logsite alert-server` receives Grafana's webhook contact point and posts the error summary for the alert's window to Slack or a webhook
-- [ ] "Error groups" dashboard panel reading `logsite alert-server`'s `/errors`
+- [x] "Error groups" dashboard panel (`logsite grafana --error-groups`) reading `logsite alert-server`'s `/errors` through the Infinity data source
 - [ ] Grafana app plugin: the same views as pages inside Grafana, listed in the plugin catalog
 - [ ] Incident investigation: `logsite investigate <error group>` and an MCP tool that gather the evidence for one error in a single call: when it started and the deploy just before, commits in that release touching the code where it's raised, other errors that started at the same time, affected services / tenants, and a few full request timelines
 - [ ] CI gate after a deploy: `logsite errors --since-deploy <ref> --fail-on-new` exits non-zero when new error groups appear, to stop or roll back a bad release

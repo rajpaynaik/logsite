@@ -701,6 +701,7 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
             title=args.title or "Log cost per code line (logsite)",
             uid=args.uid or "logsite-log-cost",
             generic=True,
+            error_groups_url=args.error_groups,
         )
         _write(json.dumps(dashboard, indent=2) + "\n", args.output)
         where = f" written to {args.output}" if args.output else ""
@@ -720,7 +721,8 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
         parser=b.get("parser", "json"),
         file_field=b.get("file_label", "pathname"),
         line_field=b.get("line_label", "lineno"),
-        level_field=args.level_field or level_field(sample),
+        level_field=args.level_field or level_field(sample) or "level",
+        plain_text=args.level_field is None and level_field(sample) is None and bool(sample),
         prefix=deployed_prefix(sample, sites) if args.strip_prefix is None else args.strip_prefix,
     )
     url = args.source_url or source_url(cfg.root)
@@ -734,6 +736,7 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
         source_url=url,
         ref=ref,
         uid=args.uid,
+        error_groups_url=args.error_groups,
     )
     text = json.dumps(dashboard, indent=2) + "\n"
     if args.output:
@@ -744,7 +747,9 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
     notes = [
         f"{len(sites)} log call(s) from {cfg.root}",
         f"selector {shape.selector}, {shape.parser} with {shape.file_field}/{shape.line_field}",
-        f"level field {shape.level_field!r}",
+        "plain-text records (level matched in the line)"
+        if shape.plain_text
+        else f"level field {shape.level_field!r}",
     ]
     if shape.prefix:
         notes.append(f"strips {shape.prefix!r} from deployed paths")
@@ -979,6 +984,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--source-url", help="link template with {ref}, {path}, {line}")
     p.add_argument("--ref", help="git ref for source links (default: the current commit)")
+    p.add_argument(
+        "--error-groups",
+        metavar="URL",
+        help="add an Error groups panel reading logsite alert-server at URL (Infinity plugin)",
+    )
     p.add_argument(
         "--generic",
         action="store_true",

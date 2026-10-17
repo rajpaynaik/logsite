@@ -17,6 +17,7 @@ from .models import LogRecord, LogSite
 MAX_MAPPINGS = 2000  # message templates baked into the table; more makes the JSON heavy
 SECONDS_PER_MONTH = 30 * 24 * 3600
 ERROR_LEVELS = "(?i)(error|err|critical|crit|fatal|exception|alert|emergency)"
+PLAIN_ERROR = "\\b(ERROR|CRITICAL|FATAL)\\b"  # "2026-10-17 12:00:01 ERROR [app] ..."
 
 
 @dataclass
@@ -29,6 +30,7 @@ class LokiShape:
     line_field: str = "lineno"
     level_field: str = "level"
     prefix: str = ""  # deployed path prefix to strip, e.g. "/srv/"
+    plain_text: bool = False  # records aren't JSON / logfmt: the level is a word in the line
 
 
 def deployed_prefix(records: Iterable[LogRecord], sites: Iterable[LogSite]) -> str:
@@ -45,8 +47,9 @@ def deployed_prefix(records: Iterable[LogRecord], sites: Iterable[LogSite]) -> s
     return seen.most_common(1)[0][0] if seen else ""
 
 
-def level_field(records: Iterable[LogRecord]) -> str:
-    """The field the records keep their level in, as Loki's json parser names it."""
+def level_field(records: Iterable[LogRecord]) -> str | None:
+    """The field the records keep their level in, as Loki's json parser names it; None for
+    plain-text records, whose level is a word in the line."""
     from .tracebacks import LEVEL_FIELDS
 
     found: Counter[str] = Counter()
@@ -55,8 +58,11 @@ def level_field(records: Iterable[LogRecord]) -> str:
             if key in r.fields:
                 found[key] += 1
                 break
-    key = found.most_common(1)[0][0] if found else "level"
-    return key.replace(".", "_")  # Loki's json parser flattens nested keys with "_"
+    if not found:
+        return None
+    return found.most_common(1)[0][0].replace(
+        ".", "_"
+    )  # Loki's json parser flattens nested keys with "_"
 
 
 def _q(s: str) -> str:
@@ -78,7 +84,9 @@ class Queries:
             f"logsite_site=`{{{{ {file_expr} }}}}:{{{{ .{line} }}}}`"
         )
         self.errors = (
-            f"{shape.selector} | {shape.parser} | __error__=`` "
+            f"{shape.selector} |~ {_q(PLAIN_ERROR)}"
+            if shape.plain_text
+            else f"{shape.selector} | {shape.parser} | __error__=`` "
             f"| {shape.level_field}=~{_q(ERROR_LEVELS)}"
         )
 
@@ -230,6 +238,107 @@ def _generic_variables() -> list[dict]:
     ]
 
 
+INFINITY = "yesoreyeram-infinity-datasource"  # Grafana's free JSON / HTTP data source plugin
+ERROR_GROUP_COLUMNS = [  # (field in logsite's /errors, column title, type)
+    ("trend_label", "Trend", "string"),
+    ("count", "Count", "number"),
+    ("title_short", "Error", "string"),
+    ("root_cause_short", "Root cause", "string"),
+    ("raised_name", "Raised at", "string"),
+    ("raised_code", "Code", "string"),
+    ("logged_name", "Logged at", "string"),
+    ("example_trace", "Example trace", "string"),
+    ("raised_url", "raised_url", "string"),
+    ("logged_url", "logged_url", "string"),
+]
+
+
+def _code_link(column: str, url_field: str) -> dict:
+    link = {"title": "Open in the code", "url": f"${{__data.fields.{url_field}}}"}
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [{"id": "links", "value": [{**link, "targetBlank": True}]}],
+    }
+
+
+def _width(column: str, width: int) -> dict:
+    return {
+        "matcher": {"id": "byName", "options": column},
+        "properties": [{"id": "custom.width", "value": width}],
+    }
+
+
+def error_groups_panel(pid: int, y: int) -> dict:
+    """Errors grouped by cause, from ``logsite alert-server``'s ``/errors`` through the
+    Infinity data source; it follows the dashboard's time range."""
+    target = {
+        "refId": "A",
+        "datasource": {"type": INFINITY, "uid": "${logsite}"},
+        "type": "json",
+        "source": "url",
+        "format": "table",
+        "parser": "backend",
+        "url": "${logsite_url}/errors",
+        "url_options": {
+            "method": "GET",
+            "data": "",
+            "params": [{"key": "from", "value": "${__from}"}, {"key": "to", "value": "${__to}"}],
+        },
+        "root_selector": "groups",
+        "columns": [
+            {"selector": f, "text": title, "type": kind} for f, title, kind in ERROR_GROUP_COLUMNS
+        ],
+    }
+    trend = {
+        "matcher": {"id": "byName", "options": "Trend"},
+        "properties": [
+            {"id": "custom.width", "value": 70},
+            {
+                "id": "mappings",
+                "value": [{"type": "value", "options": {"new": {"color": "red", "index": 0}}}],
+            },
+            {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+        ],
+    }
+    return {
+        "id": pid,
+        "type": "table",
+        "title": "Error groups",
+        "description": "Production errors grouped by cause (the exception chain and the frames "
+        "in your code), new and spiking first, for the dashboard's time range. From logsite "
+        "alert-server's /errors.",
+        "gridPos": {"h": 9, "w": 24, "x": 0, "y": y},
+        "datasource": {"type": INFINITY, "uid": "${logsite}"},
+        "targets": [target],
+        # Infinity sorts columns by name; keep the order above.
+        "transformations": [
+            {
+                "id": "organize",
+                "options": {
+                    "indexByName": {title: i for i, (_, title, _) in enumerate(ERROR_GROUP_COLUMNS)}
+                },
+            }
+        ],
+        "fieldConfig": {
+            "defaults": {"custom": {"align": "auto"}},
+            "overrides": [
+                *_hidden("raised_url", "logged_url"),
+                _code_link("Raised at", "raised_url"),
+                _code_link("Logged at", "logged_url"),
+                trend,
+                _width("Count", 70),
+                _width("Error", 280),
+                _width("Root cause", 260),
+                _width("Raised at", 170),
+                _width("Code", 190),
+                _width("Logged at", 170),
+                _width("Example trace", 100),
+            ],
+        },
+        "options": {"showHeader": True, "cellHeight": "sm"},
+    }
+
+
 def build_dashboard(
     sites: Iterable[LogSite],
     shape: LokiShape,
@@ -241,6 +350,7 @@ def build_dashboard(
     ref: str = "HEAD",
     uid: str | None = None,
     generic: bool = False,
+    error_groups_url: str | None = None,
 ) -> dict:
     """The dashboard for ``sites``, or with ``generic`` one for any project, whose shape and
     code links are dashboard variables (``shape`` and ``source_url`` are then ignored)."""
@@ -414,6 +524,26 @@ def build_dashboard(
         *(_generic_variables() if generic else []),
         price,
     ]
+    if error_groups_url:
+        for panel in panels:
+            if panel["gridPos"]["y"] >= 4:
+                panel["gridPos"]["y"] += 9
+        panels.insert(4, error_groups_panel(10, 4))
+        variables += [
+            {
+                "name": "logsite",
+                "label": "logsite (Infinity)",
+                "type": "datasource",
+                "query": INFINITY,
+                "current": {},
+            },
+            _textbox(
+                "logsite_url",
+                "logsite URL",
+                error_groups_url.rstrip("/"),
+                "Where logsite alert-server runs, as Grafana's server reaches it",
+            ),
+        ]
     extra: dict = {}
     if generic:
         for panel in panels:
@@ -431,6 +561,11 @@ def build_dashboard(
         extra["__requires"] = [
             {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
             {"type": "datasource", "id": "loki", "name": "Loki", "version": "1.0.0"},
+            *(
+                [{"type": "datasource", "id": INFINITY, "name": "Infinity", "version": "2.0.0"}]
+                if error_groups_url
+                else []
+            ),
             *(
                 {"type": "panel", "id": t, "name": t.title(), "version": ""}
                 for t in ("stat", "table", "timeseries", "logs", "text")

@@ -41,6 +41,7 @@ SUMMARY = {
                 PSQL,
                 "org.springframework.dao.QueryTimeoutException: JDBC statement timed out",
             ],
+            "root_cause": PSQL,
             "count": 561,
             "previous": 0,
             "trend": "new",
@@ -55,6 +56,7 @@ SUMMARY = {
             "title": "Retry failed for order ORD-<n>",
             "type": None,
             "causes": [],
+            "root_cause": None,
             "count": 197,
             "previous": 200,
             "trend": "1.0x",
@@ -237,3 +239,17 @@ def test_cli_refuses_to_listen_publicly_without_a_token(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit, match="needs a token"):
         main(["alert-server", "--host", "0.0.0.0"])
+
+
+def test_errors_endpoint_adds_links_and_short_names(server):
+    url, rec = server
+    status, body = call(f"{url}/errors?service_name=&token=t0ken")
+    assert status == 200
+    assert rec.calls[-1][2] == {}  # an empty dashboard variable means "all services"
+    first, second = body["groups"]
+    assert first["title_short"] == "OrderProcessingException: Unable to save order ORD-<n>"
+    assert first["root_cause_short"].startswith("PSQLException: ERROR: canceling statement")
+    assert first["raised_name"] == "OrderRepository.java:87"
+    assert first["trend_label"] == "new" and second["trend_label"] == "1.0x"
+    assert first["raised_url"] is None  # the test enricher has no code host
+    assert second["raised_name"] is None and second["logged_name"] == "OrderService.java:170"

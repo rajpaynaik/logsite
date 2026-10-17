@@ -94,6 +94,7 @@ def parse_grafana(payload: Mapping[str, Any]) -> list[Alert]:
     return alerts
 
 
+_PACKAGE = re.compile(r"^(?:[a-z_$][\w$]*\.)+(?=[A-Z])")  # "com.example.orders." in a class name
 _LABEL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -224,6 +225,25 @@ class Enricher:
         self.send = send
         self.now = now or (lambda: datetime.now(timezone.utc))
 
+    def with_links(self, summary: dict) -> dict:
+        """Add each group's code links and a short trend, for a dashboard table."""
+        for g in summary.get("groups", []):
+            for key in ("raised_at", "logged_at"):
+                where = g.get(key)
+                g[key.replace("_at", "_url")] = (
+                    self.code_url(where) if where and self.code_url else None
+                )
+                g[key.replace("_at", "_code")] = (
+                    self.code_line(where) if where and self.code_line else None
+                )
+                # "OrderRepository.java:87": short enough for a table column
+                g[key.replace("_at", "_name")] = where.rsplit("/", 1)[-1] if where else None
+            g["trend_label"] = "new" if g.get("new") else (g.get("trend") or "")
+            # "OrderProcessingException: ..." without its package, for narrow columns
+            g["title_short"] = _PACKAGE.sub("", g.get("title") or "")
+            g["root_cause_short"] = _PACKAGE.sub("", g.get("root_cause") or "") or None
+        return summary
+
     def handle(self, payload: Mapping[str, Any]) -> list[dict]:
         results = []
         for alert in parse_grafana(payload):
@@ -302,9 +322,11 @@ def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> 
                 start = _time(q.get("from", [None])[0]) or end - timedelta(hours=1)
             except ValueError as exc:
                 return self._reply(400, {"error": str(exc)})
-            labels = {k: v[0] for k, v in q.items() if k in enricher.cfg.selector_labels}
+            labels = {
+                k: v[0] for k, v in q.items() if k in enricher.cfg.selector_labels and v[0]
+            }  # an empty dashboard variable means "all"
             try:
-                self._reply(200, enricher.summarize(start, end, labels))
+                self._reply(200, enricher.with_links(enricher.summarize(start, end, labels)))
             except Exception as exc:  # the backend is down: say so, keep serving
                 self._reply(502, {"error": f"couldn't query the backend: {exc}"})
 
