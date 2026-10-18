@@ -87,6 +87,9 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
   every error group, so a regression comes with the fix that worked last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
 - **Leaks**: secrets and personal data that actually reached production logs, per log call.
 - **Request timeline**: `logsite trace <id>`, every line of one request across services.
+- **Claude Code plugin**: the assistant checks what production says about a function before it
+  changes it (errors, earlier fixes, log cost), and gets test failures grouped by cause.
+  `/plugin marketplace add rajpaynaik/logsite`. → [Claude Code](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md)
 - **MCP server**: AI assistants ask "what's failing in production, and why?" and get the
   incidents, groups and code lines. → [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
 
@@ -140,6 +143,7 @@ logsite cost --price-per-gb 0.5    # what each log call costs per month
 [Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md) ·
 [Request timeline](https://github.com/rajpaynaik/logsite/blob/main/docs/timeline.md) ·
 [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) ·
+[Claude Code plugin](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md) ·
 [How it works](https://github.com/rajpaynaik/logsite/blob/main/docs/how-it-works.md) ·
 [Roadmap](https://github.com/rajpaynaik/logsite/blob/main/docs/roadmap.md)
 

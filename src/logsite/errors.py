@@ -115,6 +115,7 @@ class ErrorGroup:
     origin: str | None = None  # the library the cause was raised in, e.g. "httpx"
     logged_at: LogSite | None = None  # the log call that logged it most often
     path: list[str] = field(default_factory=list)  # project functions, outermost first
+    frames_at: list[str] = field(default_factory=list)  # "path:line" of those functions
     services: Counter[str] = field(default_factory=Counter)
     levels: Counter[str] = field(default_factory=Counter)
     sample: dict = field(default_factory=dict)
@@ -205,6 +206,7 @@ def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
             group.origin = root.type.rsplit(".", 1)[0]  # sun.nio -> java.net: what it means
     # The cause's frames run from the entry point to where it was raised.
     group.path = [f"{Path(p).stem}.{f.function}" for p, f in own]
+    group.frames_at = [f"{p}:{f.line}" for p, f in own]  # every frame of yours, outermost first
     if group.origin:
         group.path.append(group.origin)
 

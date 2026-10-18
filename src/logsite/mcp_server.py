@@ -30,8 +30,12 @@ from .structure import production_score, score_project
 from .timeline import find_timeline, timeline_json
 
 INSTRUCTIONS = """\
-logsite maps production logs back to the Python log calls that emitted them.
+logsite maps production logs back to the code (Python, Java, Go) that emitted them.
 Log calls are identified as "PATH:LINE" (PATH relative to the project root).
+Before changing code, call `production_context` with the file (and line or range): the
+errors raised, logged or passing through there (and whether one came back after a fix, and
+what fixed it), what its log calls cost, the last commits and logging problems. Don't undo
+an earlier fix it reports, and avoid adding log calls to lines it shows as very busy.
 For "what's failing in production?", start with `investigate`: errors linked into incidents,
 each with its cause, effects, the deploy before it and suspect commits; `error_summary` lists
 the groups themselves.
@@ -509,6 +513,29 @@ def build_server(cfg: Config) -> MCPServer:
         except ValueError as exc:
             raise ToolError(str(exc)) from exc
         return [_commit(c) for c in site_history(cfg.root, path, line, max_count=max_count)]
+
+    @mcp.tool(annotations=READ_ONLY)
+    def production_context(
+        path: str, line: int | None = None, end_line: int | None = None, hours: float | None = None
+    ) -> dict[str, Any]:
+        """What production says about a piece of code, before you change it.
+
+        path is relative to the project root. With `line` alone, the function around it
+        (Python) or the lines near it; with `end_line`, that range; with neither, the file.
+        Returns the error groups raised, logged or passing through there in the last
+        `hours` (with their history: `history.regression` means it came back after a fix,
+        `history.fixed_by` the commits that fixed it then), the log calls there with volume
+        and monthly cost, recent commits, and lint findings. Without a backend, the
+        production parts are listed under `unavailable` and the rest is still returned.
+        """
+        from .about import about, about_json, parse_span
+
+        target = path if line is None else f"{path}:{line}" + (f"-{end_line}" if end_line else "")
+        try:
+            span = parse_span(cfg.root, target)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        return about_json(about(cfg, span, hours))
 
     return mcp
 

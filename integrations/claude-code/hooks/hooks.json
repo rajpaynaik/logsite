@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v logsite >/dev/null 2>&1 && logsite hook claude || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "logsite",
+  "description": "logsite for Claude Code: production context, test failures grouped by cause.",
+  "owner": {
+    "name": "Raj Paynaik"
+  },
+  "plugins": [
+    {
+      "name": "logsite",
+      "source": "./integrations/claude-code",
+      "description": "Production context for Claude Code: errors, history and log cost behind the code you're changing, and test failures grouped by cause."
+    }
+  ]
+}

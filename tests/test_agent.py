@@ -199,3 +199,19 @@ def test_state_dir_follows_xdg(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     assert agent.state_dir() == tmp_path / "logsite" / "agent"
     assert agent.state_key(tmp_path, ["pytest"]) != agent.state_key(tmp_path, ["pytest", "-x"])
+
+
+def test_a_run_that_didnt_run_doesnt_say_fixed(project, capsys, monkeypatch):
+    assert main(["agent", "--", *PYTEST]) == 1
+    capsys.readouterr()
+    # the same command, but it can't start (not on PATH): nothing was tested
+    real = agent.run_command
+    monkeypatch.setattr(
+        agent, "run_command", lambda c, r: ("command not found: pytest\n", 127, 0.0)
+    )
+    assert main(["agent", "--", *PYTEST]) == 127
+    assert "fixed" not in capsys.readouterr().out
+    monkeypatch.setattr(agent, "run_command", real)
+    assert main(["agent", "--", *PYTEST]) == 1  # compared with the last real run
+    out = capsys.readouterr().out
+    assert "fixed" not in out and "still failing" in out

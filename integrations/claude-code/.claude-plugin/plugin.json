@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "logsite",
+  "version": "0.3.1",
+  "description": "Production context for Claude Code: the errors, history and log cost behind the code you're changing (MCP), test and build failures grouped by cause (hook), and skills to investigate and fix production errors.",
+  "author": {
+    "name": "Raj Paynaik"
+  },
+  "homepage": "https://github.com/rajpaynaik/logsite",
+  "repository": "https://github.com/rajpaynaik/logsite",
+  "license": "MIT",
+  "keywords": ["logs", "observability", "errors", "loki", "grafana", "tests"]
+}

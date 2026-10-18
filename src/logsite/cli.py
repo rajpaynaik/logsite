@@ -626,9 +626,13 @@ def cmd_agent(args: argparse.Namespace, cfg: Config) -> int:
     app = AppFiles.scan(root, DEFAULT_EXCLUDES | set(cfg.excludes), tests=True)
     run = agent.analyse(command, output, code, seconds, app)
     key = agent.state_key(root, command)
-    previous = agent.load_previous(key)
+    # A failing run with no results (command not found, a crash before any test ran) says
+    # nothing about the failures: don't call them fixed, and keep the last real run.
+    real = code == 0 or bool(run.causes or run.counts)
+    previous = agent.load_previous(key) if real else None
     d = agent.delta(run, previous)
-    agent.save(key, run, output)
+    if real:
+        agent.save(key, run, output)
     try:
         agent.last_key_file(root).write_text(key)
     except OSError:
@@ -1049,6 +1053,37 @@ def cmd_seen(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_hook(args: argparse.Namespace, cfg: Config | None) -> int:
+    """A Claude Code PreToolUse hook: test and build commands through agent mode."""
+    from .hook import claude
+
+    return claude()
+
+
+def cmd_about(args: argparse.Namespace, cfg: Config) -> int:
+    """What production says about a file, line or range: errors, cost, commits, lint."""
+    from .about import about, about_json, parse_span, render
+
+    target = args.target
+    path, sep, lines = target.rpartition(":")
+    rel_path = path if sep and lines.replace("-", "").isdigit() else target
+    try:  # paths are relative to the current directory, like other commands
+        rel = (Path.cwd() / rel_path).resolve().relative_to(cfg.root.resolve()).as_posix()
+    except ValueError:
+        sys.exit(f"logsite: {rel_path} is outside the project root {cfg.root}")
+    try:
+        span = parse_span(cfg.root, rel + (f":{lines}" if rel_path != target else ""))
+    except ValueError as exc:
+        sys.exit(f"logsite: {exc}")
+    result = about(cfg, span, args.hours)
+    if args.format == "json":
+        json.dump(about_json(result), sys.stdout, indent=2)
+        print()
+    else:
+        print(render(result, cfg.cost.currency))
+    return 0
+
+
 def cmd_history(args: argparse.Namespace, cfg: Config) -> int:
     try:
         path, line = parse_target(args.target, cfg.root)
@@ -1292,6 +1327,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.set_defaults(func=cmd_leaks)
 
+    p = sub.add_parser("hook", help="Claude Code hook: test/build commands through agent mode")
+    p.add_argument("agent", choices=["claude"], help="the assistant (claude: Claude Code)")
+    p.set_defaults(func=cmd_hook, needs_config=False)
+
+    p = sub.add_parser(
+        "about", help="what production says about a file, line or range: errors, cost, commits"
+    )
+    p.add_argument("target", help="PATH, PATH:LINE (its function) or PATH:START-END")
+    p.add_argument("--hours", type=float)
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_about)
+
     p = sub.add_parser("history", help="commits that touched the code around a log line")
     p.add_argument("target", metavar="PATH:LINE")
     p.add_argument("--max", type=int, default=10)
@@ -1302,6 +1349,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("mcp", help="run the MCP server on stdio").set_defaults(func=cmd_mcp)
 
     args = parser.parse_args(argv)
+    if not getattr(args, "needs_config", True):  # the hook: never fail on a bad config
+        return args.func(args, None)
     try:
         cfg = load_config(args.config_dir)
     except ValueError as exc:

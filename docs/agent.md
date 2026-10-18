@@ -49,7 +49,9 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1 · 0.2s
   `$XDG_CACHE_HOME`), never in your repo.
 - `--format json` for tools.
 
-To have an assistant use it, tell it once, for example in `CLAUDE.md` / `AGENTS.md`:
+With Claude Code, the [plugin](claude-code.md) (or its hook alone, `logsite hook claude`) does
+this for every test and build command. For other assistants, tell it once, for example in
+`CLAUDE.md` / `AGENTS.md`:
 
 ```markdown
 Run tests and builds through logsite: `logsite agent -- pytest`, `logsite agent -- go test ./...`,

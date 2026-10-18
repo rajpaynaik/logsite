@@ -207,3 +207,15 @@ def test_env_sets_the_path(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("LOGSITE_HISTORY", str(tmp_path / "data" / "h.db"))
     assert main(["sync"]) == 0
     assert (tmp_path / "data" / "h.db").exists() and not (tmp_path / "h.db").exists()
+
+
+def test_rereading_old_sightings_of_a_gone_group_is_not_a_regression(tmp_path):
+    store = History(tmp_path / "h.db")
+    old = group("a", T0)
+    run(store, [old], T0, T0 + H)
+    run(store, [], T0 + H, T0 + 30 * H)
+    assert store.show("a")["status"] == "resolved"
+    # a 30-day window later reads the same old records again
+    (h,) = run(store, [group("a", T0)], T0 - H, T0 + 40 * H).values()
+    assert not h.regression and h.known
+    assert store.show("a")["status"] == "resolved" and store.show("a")["regressions"] == 0

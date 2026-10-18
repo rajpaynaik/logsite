@@ -61,6 +61,7 @@ def test_tools_are_read_only(project):
 
     tools = {t.name: t for t in asyncio.run(run())}
     assert set(tools) == {
+        "production_context",
         "list_log_calls",
         "list_rules",
         "lint",

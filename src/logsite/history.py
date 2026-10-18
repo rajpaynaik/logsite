@@ -138,7 +138,10 @@ class History:
                 "from hours where fingerprint = ?",
                 (g.fingerprint,),
             ).fetchone()
-            regression = row["status"] == "resolved"
+            # back only if seen after it was marked gone: a wide window re-reading the old
+            # sightings of a resolved group isn't a regression
+            seen = _iso(g.last_seen) or ""
+            regression = row["status"] == "resolved" and seen > (row["resolved_at"] or "")
             first = _dt(row["first_seen"])
             fix = {
                 "resolved_at": row["resolved_at"],

@@ -26,7 +26,9 @@ logsite pipeline --max-per-window 100000 --drop-level debug -o logsite.alloy   #
 logsite grafana -o dashboard.json   # Grafana dashboard: cost and errors per code line (Loki)
 logsite alert-server       # send the error summary with Grafana alerts (Slack / webhook)
 logsite alert-server --sync-every 15m   # ... and keep the history filled (the Docker image does)
+logsite about app/checkout.py:7   # what production says about this code: errors, cost, commits, lint
 logsite history app/checkout.py:7   # commits that touched the code around a log line
+logsite hook claude        # Claude Code hook: test/build commands through agent mode (reads stdin)
 logsite leaks              # secrets / personal data in production logs, per log call (exit 1 if any)
 logsite trace 4bf92f35...  # every log line for one request, across services, in order
 logsite serve              # language server on stdio (used by editors)
