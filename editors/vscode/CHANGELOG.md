@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+The extension itself is unchanged; it uses logsite 0.2.0, which adds:
+
+- `logsite investigate`: error groups linked into incidents, with the deploy and suspect commits.
+- `logsite agent -- <command>`: test and build failures grouped by cause, with what changed
+  since the last run, for AI coding assistants.
+- A CI gate: `logsite errors --fail-on-new` / `--fail-on-spike`.
+- Better Java and Go error summaries: framework wrappers skipped, panics pointing at your code.
+
 ## 0.1.0 (preview)
 
 First release.
