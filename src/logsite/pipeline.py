@@ -4,7 +4,9 @@ lines stop costing money without waiting for a code change. Written as a Grafana
 
 Which lines get a rule comes from ``[pipeline]`` in logsite.toml (``drop``, ``sample``) and,
 optionally, from production volume: lines above ``max_per_window`` are sampled down to it,
-and lines at a ``drop_levels`` level are dropped. Warning and error lines never get a rule.
+and lines at a ``drop_levels`` level are dropped. Only log calls at a known low level (see
+``ELIGIBLE``) can get a rule: warning and error lines, levels set at runtime and unknown
+levels never do, and every rule also skips lines that look like errors.
 """
 
 from __future__ import annotations
@@ -17,6 +19,10 @@ from .cost import CostConfig, format_bytes, format_money, monthly_costs
 from .models import LogSite, Usage
 
 NEVER_TOUCH = {"warning", "warn", "error", "exception", "critical", "fatal"}
+# Fail closed: only log calls whose level in the code is one of these can get a rule. A
+# level set at runtime (``log.log(level, ...)``, indexed as "log") or one we don't know
+# could be an error, so it's skipped like warning and error lines.
+ELIGIBLE = {"trace", "debug", "info", "notice", "success"}
 # Template rules match the raw line loosely; these keep error-looking lines out of them.
 ERROR_GUARD = "(?i)(error|exception|traceback|critical|fatal)"
 MIN_TEMPLATE_TEXT = 8  # fixed characters a template needs to be matched safely
@@ -125,8 +131,14 @@ def make_plan(
         if site is None:
             skipped.append((sid, "not a log call in this project"))
             continue
-        if site.level in NEVER_TOUCH:
-            skipped.append((sid, f"{site.level} lines are never dropped or sampled"))
+        if site.level not in ELIGIBLE:
+            if site.level in NEVER_TOUCH:
+                why = f"{site.level} lines are never dropped or sampled"
+            elif site.level == "log":
+                why = "its level is set at runtime (it could be an error), so it's never touched"
+            else:
+                why = f"level {site.level!r} isn't known to be low, so it's never touched"
+            skipped.append((sid, why))
             continue
         u = usage.get(sid, Usage())
         rule = Rule(site, action, rate, reason, u)
@@ -260,7 +272,8 @@ def to_alloy(
         ]
     for rule in plan.rules:
         if match == "location":
-            sel = "{logsite_site=~" + _str(location_regex(rule.site)) + "}"
+            # the guard too: a line from this call can still be an error at runtime
+            sel = "{logsite_site=~" + _str(location_regex(rule.site)) + "} !~ " + _str(ERROR_GUARD)
         else:
             rx = template_regex(rule.site)
             if rx is None:

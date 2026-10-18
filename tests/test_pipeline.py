@@ -112,7 +112,10 @@ def test_alloy_by_location():
     assert 'loki.process "logsite" {' in text
     assert 'logsite_file = "pathname",' in text and "stage.json {" in text
     assert 'values = { logsite_site = "" }' in text
-    assert 'selector = "{logsite_site=~\\"(.*/)?app/api[.]py:5\\"}"' in text
+    assert (
+        'selector = "{logsite_site=~\\"(.*/)?app/api[.]py:5\\"} '
+        '!~ \\"(?i)(error|exception|traceback|critical|fatal)\\""'
+    ) in text  # the error guard here too: the line can still be an error at runtime
     assert "rate                = 0.1" in text
     assert 'action              = "drop"' in text
     assert 'values = ["logsite_site"]' in text  # the helper label never reaches Loki
@@ -173,3 +176,24 @@ def test_cli_pipeline(tmp_path, monkeypatch, capsys):
         ("app/api.py:8", "drop"),
     ]
     assert data["match"] == "location"
+
+
+def test_only_known_low_levels_get_a_rule():
+    # a level set at runtime could be an error: fail closed, even when asked explicitly
+    code = (
+        "import logging\nlog = logging.getLogger(__name__)\n\n\n"
+        "def f(lvl):\n    log.log(lvl, 'payment retry failed for %s', 1)\n"
+    )
+    sites = index_source(code, "app/retry.py")
+    (site,) = sites
+    assert site.level == "log"
+    busy = {site.id: Usage(50_000, 5_000_000)}
+    for cfg in (PipelineConfig(max_per_window=1000), PipelineConfig(drop=[site.id])):
+        p = make_plan(sites, busy, cfg, PRICED, 24)
+        assert p.rules == []
+        assert p.skipped == [
+            (site.id, "its level is set at runtime (it could be an error), so it's never touched")
+        ]
+    # drop_levels can't make warning or error lines eligible either
+    p = plan(drop_levels=["warning", "error"])
+    assert all(r.site.level in ("debug", "info") for r in p.rules)

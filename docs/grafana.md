@@ -156,7 +156,7 @@ volume and priced like `logsite cost`:
   // app/api.py:88  info('request %s %s')
   // keep 1% (9,100,000 per 24h, over 100,000): saves 3.4 TB/month ($1,706)
   stage.match {
-    selector = "{logsite_site=~\"(.*/)?app/api[.]py:88\"}"
+    selector = "{logsite_site=~\"(.*/)?app/api[.]py:88\"} !~ \"(?i)(error|exception|traceback|critical|fatal)\""
 
     stage.sampling {
       rate                = 0.011
@@ -167,11 +167,18 @@ volume and priced like `logsite cost`:
 
 - Rules come from `[pipeline]` (`drop`, `sample`) and from volume: lines above
   `max_per_window` are sampled down to it, and lines at a `drop_levels` level are dropped.
-- **Warning and error lines never get a rule**, whatever the config says.
+- **Only `trace`, `debug`, `info`, `notice` and `success` log calls can get a rule.** The
+  level written in the code is checked before anything is scored or sorted, and nothing in
+  the config can override it: warning and error lines, a level set at runtime
+  (`log.log(level, …)`) and unknown levels are skipped, each with the reason.
+- Every rule also skips lines that look like errors (`error`, `exception`, `traceback`,
+  `critical`, `fatal`), for a call that logs an error at runtime anyway.
 - Lines are matched by the file and line fields records carry, through a temporary label
   that's removed before anything reaches Loki. Records without them are matched by message
-  (`match = "template"`, with your stream `selector`); those rules never touch lines that
-  look like errors, and messages with too little fixed text get no rule.
+  (`match = "template"`, with your stream `selector`); messages with too little fixed text
+  get no rule.
+- logsite only writes the file. It never applies rules to Alloy, and the MCP server has no
+  tool that writes config: review the file, then deploy it yourself.
 - Wire it in with `forward_to = [loki.process.logsite.receiver]` in your source; logs go on
   to `forward_to` in `[pipeline]` (default `loki.write.default.receiver`).
 
