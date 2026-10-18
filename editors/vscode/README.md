@@ -14,7 +14,7 @@ logsite maps production logs back to the exact line that wrote them, for **Pytho
 Elasticsearch**, **CloudWatch Logs** or a log file.
 
 > **Preview.** JavaScript/TypeScript is
-> [planned](https://github.com/rajpaynaik/logsite#other-languages).
+> [planned](https://github.com/rajpaynaik/logsite/blob/main/docs/roadmap.md#other-languages).
 
 ## Features
 
