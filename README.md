@@ -1,7 +1,7 @@
 # logsite
 
-[![PyPI](https://img.shields.io/pypi/v/logsite)](https://pypi.org/project/logsite/)
-[![Python](https://img.shields.io/pypi/pyversions/logsite)](https://pypi.org/project/logsite/)
+[![PyPI](https://img.shields.io/pypi/v/logsite?label=PyPI&cacheSeconds=3600)](https://pypi.org/project/logsite/)
+[![Python](https://img.shields.io/pypi/pyversions/logsite?cacheSeconds=86400)](https://pypi.org/project/logsite/)
 [![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
 [![CI](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/rajpaynaik/logsite/blob/main/LICENSE)
@@ -10,8 +10,9 @@
 
 logsite reads your code and the logs you already have (Loki, OpenSearch / Elasticsearch,
 CloudWatch or a file), maps every log line back to the code that wrote it, and turns thousands
-of stack traces into a few causes, each pointing at *your* line of code. No SDK, no agent in
-your services. Python, Java and Go.
+of stack traces into a few causes, each pointing at *your* line of code. It remembers every
+error, so a regression comes with the fix that worked last time, and it gives AI coding
+assistants the same production context. No SDK, no agent in your services. Python, Java and Go.
 
 ## Thousands of stack traces, a few causes
 
@@ -51,6 +52,14 @@ commit behind them:
    Suspects     854fbb95 2026-10-17 Maya: Lower carrier read timeout to 3s
 ```
 
+When the same error was fixed before, the [history](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) says so, with the commit
+that fixed it, so the new suspect is easy to judge:
+
+```
+   History      ↩ came back · seen 3 Aug 2026 → 3 Sep 2026, gone after v1.3
+   Fixed by     41bdce40 2026-09-03 Maya: Retry carrier timeouts with backoff
+```
+
 `logsite errors --since-deploy $TAG --fail-on-new` turns it into a CI gate that stops a bad release.
 
 ## Failing tests, for you and your AI assistant
@@ -72,6 +81,32 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
 ✓ fixed   sqlite3.OperationalError: no such column: discount_code  (27 test(s))
 ```
 
+## Production context for your AI assistant
+
+Before Claude Code (or any MCP client) changes a function, `production_context` tells it
+what that code does in production, so it doesn't undo an earlier fix. `logsite about` is the
+same in the terminal:
+
+```
+$ logsite about src/main/java/com/example/shipping/CarrierApiClient.java:58
+  errors in the last 24h:
+        660  java.lang.IllegalStateException: Shipping label request failed  (raised here, back)
+             root cause: java.net.SocketTimeoutException: Read timed out
+             ↩ came back: gone after v1.3, fixed by 41bdce40 Retry carrier timeouts with backoff
+  last changed:
+    0df4dac1  2026-10-18  Maya: Lower carrier read timeout to 3s
+    41bdce40  2026-09-03  Maya: Retry carrier timeouts with backoff
+```
+
+The [Claude Code plugin](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md) sets it all up: the MCP server, a hook that runs
+the assistant's tests through agent mode, and `/logsite:investigate`, `/logsite:fix-error`
+and `/logsite:log-cost`:
+
+```
+/plugin marketplace add rajpaynaik/logsite
+/plugin install logsite@logsite
+```
+
 ## And more
 
 - **In your editor**: production counts above every log call (`1.2M in 24h`, `▲ 8.0x`), the
@@ -87,9 +122,6 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
   every error group, so a regression comes with the fix that worked last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
 - **Leaks**: secrets and personal data that actually reached production logs, per log call.
 - **Request timeline**: `logsite trace <id>`, every line of one request across services.
-- **Claude Code plugin**: the assistant checks what production says about a function before it
-  changes it (errors, earlier fixes, log cost), and gets test failures grouped by cause.
-  `/plugin marketplace add rajpaynaik/logsite`. → [Claude Code](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md)
 - **MCP server**: AI assistants ask "what's failing in production, and why?" and get the
   incidents, groups and code lines. → [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
 
@@ -118,6 +150,8 @@ TOML
 
 logsite errors                     # production errors grouped by cause
 logsite investigate                # ... linked into incidents, with the deploy and commits
+logsite about app/checkout.py:42   # what production says about this code, before you change it
+logsite sync --backfill 30d        # fill the history: seen before, fixed by, came back
 logsite cost --price-per-gb 0.5    # what each log call costs per month
 ```
 
@@ -129,6 +163,8 @@ logsite cost --price-per-gb 0.5    # what each log call costs per month
 | **Log stores** | Loki, OpenSearch / Elasticsearch, CloudWatch Logs, log files |
 | **Tests and builds** | pytest, `go test`, Maven, Gradle, tsc, javac, gcc-style compilers |
 | **Editors** | VS Code; Neovim, JetBrains, Helix, Zed through LSP |
+| **AI assistants** | Claude Code plugin; any MCP client (Claude Desktop, Cursor, …) |
+| **Dashboards and alerts** | Grafana (dashboard, Error groups panel, history markers), Alloy, Slack / webhooks, Docker |
 
 ## Documentation
 
