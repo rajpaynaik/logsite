@@ -94,6 +94,55 @@ def test_javac_symbols():
     ]
 
 
+JS = ["src/cart.js", "src/inventory.js", "test/cart.test.js", "test/inventory.test.js",
+      "test/broken.test.js"]  # fmt: skip
+
+
+@pytest.mark.parametrize("fixture", ["jest1.txt", "jest-ci.txt"])  # CI=true adds colour codes
+def test_jest_12_failures_are_4_causes(fixture):
+    run = run_of(fixture, ["npx", "jest"], JS)
+    assert run.tool == "jest" and run.counts == {"failed": 12, "passed": 1}
+    assert summary(run) == [
+        (6, "TypeError: Cannot read properties of undefined (reading <str>)", "src/cart.js:8",
+         "applyDiscount"),
+        (3, "AssertionError: expect(received).toBe(expected) // Object.is equality",
+         "test/cart.test.js:15", None),  # V8 names the callee (toBe) in a test file: dropped
+        (3, "Error: out of stock: book-2", "src/inventory.js:5", "reserve"),
+        (1, "Error: Cannot find module '../src/shipping' from 'test/broken.test.js'",
+         "test/broken.test.js:1", None),
+    ]  # fmt: skip
+    discount, tax, stock, broken = run.causes
+    assert discount.tests[0] == "test/cart.test.js › discounts › applies SAVE10"
+    assert tax.first.message.splitlines()[1:] == ["Expected: 108", "Received: 110"]
+    assert {f.test_file for f in stock.failures} == {"test/cart.test.js", "test/inventory.test.js"}
+    assert broken.first.origin == "jest-resolve" and broken.tests == ["test/broken.test.js"]
+    # console.log output (a "● Console" block) isn't a failure
+    assert not any("Console" in t for c in run.causes for t in c.tests)
+
+
+def test_vitest_12_failures_are_4_causes():
+    files = [f.replace(".js", ".ts") for f in JS]
+    run = run_of("vitest1.txt", ["npx", "vitest", "run"], files)
+    assert run.tool == "vitest" and run.counts == {"failed": 12, "passed": 1}
+    assert [(n, raised, fn) for n, _, raised, fn in summary(run)] == [
+        (6, "src/cart.ts:11", "applyDiscount"),
+        (3, "test/cart.test.ts:16", None),
+        (3, "src/inventory.ts:5", "reserve"),
+        (1, "test/broken.test.ts:2", None),  # the file that failed to load
+    ]
+    assert run.causes[1].title == "AssertionError: expected <n> to be <n> // Object.is equality"
+    assert run.causes[1].first.message.splitlines()[1:] == ["- 108", "+ 110"]
+    assert run.causes[0].tests[0] == "test/cart.test.ts > discounts > applies SAVE10"
+
+
+def test_node_modules_frames_are_libraries():
+    from logsite.tracebacks import Frame
+
+    assert Frame("node_modules/jest-resolve/build/index.js", 1, "f").library == "jest-resolve"
+    assert Frame("/app/node_modules/@scope/pkg/x.js", 1, "f").library == "@scope/pkg"
+    assert Frame("node:internal/process/task_queues", 95, "f").is_library
+
+
 def test_build_pattern_and_detect():
     assert (
         build_pattern("TS2304 Cannot find name 'x' at 12") == "TS2304 Cannot find name 'x' at <n>"
@@ -104,6 +153,10 @@ def test_build_pattern_and_detect():
     assert detect(["./gradlew", "test"], []) == "junit"
     assert detect(["make"], ["ok  \texample.com/x\t0.1s"]) == "go"
     assert detect(["npx", "tsc"], []) == "compile"
+    assert detect(["npx", "jest"], []) == "jest"
+    assert detect(["npx", "vitest", "run"], []) == "vitest"
+    assert detect(["npm", "test"], ["Tests:       1 failed, 2 passed, 3 total"]) == "jest"
+    assert detect(["npm", "test"], [" RUN  v3.2.7 /work/bookstore"]) == "vitest"
 
 
 def test_delta():

@@ -1,0 +1,235 @@
+
+ RUN  v3.2.7 /work/bookstore
+
+stdout | test/inventory.test.ts > reserves a sold-out book
+reserving book-2
+
+ ❯ test/inventory.test.ts (2 tests | 2 failed) 3ms
+   × reserves a sold-out book 2ms
+     → out of stock: book-2
+   × reserves a sold-out book twice 0ms
+     → out of stock: book-2
+ ❯ test/cart.test.ts (11 tests | 10 failed) 5ms
+   × discounts > applies SAVE10 2ms
+     → Cannot read properties of undefined (reading 'SAVE10')
+   × discounts > applies SAVE20 0ms
+     → Cannot read properties of undefined (reading 'SAVE20')
+   × discounts > applies WELCOME 0ms
+     → Cannot read properties of undefined (reading 'WELCOME')
+   × discounts > applies SPRING 0ms
+     → Cannot read properties of undefined (reading 'SPRING')
+   × discounts > applies VIP 0ms
+     → Cannot read properties of undefined (reading 'VIP')
+   × discounts > applies BULK 0ms
+     → Cannot read properties of undefined (reading 'BULK')
+   × tax > tax(100) is 108 2ms
+     → expected 110 to be 108 // Object.is equality
+   × tax > tax(1000) is 1080 0ms
+     → expected 1100 to be 1080 // Object.is equality
+   × tax > tax(2500) is 2700 0ms
+     → expected 2750 to be 2700 // Object.is equality
+   ✓ total adds up 0ms
+   × checkout reserves stock 0ms
+     → out of stock: book-2
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/broken.test.ts [ test/broken.test.ts ]
+Error: Cannot find module '../src/shipping' imported from '/work/bookstore/test/broken.test.ts'
+ ❯ test/broken.test.ts:2:1
+      1| import { test, expect } from "vitest";
+      2| import { ship } from "../src/shipping";
+       | ^
+      3| 
+      4| test("ships", () => {
+
+Caused by: Error: Failed to load url ../src/shipping (resolved id: ../src/shipping) in /work/bookstore/test/broken.test.ts. Does the file exist?
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/config.js:22907:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/cart.test.ts > discounts > applies SAVE10
+TypeError: Cannot read properties of undefined (reading 'SAVE10')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  test/cart.test.ts > discounts > applies SAVE20
+TypeError: Cannot read properties of undefined (reading 'SAVE20')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  test/cart.test.ts > discounts > applies WELCOME
+TypeError: Cannot read properties of undefined (reading 'WELCOME')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  test/cart.test.ts > discounts > applies SPRING
+TypeError: Cannot read properties of undefined (reading 'SPRING')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  test/cart.test.ts > discounts > applies VIP
+TypeError: Cannot read properties of undefined (reading 'VIP')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  test/cart.test.ts > discounts > applies BULK
+TypeError: Cannot read properties of undefined (reading 'BULK')
+ ❯ applyDiscount src/cart.ts:11:22
+      9| 
+     10| export function applyDiscount(cart: Cart, code: string): number {
+     11|   const rate = (cart.discounts as any)[code].rate;
+       |                      ^
+     12|   return Math.round(total(cart.items) * (1 - rate));
+     13| }
+ ❯ test/cart.test.ts:9:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  test/cart.test.ts > tax > tax(100) is 108
+AssertionError: expected 110 to be 108 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 108[39m
+[31m+ 110[39m
+
+ ❯ test/cart.test.ts:16:25
+     14| describe("tax", () => {
+     15|   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i",…
+     16|     expect(tax(amount)).toBe(expected);
+       |                         ^
+     17|   });
+     18| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  test/cart.test.ts > tax > tax(1000) is 1080
+AssertionError: expected 1100 to be 1080 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1080[39m
+[31m+ 1100[39m
+
+ ❯ test/cart.test.ts:16:25
+     14| describe("tax", () => {
+     15|   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i",…
+     16|     expect(tax(amount)).toBe(expected);
+       |                         ^
+     17|   });
+     18| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  test/cart.test.ts > tax > tax(2500) is 2700
+AssertionError: expected 2750 to be 2700 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2700[39m
+[31m+ 2750[39m
+
+ ❯ test/cart.test.ts:16:25
+     14| describe("tax", () => {
+     15|   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i",…
+     16|     expect(tax(amount)).toBe(expected);
+       |                         ^
+     17|   });
+     18| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  test/cart.test.ts > checkout reserves stock
+Error: out of stock: book-2
+ ❯ reserve src/inventory.ts:5:11
+      3| export function reserve(sku: string, qty: number): void {
+      4|   if ((stock[sku] ?? 0) < qty) {
+      5|     throw new Error(`out of stock: ${sku}`);
+       |           ^
+      6|   }
+      7|   stock[sku] -= qty;
+ ❯ src/cart.ts:20:32
+ ❯ checkout src/cart.ts:20:14
+ ❯ test/cart.test.ts:25:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  test/inventory.test.ts > reserves a sold-out book
+Error: out of stock: book-2
+ ❯ reserve src/inventory.ts:5:11
+      3| export function reserve(sku: string, qty: number): void {
+      4|   if ((stock[sku] ?? 0) < qty) {
+      5|     throw new Error(`out of stock: ${sku}`);
+       |           ^
+      6|   }
+      7|   stock[sku] -= qty;
+ ❯ test/inventory.test.ts:6:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  test/inventory.test.ts > reserves a sold-out book twice
+Error: out of stock: book-2
+ ❯ reserve src/inventory.ts:5:11
+      3| export function reserve(sku: string, qty: number): void {
+      4|   if ((stock[sku] ?? 0) < qty) {
+      5|     throw new Error(`out of stock: ${sku}`);
+       |           ^
+      6|   }
+      7|   stock[sku] -= qty;
+ ❯ test/inventory.test.ts:10:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  12 failed | 1 passed (13)
+   Start at  01:34:18
+   Duration  298ms (transform 129ms, setup 0ms, collect 96ms, tests 9ms, environment 0ms, prepare 134ms)
+

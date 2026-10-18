@@ -50,7 +50,7 @@ _JAVA_EXC = re.compile(
 _GO_PANIC = re.compile(r"^panic: (?P<msg>.*?)(?: \[recovered[^\]]*\])?$")
 _GO_FILE = re.compile(r"^\t(?P<file>\S+\.go):(?P<line>\d+)(?: \+0x[0-9a-f]+)?$")
 _TEXT_LEVEL = re.compile(r"\b(ERROR|CRITICAL|FATAL|EXCEPTION)\b")
-_LIBRARY_PARTS = ("site-packages", "dist-packages")
+_LIBRARY_PARTS = ("site-packages", "dist-packages", "node_modules")
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,8 @@ class Frame:
         """Installed packages and the standard library, never the project's own code."""
         path = self.file.replace("\\", "/")
         return (
-            any(f"/{p}/" in path for p in _LIBRARY_PARTS)
-            or path.startswith("<")  # <frozen runpy>, <string>
+            any(f"/{p}/" in f"/{path}" for p in _LIBRARY_PARTS)
+            or path.startswith(("<", "node:"))  # <frozen runpy>, <string>, node:internal/...
             or re.search(r"/lib/python\d", path) is not None
             or path.startswith(_JDK_PACKAGES)  # Java frames carry the package as the path
             or "/pkg/mod/" in path  # Go modules
@@ -79,9 +79,14 @@ class Frame:
         ``org.postgresql`` (Java), ``github.com/lib/pq`` or ``net/http`` (Go)."""
         path = self.file.replace("\\", "/")
         for p in _LIBRARY_PARTS:
-            if f"/{p}/" in path:
-                rest = path.split(f"/{p}/", 1)[1]
-                return rest.split("/", 1)[0].removesuffix(".py")
+            if f"/{p}/" in f"/{path}":
+                rest = f"/{path}".split(f"/{p}/", 1)[1]
+                parts = rest.split("/")
+                if parts[0].startswith("@") and len(parts) > 1:  # @scope/package
+                    return f"{parts[0]}/{parts[1]}"
+                return parts[0].removesuffix(".py")
+        if path.startswith("node:"):
+            return "node"
         m = re.search(r"/lib/python[\d.]+/([^/]+)", path)
         if m:
             return m.group(1).removesuffix(".py")

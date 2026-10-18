@@ -1,0 +1,217 @@
+FAIL test/cart.test.js
+  ● discounts › applies SAVE10
+
+    TypeError: Cannot read properties of undefined (reading 'SAVE10')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● discounts › applies SAVE20
+
+    TypeError: Cannot read properties of undefined (reading 'SAVE20')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● discounts › applies WELCOME
+
+    TypeError: Cannot read properties of undefined (reading 'WELCOME')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● discounts › applies SPRING
+
+    TypeError: Cannot read properties of undefined (reading 'SPRING')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● discounts › applies VIP
+
+    TypeError: Cannot read properties of undefined (reading 'VIP')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● discounts › applies BULK
+
+    TypeError: Cannot read properties of undefined (reading 'BULK')
+
+       6 |
+       7 | function applyDiscount(cart, code) {
+    >  8 |   const rate = cart.discounts[code].rate;
+         |                              ^
+       9 |   return Math.round(total(cart.items) * (1 - rate));
+      10 | }
+      11 |
+
+      at applyDiscount (src/cart.js:8:30)
+      at Object.applyDiscount (test/cart.test.js:8:14)
+
+  ● tax › tax(100) is 108
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 108
+    Received: 110
+
+      13 | describe("tax", () => {
+      14 |   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i", (amount, expected) => {
+    > 15 |     expect(tax(amount)).toBe(expected);
+         |                         ^
+      16 |   });
+      17 | });
+      18 |
+
+      at toBe (test/cart.test.js:15:25)
+
+  ● tax › tax(1000) is 1080
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1080
+    Received: 1100
+
+      13 | describe("tax", () => {
+      14 |   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i", (amount, expected) => {
+    > 15 |     expect(tax(amount)).toBe(expected);
+         |                         ^
+      16 |   });
+      17 | });
+      18 |
+
+      at toBe (test/cart.test.js:15:25)
+
+  ● tax › tax(2500) is 2700
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2700
+    Received: 2750
+
+      13 | describe("tax", () => {
+      14 |   test.each([[100, 108], [1000, 1080], [2500, 2700]])("tax(%i) is %i", (amount, expected) => {
+    > 15 |     expect(tax(amount)).toBe(expected);
+         |                         ^
+      16 |   });
+      17 | });
+      18 |
+
+      at toBe (test/cart.test.js:15:25)
+
+  ● checkout reserves stock
+
+    out of stock: book-2
+
+      3 | function reserve(sku, qty) {
+      4 |   if ((stock[sku] ?? 0) < qty) {
+    > 5 |     throw new Error(`out of stock: ${sku}`);
+        |           ^
+      6 |   }
+      7 |   stock[sku] -= qty;
+      8 | }
+
+      at reserve (src/inventory.js:5:11)
+      at reserve (src/cart.js:17:32)
+          at Array.forEach (<anonymous>)
+      at forEach (src/cart.js:17:14)
+      at Object.checkout (test/cart.test.js:24:10)
+
+FAIL test/inventory.test.js
+  ● Console
+
+    console.log
+      reserving book-2
+
+      at Object.log (test/inventory.test.js:4:11)
+
+  ● reserves a sold-out book
+
+    out of stock: book-2
+
+      3 | function reserve(sku, qty) {
+      4 |   if ((stock[sku] ?? 0) < qty) {
+    > 5 |     throw new Error(`out of stock: ${sku}`);
+        |           ^
+      6 |   }
+      7 |   stock[sku] -= qty;
+      8 | }
+
+      at reserve (src/inventory.js:5:11)
+      at Object.reserve (test/inventory.test.js:5:3)
+
+  ● reserves a sold-out book twice
+
+    out of stock: book-2
+
+      3 | function reserve(sku, qty) {
+      4 |   if ((stock[sku] ?? 0) < qty) {
+    > 5 |     throw new Error(`out of stock: ${sku}`);
+        |           ^
+      6 |   }
+      7 |   stock[sku] -= qty;
+      8 | }
+
+      at reserve (src/inventory.js:5:11)
+      at Object.reserve (test/inventory.test.js:9:3)
+
+FAIL test/broken.test.js
+  ● Test suite failed to run
+
+    Cannot find module '../src/shipping' from 'test/broken.test.js'
+
+    > 1 | const { ship } = require("../src/shipping");
+        |                  ^
+      2 |
+      3 | test("ships", () => {
+      4 |   expect(ship()).toBe(true);
+
+      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/index.js:1031:11)
+      at Object.require (test/broken.test.js:1:18)
+
+Test Suites: 3 failed, 3 total
+Tests:       12 failed, 1 passed, 13 total
+Snapshots:   0 total
+Time:        0.23 s, estimated 1 s
+Ran all test suites.

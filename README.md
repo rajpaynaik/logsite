@@ -64,7 +64,7 @@ that fixed it, so the new suspect is easy to judge:
 
 ## Failing tests, for you and your AI assistant
 
-`logsite agent -- pytest` (or `go test`, `mvn test`, `tsc`…) runs the command and prints the
+`logsite agent -- pytest` (or `go test`, `mvn test`, `npx jest`, `vitest`, `tsc`…) runs the command and prints the
 causes instead of hundreds of lines, then what changed after each fix:
 
 ```
@@ -161,7 +161,7 @@ logsite cost --price-per-gb 0.5    # what each log call costs per month
 |---|---|
 | **Languages** | Python (`logging`, structlog, loguru), Java (SLF4J, Log4j 2, java.util.logging, Lombok), Go (slog, zap, zerolog, logrus, logr, klog) |
 | **Log stores** | Loki, OpenSearch / Elasticsearch, CloudWatch Logs, log files |
-| **Tests and builds** | pytest, `go test`, Maven, Gradle, tsc, javac, gcc-style compilers |
+| **Tests and builds** | pytest, `go test`, Maven, Gradle, Jest, Vitest, tsc, javac, gcc-style compilers |
 | **Editors** | VS Code; Neovim, JetBrains, Helix, Zed through LSP |
 | **AI assistants** | Claude Code plugin; any MCP client (Claude Desktop, Cursor, …) |
 | **Dashboards and alerts** | Grafana (dashboard, Error groups panel, history markers), Alloy, Slack / webhooks, Docker |

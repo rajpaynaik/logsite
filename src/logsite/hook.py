@@ -2,7 +2,7 @@
 mode, so it gets failures grouped by cause instead of the raw output.
 
 ``logsite hook claude`` reads the hook's JSON on stdin and, for a plain test or build
-command (``pytest -q``, ``go test ./...``, ``mvn test``, ``./gradlew build``, ``npx tsc``…,
+command (``pytest -q``, ``go test ./...``, ``mvn test``, ``npx jest``, ``npm test``, ``npx tsc``…,
 optionally after ``cd DIR &&``), answers with the command rewritten to ``logsite agent --
 <command>``. Anything else (pipes, redirects, chains, other commands) is left alone, so the
 assistant always gets what it asked for. Agent mode keeps the exit code, keeps the full
@@ -37,7 +37,20 @@ TOOLS = [
     (("tsc",), None),
     (("npx", "tsc"), None),
     (("javac",), None),
+    (("jest",), None),
+    (("npx", "jest"), None),
+    (("yarn", "jest"), None),
+    (("vitest",), None),
+    (("npx", "vitest"), None),
+    (("yarn", "vitest"), None),
+    (("pnpm", "vitest"), None),
+    (("npm", "test"), None),
+    (("npm", "t"), None),
+    (("npm", "run", "test"), None),
+    (("yarn", "test"), None),
+    (("pnpm", "test"), None),
 ]
+WATCH = {"--watch", "--watchAll", "watch", "dev", "-w"}  # never ends: leave it alone
 SHELL = re.compile(r"[|;<>`]|&&|\|\||\$\(|&\s*$")  # pipes, chains, redirects, substitution
 CD = re.compile(r"^\s*cd\s+(\"[^\"]+\"|'[^']+'|[^\s;&|]+)\s*&&\s*")
 
@@ -59,6 +72,8 @@ def rewrite(command: str) -> str | None:
         return None
     if any("=" in w.split("/")[0] and not w.startswith("-") for w in words[:1]):
         return None  # VAR=value pytest: leave environment tricks alone
+    if WATCH & set(words):
+        return None
     for head, goals in TOOLS:
         if tuple(words[: len(head)]) != head:
             continue

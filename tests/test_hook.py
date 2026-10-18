@@ -20,6 +20,13 @@ from logsite.hook import claude, rewrite
         ("mvn -q test", "logsite agent -- mvn -q test"),
         ("./gradlew build", "logsite agent -- ./gradlew build"),
         ("npx tsc --noEmit", "logsite agent -- npx tsc --noEmit"),
+        ("npx jest", "logsite agent -- npx jest"),
+        ("npx vitest run", "logsite agent -- npx vitest run"),
+        ("npm test", "logsite agent -- npm test"),
+        ("pnpm test -- --coverage", "logsite agent -- pnpm test -- --coverage"),
+        ("npx jest --watch", None),  # never ends
+        ("npx vitest watch", None),
+        ("npm run dev", None),
         ("mvn dependency:tree", None),  # not a build or test
         ("pytest -q | tail -5", None),  # the assistant asked for a pipe: leave it
         ("pytest > out.txt", None),

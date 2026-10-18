@@ -40,7 +40,40 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1 · 0.2s
 | pytest | the exception and the line of your code that raised it; assertions by their pattern, per test file |
 | `go test`, `go build` | `t.Errorf` messages with values masked, panics by the frame of yours they happened in |
 | Maven (surefire), Gradle | the Java exception chain and the deepest frame of yours (JUnit's frames are library code) |
+| Jest, Vitest (`npm test` too) | the error and the deepest frame of yours (`node_modules` is library code); `expect` failures by their pattern, per test file; a test file that fails to load is one failure |
 | tsc, javac, go, gcc-style, mypy | the error code and message with numbers masked, names kept: `'totl'` and `'shippng'` are two typos |
+
+Jest, on a bookstore project with 12 failing tests in three files:
+
+```
+$ logsite agent -- npx jest
+jest: 12 failed, 1 passed · 4 cause(s) · exit 1 · 0.8s
+
+1. 6 test(s)  TypeError: Cannot read properties of undefined (reading <str>)
+   raised   src/cart.js:8 in applyDiscount()
+            8 │ const rate = cart.discounts[code].rate;
+   tests    test/cart.test.js ×6 (discounts › applies SAVE10, discounts › applies SAVE20, discounts › applies WELCOME, …)
+
+2. 3 test(s)  AssertionError: expect(received).toBe(expected) // Object.is equality
+   raised   test/cart.test.js:15
+            15 │ expect(tax(amount)).toBe(expected);
+   detail   Expected: 108
+   detail   Received: 110
+   tests    test/cart.test.js ×3 (tax › tax(100) is 108, tax › tax(1000) is 1080, tax › tax(2500) is 2700)
+
+3. 3 test(s)  Error: out of stock: book-2
+   raised   src/inventory.js:5 in reserve()
+            5 │ throw new Error(`out of stock: ${sku}`);
+   tests    test/inventory.test.js ×2, test/cart.test.js ×1 (checkout reserves stock, reserves a sold-out book, reserves a sold-out book twice)
+
+4. 1 test(s)  Error: Cannot find module '../src/shipping' from 'test/broken.test.js'
+   raised   test/broken.test.js:1  (jest-resolve)
+            1 │ const { ship } = require("../src/shipping");
+   tests    test/broken.test.js ×1 (the file didn't load)
+```
+
+Vitest gives the same four causes on the TypeScript version (`src/cart.ts:11`, …). Watch mode
+(`--watch`, `vitest watch`) never ends, so run them once (`npx vitest run`).
 
 - **Nothing is lost.** The exit code is the command's own; the full output is saved and its
   path printed; `--show N` prints one failure as the tool wrote it; output it can't parse is

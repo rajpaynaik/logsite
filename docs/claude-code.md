@@ -8,7 +8,7 @@ One install gives Claude Code three things:
   and the last commits. So it doesn't undo an earlier fix, and doesn't add a log line to a
   line that already writes millions a day.
 - **Test and build failures grouped by cause**: a hook runs the assistant's `pytest`,
-  `go test`, `mvn test`, `./gradlew build`, `tsc`… through [agent mode](agent.md), so
+  `go test`, `mvn test`, `./gradlew build`, `npx jest`, `npm test`, `tsc`… through [agent mode](agent.md), so
   it gets "30 failed → 2 causes, here's the line" and what changed since the last run.
 - **Skills**: `/logsite:investigate` (what's broken in production and why),
   `/logsite:fix-error` (find the cause, fix it, run the tests until they pass) and

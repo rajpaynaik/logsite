@@ -5,7 +5,7 @@ group per cause (30 failing tests -> 2 causes), where each was raised in your co
 this run differs from the previous one (fixed, still failing, new). The full output is saved
 to a file; ``logsite agent --show N`` prints group N's first failure in full.
 
-Recognised: pytest, ``go test`` / ``go build``, Maven and Gradle (JUnit), and compiler
+Recognised: pytest, ``go test`` / ``go build``, Maven and Gradle (JUnit), Jest, Vitest, and compiler
 errors in the ``file:line:col: message`` / ``file(line,col): error ...`` shapes (tsc, javac,
 go, gcc, mypy...). Anything else that fails shows its last lines: nothing is hidden.
 """
@@ -103,7 +103,9 @@ class Run:
 
 # --- parsing helpers ---------------------------------------------------------------------------
 
-_LIBRARY = re.compile(r"(site-packages|dist-packages|/lib/python\d|/go/src/|/pkg/mod/|^<)")
+_LIBRARY = re.compile(
+    r"(site-packages|dist-packages|/lib/python\d|/go/src/|/pkg/mod/|^<|node_modules/|^node:)"
+)
 
 
 def _is_test_path(path: str) -> bool:
@@ -376,6 +378,141 @@ def _junit_failure(test: str, block: list[str], app: AppFiles) -> Failure:
     return Failure(test, "test", None, block[0].strip() if block else "failed", block=block)
 
 
+# --- Jest / Vitest ------------------------------------------------------------------------------
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_JEST_FILE = re.compile(r"^(FAIL|PASS) +(?P<file>\S+)")
+_JEST_TEST = re.compile(r"^  ● (?P<name>.+)$")
+_JEST_TOTALS = re.compile(r"^Tests:\s+(?P<body>.+)$")
+_VITEST_TEST = re.compile(r"^ FAIL  (?P<file>\S+?)(?: > (?P<name>.+?)| \[ .+ \])?$")
+_VITEST_TOTALS = re.compile(r"^\s+Tests\s+(?P<body>\d+ (?:failed|passed|skipped|todo).*)$")
+_VITEST_RULE = re.compile(r"^⎯{3,}")
+# V8 stack frames: "at fn (file:line:col)", "at file:line:col"; Vitest: "❯ fn file:line:col"
+_JS_AT = re.compile(r"^\s+at (?:(?P<fn>.+?) \()?(?P<file>[^\s()]+?):(?P<line>\d+):\d+\)?$")
+_JS_ARROW = re.compile(r"^\s*❯ (?:(?P<fn>\S+) )?(?P<file>[^\s()]+?):(?P<line>\d+):\d+$")
+_JS_CODE = re.compile(r"^\s*>?\s*\d*\s*\|")  # a code frame line: "  > 8 | ...", "   11| ..."
+_JS_ERROR = re.compile(r"^(?P<type>[\w$.]*(?:Error|Exception)|Error):\s?(?P<msg>.*)$")
+
+
+def _js_frames(block: list[str]) -> list[Frame]:
+    """The first error's frames, outermost first (V8 lists the innermost first)."""
+    frames = []
+    for line in block:
+        if line.lstrip().startswith("Caused by:"):
+            break
+        m = _JS_AT.match(line) or _JS_ARROW.match(line)
+        if not m or m["file"] in ("<anonymous>", "native"):
+            continue
+        file = m["file"].removeprefix("file://")
+        fn = (m["fn"] or "?").removeprefix("Object.").removeprefix("async ")
+        frames.append(Frame(file, int(m["line"]), fn.split(" [as ", 1)[0]))
+    return frames[::-1]
+
+
+def _js_failure(test: str, file: str | None, block: list[str], app: AppFiles) -> Failure:
+    text: list[str] = []
+    for line in block:  # the message: everything before the code frame and the stack
+        if _JS_CODE.match(line) or _JS_AT.match(line) or _JS_ARROW.match(line):
+            break
+        if line.lstrip().startswith("Caused by:"):
+            break
+        text.append(line.strip())
+    while text and not text[-1]:
+        text.pop()
+    while text and not text[0]:
+        text.pop(0)
+    exc_type, message = "Error", "\n".join(text)
+    m = _JS_ERROR.match(text[0]) if text else None
+    if m:
+        exc_type = m["type"]
+        message = "\n".join([m["msg"], *text[1:]])
+    elif message.startswith(("expect(", "expected ")):
+        exc_type = "AssertionError"
+    message = "\n".join(x for x in message.split("\n") if x not in ("- Expected", "+ Received"))
+    message = re.sub(r"\n{2,}", "\n", message).strip()
+    raised, func, origin = _place(_js_frames(block), app)
+    if func == "?" or (raised and _is_test_path(raised.rsplit(":", 1)[0])):
+        func = None  # in a test file V8 (with Jest's source maps) names the callee: toBe
+    return Failure(
+        test=test, kind="test", exc_type=exc_type, message=message, raised_at=raised,
+        raised_in=func, test_file=file, origin=origin, block=list(block),
+    )  # fmt: skip
+
+
+def _js_counts(body: str) -> dict[str, int]:
+    out = {}
+    for n, what in re.findall(r"(\d+) (failed|passed|skipped|todo)", body):
+        out[what] = int(n)
+    return out
+
+
+def parse_jest(lines: list[str], app: AppFiles) -> tuple[list[Failure], dict[str, int]]:
+    """Jest and Vitest: one failure per test (a test file that failed to load counts as
+    one), with where it was raised in your code."""
+    lines = [_ANSI.sub("", x) for x in lines]
+    failures: list[Failure] = []
+    counts: dict[str, int] = {}
+    file, name, block = None, None, []
+    pending: list[tuple[str, str]] = []  # Vitest: FAIL headers sharing the next error
+    vitest = any(_VITEST_TEST.match(x) or x.startswith(" RUN  v") for x in lines[:400])
+
+    def flush() -> None:
+        nonlocal name, block
+        if name is not None and any(x.strip() for x in block):
+            for f_file, f_name in [*pending, (file, name)]:
+                failures.append(_js_failure(f_name, f_file, block, app))
+            pending.clear()
+        name, block = None, []
+
+    for line in lines:
+        if vitest:
+            t = _VITEST_TOTALS.match(line)
+            if t:
+                flush()
+                counts.update(_js_counts(t["body"]))
+                continue
+            m = _VITEST_TEST.match(line)
+            if m:
+                if name is not None and not any(x.strip() for x in block):
+                    pending.append((file, name))  # no error of its own: shares the next one
+                    name = None
+                flush()
+                file = m["file"]
+                name = f"{m['file']} > {m['name']}" if m["name"] else m["file"]
+                continue
+            if _VITEST_RULE.match(line):
+                flush()
+                continue
+        else:
+            if line.startswith("Summary of all failing tests"):
+                flush()
+                break  # the same failures again
+            t = _JEST_TOTALS.match(line)
+            if t:
+                flush()
+                counts.update(_js_counts(t["body"]))
+                continue
+            m = _JEST_FILE.match(line)
+            if m:
+                flush()
+                file = m["file"]
+                continue
+            m = _JEST_TEST.match(line)
+            if m:
+                flush()
+                if m["name"] != "Console":  # console.log output, not a failure
+                    test = file if m["name"] == "Test suite failed to run" else m["name"]
+                    name = test if test == file else f"{file} › {test}"
+                continue
+            if line.startswith("Test Suites:"):
+                flush()
+                continue
+        if name is not None:
+            block.append(line)
+    flush()
+    return failures, counts
+
+
 # --- compiler errors ---------------------------------------------------------------------------
 
 _COMPILE = re.compile(
@@ -422,6 +559,10 @@ def detect(command: list[str], lines: list[str]) -> str:
     text = "\n".join(lines[:400] + lines[-200:])
     if "pytest" in words or "test session starts" in text:
         return "pytest"
+    if re.search(r"\bvitest\b", words) or re.search(r"^ RUN  v\d", text, re.M):
+        return "vitest"
+    if re.search(r"\bjest\b", words) or re.search(r"^Tests:\s+\d+ (failed|passed)", text, re.M):
+        return "jest"
     if re.search(r"\bgo (test|build|vet)\b", words) or re.search(
         r"^(ok|FAIL)\s+\S+\s+[\d.]+s", text, re.M
     ):
@@ -436,7 +577,14 @@ def detect(command: list[str], lines: list[str]) -> str:
     return "compile"
 
 
-PARSERS = {"pytest": parse_pytest, "go": parse_go, "junit": parse_junit, "compile": parse_compile}
+PARSERS = {
+    "pytest": parse_pytest,
+    "go": parse_go,
+    "junit": parse_junit,
+    "jest": parse_jest,
+    "vitest": parse_jest,
+    "compile": parse_compile,
+}
 
 
 def group(failures: Iterable[Failure]) -> list[Cause]:
@@ -570,12 +718,23 @@ def _where(f: Failure, root: Path, pal) -> list[str]:
     return out
 
 
+def _test_name(test: str, test_file: str | None) -> str:
+    """pytest node ids -> the function; Jest/Vitest "file › describe › test" -> without the
+    file; JUnit "com.x.PricingTest.total" -> "PricingTest.total"."""
+    if "::" in test:
+        return test.rsplit("::", 1)[-1]
+    if test_file and test.startswith(test_file):
+        return test[len(test_file) :].lstrip(" ›>") or "the file didn't load"
+    return ".".join(test.split(".")[-2:])
+
+
 def _tests_text(c: Cause) -> str:
+    tested = [f for f in c.failures if f.test]
     by_file = Counter(
-        (t.split("::", 1)[0] if "::" in t else (c.first.test_file or "")) for t in c.tests
+        (f.test.split("::", 1)[0] if "::" in f.test else (f.test_file or c.first.test_file or ""))
+        for f in tested
     )
-    # pytest node ids -> the function; JUnit "com.x.PricingTest.total" -> "PricingTest.total"
-    names = [t.rsplit("::", 1)[-1] if "::" in t else ".".join(t.split(".")[-2:]) for t in c.tests]
+    names = [_test_name(f.test, f.test_file) for f in tested]
     shown = ", ".join(names[:3]) + (", …" if len(names) > 3 else "")
     files = ", ".join(f"{f} ×{n}" if f else f"×{n}" for f, n in by_file.most_common(3))
     return f"{files} ({shown})" if files else shown
