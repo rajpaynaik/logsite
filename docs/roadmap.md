@@ -1,7 +1,7 @@
 # Roadmap
 
 - [x] **v0.1**: log index, Loki + file backends, code-lens counts, quality linter, CLI
-- [x] **v0.1.0 released**: [PyPI](https://pypi.org/project/logsite/) and the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite) ([`editors/vscode`](../editors/vscode); releases: [RELEASING.md](../RELEASING.md))
+- [x] **Released**: [PyPI](https://pypi.org/project/logsite/) (0.1.0; 0.2.0 with incidents, the CI gate and agent mode; 0.2.1) and the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite) ([`editors/vscode`](../editors/vscode); releases: [RELEASING.md](../RELEASING.md))
 - [ ] Open VSX (VSCodium, Cursor, Windsurf)
 - [x] Git correlation: when a line spikes, show the commits that touched it
 - [x] MCP server: let AI assistants ask "which log lines spiked after the last deploy?"

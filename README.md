@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/logsite)](https://pypi.org/project/logsite/)
 [![Python](https://img.shields.io/pypi/pyversions/logsite)](https://pypi.org/project/logsite/)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/rajpaynaik.logsite?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
+[![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
 [![CI](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/rajpaynaik/logsite/blob/main/LICENSE)
 
