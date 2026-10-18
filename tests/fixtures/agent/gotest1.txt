@@ -1,0 +1,29 @@
+--- FAIL: TestTitle (0.00s)
+panic: runtime error: invalid memory address or nil pointer dereference [recovered, repanicked]
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x0 pc=0x10450adf0]
+
+goroutine 5 [running]:
+testing.tRunner.func1.2({0x10466a9a8, 0x1046a4f80})
+	/usr/local/go/src/testing/testing.go:2125 +0x1a0
+testing.tRunner.func1()
+	/usr/local/go/src/testing/testing.go:2128 +0x2c8
+panic({0x10466a9a8?, 0x1046a4f80?})
+	/usr/local/go/src/runtime/panic.go:859 +0x120
+example.com/books/catalog.Title(...)
+	/src/go/catalog/catalog.go:8
+example.com/books/catalog.TestTitle(0x58fdf4aae248)
+	/src/go/catalog/catalog_test.go:6 +0x40
+testing.tRunner(0x58fdf4aae248, 0x104687ad0)
+	/usr/local/go/src/testing/testing.go:2195 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2260 +0x3b8
+FAIL	example.com/books/catalog	0.155s
+--- FAIL: TestTotal1999 (0.00s)
+    tax_test.go:7: Total(1999) = 2198, want 2098
+--- FAIL: TestTotal1000 (0.00s)
+    tax_test.go:13: Total(1000) = 1150, want 1050
+--- FAIL: TestTotalZero (0.00s)
+    tax_test.go:19: Total(0) = 100, want 0
+FAIL
+FAIL	example.com/books/pricing	0.258s
+FAIL

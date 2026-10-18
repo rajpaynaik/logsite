@@ -77,9 +77,12 @@ class AppFiles:
             self._by_name.setdefault(p.rsplit("/", 1)[-1], []).append(p)
 
     @classmethod
-    def scan(cls, root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES) -> AppFiles:
+    def scan(
+        cls, root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES, tests: bool = False
+    ) -> AppFiles:
         root = root.resolve()
-        return cls(f.relative_to(root).as_posix() for f in iter_source_files(root, excludes))
+        files = iter_source_files(root, excludes, tests=tests)
+        return cls(f.relative_to(root).as_posix() for f in files)
 
     def resolve(self, frame: Frame) -> str | None:
         """The project path of a frame, or None if it's not the project's code."""

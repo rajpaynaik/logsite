@@ -380,9 +380,13 @@ def iter_python_files(root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES) ->
 
 
 def iter_source_files(
-    root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES, suffixes: Iterable[str] | None = None
+    root: Path,
+    excludes: Iterable[str] = DEFAULT_EXCLUDES,
+    suffixes: Iterable[str] | None = None,
+    tests: bool = False,
 ) -> Iterator[Path]:
-    """Source files under ``root`` in the languages logsite reads (or only ``suffixes``)."""
+    """Source files under ``root`` in the languages logsite reads (or only ``suffixes``);
+    Go's ``_test.go`` files only with ``tests``."""
     from .lang import EXTENSIONS
 
     wanted = tuple(suffixes or EXTENSIONS)
@@ -390,7 +394,7 @@ def iter_source_files(
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in excludes and not d.startswith(".")]
         for name in filenames:
-            if name.endswith(wanted) and not name.endswith("_test.go"):
+            if name.endswith(wanted) and (tests or not name.endswith("_test.go")):
                 yield Path(dirpath) / name
 
 

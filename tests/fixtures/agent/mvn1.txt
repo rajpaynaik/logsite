@@ -1,0 +1,61 @@
+[ERROR] Tests run: 5, Failures: 2, Errors: 2, Skipped: 0, Time elapsed: 0.023 s <<< FAILURE! -- in com.example.books.PricingTest
+[ERROR] com.example.books.PricingTest.title1 -- Time elapsed: 0.009 s <<< ERROR!
+java.lang.NullPointerException
+	at com.example.books.Pricing.title(Pricing.java:9)
+	at com.example.books.PricingTest.title1(PricingTest.java:9)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+
+[ERROR] com.example.books.PricingTest.title2 -- Time elapsed: 0.001 s <<< ERROR!
+java.lang.NullPointerException
+	at com.example.books.Pricing.title(Pricing.java:9)
+	at com.example.books.PricingTest.title2(PricingTest.java:10)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+
+[ERROR] com.example.books.PricingTest.total1000 -- Time elapsed: 0.002 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <1050> but was: <1150>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+	at com.example.books.PricingTest.total1000(PricingTest.java:8)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+
+[ERROR] com.example.books.PricingTest.total1999 -- Time elapsed: 0.001 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <2098> but was: <2198>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+	at com.example.books.PricingTest.total1999(PricingTest.java:7)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
+
+[ERROR] Failures: 
+[ERROR]   PricingTest.total1000:8 expected: <1050> but was: <1150>
+[ERROR]   PricingTest.total1999:7 expected: <2098> but was: <2198>
+[ERROR] Errors: 
+[ERROR]   PricingTest.title1:9 » NullPointer
+[ERROR]   PricingTest.title2:10 » NullPointer
+[ERROR] Tests run: 5, Failures: 2, Errors: 2, Skipped: 0
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.2.5:test (default-test) on project books: There are test failures.
+[ERROR] 
+[ERROR] Please refer to /src/mvn/target/surefire-reports for the individual test results.
+[ERROR] Please refer to dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

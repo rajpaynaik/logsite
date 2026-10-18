@@ -1,0 +1,38 @@
+src/cart.ts(2,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(3,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(4,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(5,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(6,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(7,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(8,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(9,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(10,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(11,19): error TS2304: Cannot find name 'totl'.
+src/cart.ts(12,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(13,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(14,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(15,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(16,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(17,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(18,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(19,20): error TS2304: Cannot find name 'totl'.
+src/cart.ts(20,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/cart.ts(21,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/cart.ts(22,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/cart.ts(23,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/cart.ts(24,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/cart.ts(25,33): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/checkout.ts(1,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(2,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(3,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(4,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(5,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(6,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(7,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(8,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(9,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(10,19): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(11,20): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(12,20): error TS2304: Cannot find name 'totl'.
+src/checkout.ts(13,18): error TS2304: Cannot find name 'shippng'.
+src/pricing.ts(2,18): error TS2304: Cannot find name 'totl'.

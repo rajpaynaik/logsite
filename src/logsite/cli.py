@@ -600,6 +600,47 @@ def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_agent(args: argparse.Namespace, cfg: Config) -> int:
+    from . import agent
+
+    root = Path.cwd()
+    if args.show is not None:
+        try:
+            key = agent.last_key_file(root).read_text().strip()
+        except OSError:
+            sys.exit("logsite: no logsite agent run in this directory yet")
+        state = agent.load_previous(key) or {}
+        order = state.get("order", [])
+        if not 1 <= args.show <= len(order):
+            sys.exit(f"logsite: the last run has {len(order)} cause(s); pick 1-{len(order)}")
+        print("\n".join(state["show"][order[args.show - 1]]))
+        return 0
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    if not command:
+        sys.exit("logsite: give the command to run, e.g. logsite agent -- pytest")
+    output, code, seconds = agent.run_command(command, root)
+    app = AppFiles.scan(root, DEFAULT_EXCLUDES | set(cfg.excludes), tests=True)
+    run = agent.analyse(command, output, code, seconds, app)
+    key = agent.state_key(root, command)
+    previous = agent.load_previous(key)
+    d = agent.delta(run, previous)
+    agent.save(key, run, output)
+    try:
+        agent.last_key_file(root).write_text(key)
+    except OSError:
+        pass
+    if args.format == "json":
+        json.dump(agent.run_json(run, d), sys.stdout, indent=2)
+        print()
+        return code
+    pal = palette(args.color, sys.stdout)
+    text = "\n".join(agent.render(run, d, previous, root, pal))
+    if len(text) >= len(output) and d is None:
+        text = output.rstrip("\n")  # never longer than the command's own output
+    print(text)
+    return code
+
+
 def _log_shape(cfg: Config, backend, sites, window: TimeRange) -> tuple[str, str, str, str]:
     """How records look in production: (match mode, format, file field, line field)."""
     pcfg, b = cfg.pipeline, cfg.backend
@@ -1002,6 +1043,17 @@ def main(argv: list[str] | None = None) -> int:
         help="a dashboard for any project (for the grafana.com catalog): no config needed",
     )
     p.set_defaults(func=cmd_grafana)
+
+    p = sub.add_parser(
+        "agent",
+        help="run tests or a build; print failures grouped by cause and what changed since "
+        "the last run (for AI coding assistants)",
+    )
+    p.add_argument("--show", type=int, metavar="N", help="cause N of the last run, in full")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.add_argument("command", nargs=argparse.REMAINDER, help="-- the command to run")
+    p.set_defaults(func=cmd_agent)
 
     p = sub.add_parser(
         "investigate", help="error groups linked into incidents, with the deploy and commits"

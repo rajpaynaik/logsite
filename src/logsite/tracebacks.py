@@ -47,7 +47,7 @@ _JAVA_EXC = re.compile(
     r"(?P<type>(?:[a-z_$][\w$]*\.)+[A-Z][\w$]*)(?::\s?(?P<msg>.*))?$"
 )
 # Go: "panic: ...", then per frame "pkg.Func(args)" and "\t/path/file.go:42 +0x1d".
-_GO_PANIC = re.compile(r"^panic: (?P<msg>.*?)(?: \[recovered\])?$")
+_GO_PANIC = re.compile(r"^panic: (?P<msg>.*?)(?: \[recovered[^\]]*\])?$")
 _GO_FILE = re.compile(r"^\t(?P<file>\S+\.go):(?P<line>\d+)(?: \+0x[0-9a-f]+)?$")
 _TEXT_LEVEL = re.compile(r"\b(ERROR|CRITICAL|FATAL|EXCEPTION)\b")
 _LIBRARY_PARTS = ("site-packages", "dist-packages")
@@ -212,7 +212,12 @@ def parse_go_trace(text: str, exc_type: str = "panic", message: str = "") -> lis
             continue
         if line and not line[0].isspace() and not line.startswith(("created by", "exit status")):
             func = line
-    exc.frames.reverse()  # Go prints the innermost frame first
+    # Go prints the innermost frame first; a panic's dump starts with the code handling it
+    # (deferred functions, testing.tRunner's recover, the panic() call): not where it happened
+    names = [f.function for f in exc.frames]
+    if "panic" in names:
+        exc.frames = exc.frames[names.index("panic") + 1 :]
+    exc.frames.reverse()
     return [exc] if exc.frames else []
 
 

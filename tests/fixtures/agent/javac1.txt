@@ -1,0 +1,16 @@
+src/Shelf.java:2: error: cannot find symbol
+  int count() { return books.size(); }
+                       ^
+  symbol:   variable books
+  location: class Shelf
+src/Shelf.java:3: error: cannot find symbol
+  String title() { return booksTitle; }
+                          ^
+  symbol:   variable booksTitle
+  location: class Shelf
+src/Shelf.java:4: error: cannot find symbol
+  int more() { return books.length; }
+                      ^
+  symbol:   variable books
+  location: class Shelf
+3 errors

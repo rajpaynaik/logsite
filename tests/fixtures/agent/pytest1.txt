@@ -1,0 +1,525 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.1.1, pluggy-1.7.0
+rootdir: /src/py
+plugins: anyio-4.15.1
+collected 42 items
+
+tests/test_orders.py FFFFFFFFFFFFFFFFFFFFFFFFFFF                         [ 64%]
+tests/test_tax.py FFF............                                        [100%]
+
+=================================== FAILURES ===================================
+_________________________________ test_order_0 _________________________________
+
+    def test_order_0():
+>       assert Repository().get(0) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:4: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x10423cd70>, order_id = 0
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_1 _________________________________
+
+    def test_order_1():
+>       assert Repository().get(1) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:7: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1041b2c10>, order_id = 1
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_2 _________________________________
+
+    def test_order_2():
+>       assert Repository().get(2) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:10: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1041b34d0>, order_id = 2
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_3 _________________________________
+
+    def test_order_3():
+>       assert Repository().get(3) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:13: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042fc8a0>, order_id = 3
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_4 _________________________________
+
+    def test_order_4():
+>       assert Repository().get(4) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:16: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042fd220>, order_id = 4
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_5 _________________________________
+
+    def test_order_5():
+>       assert Repository().get(5) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:19: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104231c70>, order_id = 5
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_6 _________________________________
+
+    def test_order_6():
+>       assert Repository().get(6) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x10422a7a0>, order_id = 6
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_7 _________________________________
+
+    def test_order_7():
+>       assert Repository().get(7) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:25: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x10422acf0>, order_id = 7
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_8 _________________________________
+
+    def test_order_8():
+>       assert Repository().get(8) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042c7150>, order_id = 8
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+_________________________________ test_order_9 _________________________________
+
+    def test_order_9():
+>       assert Repository().get(9) is None
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042c7d50>, order_id = 9
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_10 _________________________________
+
+    def test_order_10():
+>       assert Repository().get(10) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104263c50>, order_id = 10
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_11 _________________________________
+
+    def test_order_11():
+>       assert Repository().get(11) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:37: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104260b90>, order_id = 11
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_12 _________________________________
+
+    def test_order_12():
+>       assert Repository().get(12) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:40: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104289e10>, order_id = 12
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_13 _________________________________
+
+    def test_order_13():
+>       assert Repository().get(13) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104288f30>, order_id = 13
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_14 _________________________________
+
+    def test_order_14():
+>       assert Repository().get(14) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:46: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1048dcbb0>, order_id = 14
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_15 _________________________________
+
+    def test_order_15():
+>       assert Repository().get(15) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104246a50>, order_id = 15
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_16 _________________________________
+
+    def test_order_16():
+>       assert Repository().get(16) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x104246750>, order_id = 16
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_17 _________________________________
+
+    def test_order_17():
+>       assert Repository().get(17) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:55: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042f1c80>, order_id = 17
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_18 _________________________________
+
+    def test_order_18():
+>       assert Repository().get(18) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042f24c0>, order_id = 18
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_19 _________________________________
+
+    def test_order_19():
+>       assert Repository().get(19) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042be030>, order_id = 19
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_20 _________________________________
+
+    def test_order_20():
+>       assert Repository().get(20) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:64: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042be0d0>, order_id = 20
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_21 _________________________________
+
+    def test_order_21():
+>       assert Repository().get(21) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042a9910>, order_id = 21
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_22 _________________________________
+
+    def test_order_22():
+>       assert Repository().get(22) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:70: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042b98d0>, order_id = 22
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_23 _________________________________
+
+    def test_order_23():
+>       assert Repository().get(23) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:73: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042ba050>, order_id = 23
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_24 _________________________________
+
+    def test_order_24():
+>       assert Repository().get(24) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:76: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042e98d0>, order_id = 24
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_25 _________________________________
+
+    def test_order_25():
+>       assert Repository().get(25) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1042e9b00>, order_id = 25
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+________________________________ test_order_26 _________________________________
+
+    def test_order_26():
+>       assert Repository().get(26) is None
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_orders.py:82: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.orders.repository.Repository object at 0x1048c4ad0>, order_id = 26
+
+    def get(self, order_id):
+>       cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       sqlite3.OperationalError: no such column: discount_code
+
+app/orders/repository.py:10: OperationalError
+__________________________________ test_tax_0 __________________________________
+
+    def test_tax_0():
+>       assert total(1999) == 2099
+E       assert 2199 == 2099
+E        +  where 2199 = total(1999)
+
+tests/test_tax.py:4: AssertionError
+__________________________________ test_tax_1 __________________________________
+
+    def test_tax_1():
+>       assert total(1000) == 1050
+E       assert 1150 == 1050
+E        +  where 1150 = total(1000)
+
+tests/test_tax.py:7: AssertionError
+__________________________________ test_tax_2 __________________________________
+
+    def test_tax_2():
+>       assert total(500) == 525
+E       assert 625 == 525
+E        +  where 625 = total(500)
+
+tests/test_tax.py:10: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_orders.py::test_order_0 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_1 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_2 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_3 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_4 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_5 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_6 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_7 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_8 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_9 - sqlite3.OperationalError: no such...
+FAILED tests/test_orders.py::test_order_10 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_11 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_12 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_13 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_14 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_15 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_16 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_17 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_18 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_19 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_20 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_21 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_22 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_23 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_24 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_25 - sqlite3.OperationalError: no suc...
+FAILED tests/test_orders.py::test_order_26 - sqlite3.OperationalError: no suc...
+FAILED tests/test_tax.py::test_tax_0 - assert 2199 == 2099
+FAILED tests/test_tax.py::test_tax_1 - assert 1150 == 1050
+FAILED tests/test_tax.py::test_tax_2 - assert 625 == 525
+======================== 30 failed, 12 passed in 0.12s =========================

@@ -31,6 +31,7 @@ It doesn't depend on any one vendor: Loki, OpenSearch / Elasticsearch and CloudW
 - **Error summary**: `logsite errors` turns thousands of production errors and tracebacks into a short list of groups, new and spiking ones first, each with where it was raised in your code, the log call that logged it, and a sample trace id. In the editor, the line that raised an error shows how often it did. See [Error summary](#error-summary).
 - **Alert enrichment**: when a Grafana alert fires, `logsite alert-server` posts the error summary to Slack or a webhook: the root cause, the line of code that raised it, an example trace. See [Alerts](#alerts-the-error-summary-in-the-notification).
 - **Grafana and Alloy**: `logsite grafana` writes a Grafana dashboard of log cost and errors per code line, live from Loki, with each row linked to its source line; `logsite pipeline` writes Grafana Alloy rules that drop or sample the noisy lines before they're shipped. See [Grafana and Alloy](#grafana-and-alloy).
+- **Agent mode**: `logsite agent -- pytest` (or `go test`, `mvn test`, `tsc`…) prints test and build failures grouped by cause, with your line of code and what changed since the last run, for AI coding assistants. See [Agent mode](#agent-mode-test-and-build-failures-for-ai-coding-assistants).
 - **Request timeline**: `logsite trace <trace_id>` shows every log line for one request across services, in order, with this repo's lines linked to the code that wrote them and the first warning flagged as a likely cause.
 - **Leak scanning**: finds secrets (API keys, tokens, passwords, private keys) and personal data (emails, card numbers, IBANs, SSNs) in what your services *actually* logged, and points at the log call that wrote each one. Values are always masked in the report.
 - **Git correlation**: hover a log call to see its trend and the last commits that touched the function around it; `logsite spikes` lists the lines that jumped, with the commits that likely caused it.
@@ -81,6 +82,7 @@ logsite spikes --since-deploy v1.4.0   # what changed after a release, with that
 logsite errors             # production errors grouped by cause, new and spiking first
 logsite errors --since-deploy v1.4.0   # what started failing after a release
 logsite investigate        # errors linked into incidents, with the deploy and suspect commits
+logsite agent -- pytest    # test/build failures grouped by cause + what changed (AI assistants)
 logsite pipeline --max-per-window 100000 --drop-level debug -o logsite.alloy   # Alloy drop/sample rules
 logsite grafana -o dashboard.json   # Grafana dashboard: cost and errors per code line (Loki)
 logsite alert-server       # send the error summary with Grafana alerts (Slack / webhook)
@@ -484,6 +486,65 @@ logsite errors --hours 1 --fail-on-spike               # or one that spiked
 Run it a few minutes after a deploy to stop a rollout or roll back: it prints
 `logsite: FAIL: 3 new error group(s) since v1.4 (…)` and exits 1.
 
+## Agent mode: test and build failures for AI coding assistants
+
+AI coding assistants run the tests again and again, and read every line each time: 30 failing
+tests that share one cause, 40 frames of framework code each, the whole output again after
+every attempted fix. `logsite agent -- <command>` runs the command and prints one group per
+cause, where it was raised in your code, and what changed since the last run:
+
+```
+$ logsite agent -- pytest
+pytest: 30 failed, 12 passed · 2 cause(s) · exit 1 · 0.3s
+
+1. 27 test(s)  sqlite3.OperationalError: no such column: discount_code
+   raised   app/orders/repository.py:10 in get()
+            10 │ cur = self.db.execute("select id, total, discount_code from orders where id = ?", (order_id,))
+   tests    tests/test_orders.py ×27 (test_order_0, test_order_1, test_order_2, …)
+
+2. 3 test(s)  AssertionError: assert total(<n>) == <n>
+   raised   tests/test_tax.py:4 in test_tax_0()
+            4 │ assert total(1999) == 2099
+   detail   assert 2199 == 2099
+   detail   +  where 2199 = total(1999)
+   tests    tests/test_tax.py ×3 (test_tax_0, test_tax_1, test_tax_2)
+
+full output: ~/.cache/logsite/agent/0c639ac1d6102826.log · one failure in full: logsite agent --show N
+```
+
+That's 525 lines of pytest output. After fixing the first cause:
+
+```
+$ logsite agent -- pytest
+pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1 · 0.2s
+✓ fixed   sqlite3.OperationalError: no such column: discount_code  (27 test(s))
+
+1. 3 test(s)  AssertionError: assert total(<n>) == <n>  (still failing)
+   …
+```
+
+| Recognised | Grouped by |
+|---|---|
+| pytest | the exception and the line of your code that raised it; assertions by their pattern, per test file |
+| `go test`, `go build` | `t.Errorf` messages with values masked, panics by the frame of yours they happened in |
+| Maven (surefire), Gradle | the Java exception chain and the deepest frame of yours (JUnit's frames are library code) |
+| tsc, javac, go, gcc-style, mypy | the error code and message with numbers masked, names kept: `'totl'` and `'shippng'` are two typos |
+
+- **Nothing is lost.** The exit code is the command's own; the full output is saved and its
+  path printed; `--show N` prints one failure as the tool wrote it; output it can't parse is
+  shown as its last 40 lines; and a summary is never printed when the raw output is shorter.
+- **What changed** is kept per project and command in `~/.cache/logsite/agent` (or
+  `$XDG_CACHE_HOME`), never in your repo.
+- `--format json` for tools.
+
+To have an assistant use it, tell it once, for example in `CLAUDE.md` / `AGENTS.md`:
+
+```markdown
+Run tests and builds through logsite: `logsite agent -- pytest`, `logsite agent -- go test ./...`,
+`logsite agent -- mvn -q test`, `logsite agent -- npx tsc --noEmit`. For one failure in full:
+`logsite agent --show N`.
+```
+
 ## Grafana and Alloy
 
 ### Dashboard: cost and errors per code line
@@ -745,6 +806,8 @@ class LogBackend(ABC):
 - [ ] Grafana app plugin: the same views as pages inside Grafana, listed in the plugin catalog
 - [x] Incident investigation: `logsite investigate` links error groups into incidents (shared trace ids, starting together), with the cause, effects, the deploy before it and suspect commits; MCP tool `investigate`
 - [x] CI gate after a deploy: `logsite errors --since-deploy <ref> --fail-on-new` (and `--fail-on-spike`) exits 1
+- [x] Agent mode: `logsite agent -- <command>` groups test and build failures by cause (pytest, go, Maven/Gradle, tsc, javac...) and shows what changed since the last run
+- [ ] Agent mode, more: Jest / Vitest, Rust (cargo test), a Claude Code hook that routes test commands automatically
 - [ ] History store: "first seen ever", regressions after a fix
 - [ ] Incident investigation, more: affected services and tenants, and a few full request timelines per incident
 - [ ] More MCP tools for incident investigation: recent messages for a line, so AI assistants can do root-cause analysis on logsite data
