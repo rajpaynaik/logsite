@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Fix: an error that had stopped is no longer reported as back when a wide window re-reads its old records.
+
 ## 0.3.0
 
 - History store: errors seen before, the fix that worked, and regressions, in the editor's language server and the CLI.

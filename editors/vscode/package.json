@@ -2,7 +2,7 @@
   "name": "logsite",
   "displayName": "logsite",
   "description": "See how often each log line fires in production, what it costs, and catch bad logging, right next to the log call. Python, Java and Go.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "preview": true,
   "publisher": "rajpaynaik",
   "license": "MIT",
