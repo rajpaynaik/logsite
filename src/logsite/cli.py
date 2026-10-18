@@ -864,6 +864,17 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
     def dry_run(url, body):
         print(f"--- would POST to {url.split('?')[0]}:\n{body.get('text', '')}\n", flush=True)
 
+    def history_events(start, end):
+        from . import history
+
+        store = history.open_history(cfg)
+        if store is None:
+            return []
+        try:
+            return store.events(start, end)
+        finally:
+            store.close()
+
     enricher = Enricher(
         acfg,
         summarize,
@@ -871,6 +882,7 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         code_url=code_url,
         trace_field=cfg.timeline.field_name,
         send=dry_run if args.dry_run else post_json,
+        events=history_events if cfg.history.enabled else None,
     )
     server = make_server(args.host, args.port, enricher, token)
     host, port = server.server_address[:2]
@@ -885,11 +897,31 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         file=sys.stderr,
         flush=True,
     )
+    if args.sync_every and cfg.history.enabled:
+        _start_sync_loop(cfg, _duration(args.sync_every), args.limit)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     return 0
+
+
+def _start_sync_loop(cfg: Config, every: timedelta, limit: int) -> None:
+    """Keep the history filled from a long-running process: every ``every``, record the
+    errors since the last round (with a few minutes' overlap; counts don't double)."""
+    import threading
+    import time
+
+    def loop():
+        while True:
+            try:
+                groups, _ = _sync(cfg, every + timedelta(minutes=5), every, limit)
+                print(f"logsite: history sync: {len(groups)} group(s)", file=sys.stderr, flush=True)
+            except Exception as exc:  # the backend is down: try again next round
+                print(f"logsite: history sync failed: {exc}", file=sys.stderr, flush=True)
+            time.sleep(every.total_seconds())
+
+    threading.Thread(target=loop, name="logsite-history-sync", daemon=True).start()
 
 
 def _duration(text: str) -> timedelta:
@@ -903,39 +935,47 @@ def _duration(text: str) -> timedelta:
         sys.exit(f"logsite: can't read the duration {text!r} (e.g. 15m, 6h, 30d)")
 
 
-def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
-    """Record the recent errors into the history store; on a schedule, or once to backfill."""
+def _sync(cfg: Config, span: timedelta, step: timedelta, limit: int, backend=None):
+    """Record the errors of the last ``span`` into the history, ``step`` at a time:
+    ``(group fingerprints, history path)``. Backend errors propagate."""
     from datetime import datetime
 
     from . import history
 
-    if not cfg.history.enabled:
-        sys.exit("logsite: the history is turned off ([history] enabled = false)")
-    backend = _backend_or_exit(cfg)
+    backend = backend or _backend_or_exit(cfg)
     sites = _sites(cfg, None)
     app = AppFiles.scan(cfg.root, DEFAULT_EXCLUDES | set(cfg.excludes))
     fields = dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"])
     end = datetime.now(timezone.utc)
-    span = _duration(args.backfill or args.last)
-    step = min(_duration(args.step), span)
+    step = min(step, span)
     start, groups, path = end - span, set(), None
     while start < end:
         chunk = TimeRange(start, min(start + step, end))
-        try:
-            summary = summarize_errors(
-                backend, sites, app, chunk, None, cfg.lint, cfg.leaks, args.limit, fields
-            )
-        except Exception as exc:
-            sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
+        summary = summarize_errors(
+            backend, sites, app, chunk, None, cfg.lint, cfg.leaks, limit, fields
+        )
         path = history.apply(cfg, summary.groups, chunk.start, chunk.end, now=end) or path
         groups |= {g.fingerprint for g in summary.groups}
         if summary.truncated:
             print(
-                f"logsite: {chunk.start:%Y-%m-%d %H:%M}: --limit {args.limit} reached, "
+                f"logsite: {chunk.start:%Y-%m-%d %H:%M}: --limit {limit} reached, "
                 "counts are a lower bound (use a smaller --step)",
                 file=sys.stderr,
             )
         start = chunk.end
+    return groups, path
+
+
+def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
+    """Record the recent errors into the history store; on a schedule, or once to backfill."""
+    if not cfg.history.enabled:
+        sys.exit("logsite: the history is turned off ([history] enabled = false)")
+    backend = _backend_or_exit(cfg)
+    span = _duration(args.backfill or args.last)
+    try:
+        groups, path = _sync(cfg, span, _duration(args.step), args.limit, backend)
+    except Exception as exc:
+        sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
     if path is None:
         sys.exit("logsite: couldn't open the history store")
     print(f"recorded {len(groups)} error group(s) over {args.backfill or args.last} → {path}")
@@ -1222,6 +1262,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--slack-webhook", help="Slack incoming webhook URL (default: [alerts])")
     p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")
     p.add_argument("--dry-run", action="store_true", help="print messages instead of sending")
+    p.add_argument(
+        "--sync-every", metavar="SPAN", help="also fill the history store, e.g. every 15m"
+    )
     p.set_defaults(func=cmd_alert_server)
 
     p = sub.add_parser("cost", help="bytes and estimated monthly spend per log call")

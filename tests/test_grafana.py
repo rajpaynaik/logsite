@@ -206,7 +206,20 @@ def test_error_groups_panel():
         {"key": "to", "value": "${__to}"},
     ]  # follows the dashboard's time range
     order = panel["transformations"][0]["options"]["indexByName"]
-    assert list(order)[:5] == ["Trend", "Count", "Error", "Root cause", "Raised at"]
+    assert list(order)[:5] == ["Trend", "Count", "Error", "History", "Root cause"]
+    assert {"First seen", "Fixed before by"} <= set(order)
+    # first seen / gone / came back as annotations; the data source by type (see grafana.py)
+    builtin, anno = d["annotations"]["list"]
+    assert builtin["builtIn"] == 1 and anno["name"] == "logsite history"
+    assert anno["datasource"] == {"type": "yesoreyeram-infinity-datasource"}
+    assert anno["target"]["url"] == "${logsite_url}/history/events"
+    assert anno["target"]["root_selector"] == "events"
+    assert anno["target"]["columns"][0] == {
+        "selector": "time",
+        "text": "time",
+        "type": "timestamp_epoch",
+    }
+    assert "annotations" not in plain
     links = [o for o in panel["fieldConfig"]["overrides"] if o["matcher"]["options"] == "Raised at"]
     assert links[0]["properties"][0]["value"][0]["url"] == "${__data.fields.raised_url}"
     variables = {v["name"]: v for v in d["templating"]["list"]}

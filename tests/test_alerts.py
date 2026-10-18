@@ -269,3 +269,42 @@ def test_render_says_when_an_error_is_back():
     assert f"1. {OPE}: Unable to save order ORD-<n>  ·  561  ·  back" in text
     assert "    ↩ came back: seen 2026-08-03 → 2026-09-03, gone after v1.3" in text
     assert "    fixed before by: a1b2c3d4 Maya: Retry carrier timeouts" in text
+
+
+def test_history_columns_and_events_endpoint():
+    rec = Recorder()
+
+    def summarize(start, end, labels):
+        out = rec.summarize(start, end, labels)
+        out["groups"][0]["history"] = {
+            "regression": True, "known": True, "first_seen": "2026-08-03T12:00:00+00:00",
+            "resolved_release": "v1.3", "days_seen": 31,
+            "fixed_by": [{"sha": "a1b2c3d4", "summary": "Retry carrier timeouts"}],
+        }  # fmt: skip
+        out["groups"][1]["history"] = {"known": False, "new_ever": True}
+        return out
+
+    events = [{"time": 1785744000000, "kind": "first seen", "title": "first seen: x"}]
+    seen = []
+    enricher = Enricher(
+        AlertsConfig(), summarize, send=rec.send, now=lambda: NOW,
+        events=lambda start, end: seen.append((start, end)) or events,
+    )  # fmt: skip
+    srv = make_server("127.0.0.1", 0, enricher, token=None)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        _, body = call(f"{url}/errors")
+        back, new = body["groups"]
+        assert back["trend_label"] == "back"
+        assert back["history_label"] == "↩ back, gone after v1.3"
+        assert back["first_seen_ever"] == "2026-08-03"
+        assert back["fixed_before"] == "a1b2c3d4 Retry carrier timeouts (v1.3)"
+        assert new["history_label"] == "first time ever" and new["fixed_before"] is None
+        status, body = call(f"{url}/history/events?from=1785700000000&to=1785800000000")
+        assert status == 200 and body == {"events": events}
+        assert seen[0][0].year == 2026
+        enricher.events = None
+        assert call(f"{url}/history/events")[0] == 404
+    finally:
+        srv.shutdown()

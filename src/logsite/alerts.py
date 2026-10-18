@@ -200,6 +200,28 @@ def render(
     return "\n".join(out)
 
 
+def _history_columns(h: dict) -> dict:
+    """Flat history fields for a dashboard table: History, First seen, Fixed before by."""
+    label = None
+    if h.get("regression"):
+        label = "↩ back" + (
+            f", gone after {h['resolved_release']}" if h.get("resolved_release") else ""
+        )
+    elif h.get("new_ever"):
+        label = "first time ever"
+    elif h.get("known") and h.get("days_seen"):
+        label = f"seen on {h['days_seen']} day(s)"
+    fixes = h.get("fixed_by") or []
+    fixed = "; ".join(f"{c['sha']} {c['summary']}" for c in fixes) or None
+    if fixed and h.get("resolved_release"):
+        fixed += f" ({h['resolved_release']})"
+    return {
+        "history_label": label,
+        "first_seen_ever": (h.get("first_seen") or "")[:10] or None,
+        "fixed_before": fixed,
+    }
+
+
 def _history_lines(h: dict) -> list[str]:
     if h.get("regression"):
         first, gone = (h.get("first_seen") or "")[:10], (h.get("resolved_at") or "")[:10]
@@ -236,8 +258,10 @@ class Enricher:
     builds a summary (``errors.summary_json``) for a window, optionally narrowed by labels."""
 
     def __init__(self, cfg: AlertsConfig, summarize, *, code_line=None, code_url=None,
-                 trace_field: str = "trace_id", send=post_json, now=None) -> None:  # fmt: skip
+                 trace_field: str = "trace_id", send=post_json, now=None,
+                 events=None) -> None:  # fmt: skip
         self.cfg = cfg
+        self.events = events  # (start, end) -> history events, for Grafana annotations
         self.summarize = summarize
         self.code_line, self.code_url = code_line, code_url
         self.trace_field = trace_field
@@ -257,7 +281,11 @@ class Enricher:
                 )
                 # "OrderRepository.java:87": short enough for a table column
                 g[key.replace("_at", "_name")] = where.rsplit("/", 1)[-1] if where else None
-            g["trend_label"] = "new" if g.get("new") else (g.get("trend") or "")
+            h = g.get("history") or {}
+            g["trend_label"] = (
+                "back" if h.get("regression") else "new" if g.get("new") else (g.get("trend") or "")
+            )
+            g.update(_history_columns(h))
             # "OrderProcessingException: ..." without its package, for narrow columns
             g["title_short"] = _PACKAGE.sub("", g.get("title") or "")
             g["root_cause_short"] = _PACKAGE.sub("", g.get("root_cause") or "") or None
@@ -333,7 +361,7 @@ def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> 
                 return self._reply(200, {"ok": True})
             if not self._authorized():
                 return self._reply(401, {"error": "missing or wrong token"})
-            if url.path != "/errors":
+            if url.path not in ("/errors", "/history/events"):
                 return self._reply(404, {"error": "not found"})
             q = parse_qs(url.query)
             try:
@@ -341,6 +369,10 @@ def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> 
                 start = _time(q.get("from", [None])[0]) or end - timedelta(hours=1)
             except ValueError as exc:
                 return self._reply(400, {"error": str(exc)})
+            if url.path == "/history/events":
+                if enricher.events is None:
+                    return self._reply(404, {"error": "the history is turned off"})
+                return self._reply(200, {"events": enricher.events(start, end)})
             labels = {
                 k: v[0] for k, v in q.items() if k in enricher.cfg.selector_labels and v[0]
             }  # an empty dashboard variable means "all"

@@ -78,9 +78,9 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
   line that raised an error marked with how often it did, and log-quality warnings as you type.
   [VS Code](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite), or any LSP editor with `logsite serve`.
 - **Cost per line of code**: which `logger.info(...)` calls make up your log bill. → [Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md)
-- **Grafana**: a generated dashboard of cost and errors per code line, the error summary in
-  your alert notifications (Slack / webhook), and Alloy rules that drop or sample noisy lines
-  before they're shipped. → [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
+- **Grafana**: a generated dashboard of cost and errors per code line, with "back after a fix"
+  markers on the graphs; the error summary in your alert notifications (Slack / webhook);
+  Alloy rules that drop or sample noisy lines before they're shipped; one Docker container. → [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
 - **Lint for logging**: lost stack traces, failures logged at `info`, secrets and card numbers
   in log calls, logs in hot loops, missing context like `request_id`. → [Lint rules](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md)
 - **History**: "seen before, fixed by `a1b2c3d` in v1.3, back since v1.4": logsite remembers

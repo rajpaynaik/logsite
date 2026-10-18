@@ -185,3 +185,25 @@ def test_default_path_is_outside_the_repo(tmp_path, monkeypatch):
     path = history.default_path(tmp_path / "shop")
     assert path.parent == tmp_path / "data" / "logsite" / "history"
     assert path.name.startswith("shop-") and path.suffix == ".db"
+
+
+def test_events_for_annotations(tmp_path):
+    store = History(tmp_path / "h.db")
+    run(store, [group("a", T0)], T0, T0 + H)
+    run(store, [], T0 + H, T0 + 30 * H)
+    back = T0 + timedelta(days=30)
+    run(store, [group("a", back)], back, back + H)
+    events = store.events(T0 - H, back + 2 * H)
+    assert [e["kind"] for e in events] == ["first seen", "gone", "came back"]
+    assert events[0]["time"] == int(T0.timestamp() * 1000)
+    assert events[1]["text"] == "after v1.3 · a1b2c3d4 retry"
+    assert events[2]["text"] == "was gone 2026-08-03, fixed by a1b2c3d4 retry"
+    assert [e["kind"] for e in store.events(back - H, back + 2 * H)] == ["came back"]
+
+
+def test_env_sets_the_path(tmp_path, monkeypatch, capsys):
+    project(tmp_path, datetime.now(timezone.utc) - timedelta(minutes=5))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("LOGSITE_HISTORY", str(tmp_path / "data" / "h.db"))
+    assert main(["sync"]) == 0
+    assert (tmp_path / "data" / "h.db").exists() and not (tmp_path / "h.db").exists()

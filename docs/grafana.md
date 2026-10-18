@@ -108,6 +108,41 @@ datasources:
 Pick it in the dashboard's **logsite (Infinity)** variable. The panel is opt-in, so the
 catalog dashboard doesn't require the plugin.
 
+#### History in the dashboard
+
+With the [history store](history.md), the panel also says which errors are back after a fix
+and since when each one has been around:
+
+| Trend | Count | Error | History | … | First seen | Fixed before by |
+|---|---|---|---|---|---|---|
+| back | 660 | IllegalStateException: Shipping label request failed | ↩ back, gone after v1.3 | … | 2026-08-03 | 41bdce40 Retry carrier timeouts with backoff (v1.3) |
+| new | 40 | KeyError: 'zone' | first time ever | … | 2026-10-18 | |
+
+The dashboard also gets a **logsite history** annotation (toggle at the top): red markers
+on the time graphs where an error was first seen, where it went away and where it came back.
+Hovering one shows, for example, *came back: IllegalStateException: Shipping label request
+failed · was gone 2026-09-03, fixed by 41bdce40 Retry carrier timeouts with backoff*. It
+reads `/history/events` and uses your Infinity data source (Grafana doesn't run annotations
+through a data source variable; with several Infinity data sources, pick one in the
+dashboard's annotation settings).
+
+#### Running it for a team: one container
+
+`alert-server` serves the panel, the annotations and the alert messages; with
+`--sync-every 15m` it also keeps the history filled. In a container, with your repository
+mounted (for code lines and the commits that fixed an error) and the history on a volume:
+
+```bash
+docker build -t logsite integrations/docker
+docker run -d -p 8085:8085 \
+  -v "$PWD:/repo:ro" -v logsite-history:/data \
+  -e LOGSITE_ALERT_TOKEN=<shared secret> logsite
+```
+
+or `docker compose -f integrations/docker/compose.yaml up -d` from the repository. The image
+runs `logsite alert-server --host 0.0.0.0 --sync-every 15m` with `LOGSITE_HISTORY=/data/history.db`;
+backfill once with `docker exec <container> logsite --config-dir /repo sync --backfill 30d`.
+
 ### Alloy rules: drop or sample noisy lines before they're shipped
 
 ```bash

@@ -73,6 +73,10 @@ logsite sync --backfill 30d          # once: read back 30 days, 6h at a time
 logsite sync                         # every 15 min or hourly (cron, Kubernetes CronJob)
 ```
 
+A long-running `logsite alert-server --sync-every 15m` does the same without cron, and serves
+the history to Grafana: an Error groups panel column and annotations on the time graphs
+([Grafana](grafana.md#history-in-the-dashboard)).
+
 `--step` sets how much is queried at a time (default `6h`); make it smaller if a step hits
 `--limit` (5000 error records), and logsite says so when it does.
 
@@ -103,5 +107,6 @@ path = "/var/lib/logsite/history.db"   # e.g. a volume for the alert-server cont
 resolve_after_hours = 24
 ```
 
-`--no-history` on `errors` and `investigate` skips it for one run. Alerts narrowed to some of
+`LOGSITE_HISTORY=/path/to/history.db` overrides the path (the Docker image uses
+`/data/history.db`). `--no-history` on `errors` and `investigate` skips it for one run. Alerts narrowed to some of
 your labels read the history but don't record into it, since they saw only part.

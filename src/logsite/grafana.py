@@ -243,10 +243,13 @@ ERROR_GROUP_COLUMNS = [  # (field in logsite's /errors, column title, type)
     ("trend_label", "Trend", "string"),
     ("count", "Count", "number"),
     ("title_short", "Error", "string"),
+    ("history_label", "History", "string"),
     ("root_cause_short", "Root cause", "string"),
     ("raised_name", "Raised at", "string"),
     ("raised_code", "Code", "string"),
     ("logged_name", "Logged at", "string"),
+    ("first_seen_ever", "First seen", "string"),
+    ("fixed_before", "Fixed before by", "string"),
     ("example_trace", "Example trace", "string"),
     ("raised_url", "raised_url", "string"),
     ("logged_url", "logged_url", "string"),
@@ -295,7 +298,15 @@ def error_groups_panel(pid: int, y: int) -> dict:
             {"id": "custom.width", "value": 70},
             {
                 "id": "mappings",
-                "value": [{"type": "value", "options": {"new": {"color": "red", "index": 0}}}],
+                "value": [
+                    {
+                        "type": "value",
+                        "options": {
+                            "new": {"color": "red", "index": 0},
+                            "back": {"color": "red", "index": 1},
+                        },
+                    }
+                ],
             },
             {"id": "custom.cellOptions", "value": {"type": "color-text"}},
         ],
@@ -332,11 +343,61 @@ def error_groups_panel(pid: int, y: int) -> dict:
                 _width("Raised at", 170),
                 _width("Code", 190),
                 _width("Logged at", 170),
+                _width("History", 170),
+                _width("First seen", 95),
+                _width("Fixed before by", 220),
                 _width("Example trace", 100),
             ],
         },
         "options": {"showHeader": True, "cellHeight": "sm"},
     }
+
+
+def history_annotation() -> dict:
+    """First seen / gone / came back markers on the time graphs, from logsite alert-server's
+    ``/history/events`` through the Infinity data source."""
+    return {
+        "name": "logsite history",
+        "enable": True,
+        "iconColor": "red",
+        # the type only: Grafana 13 doesn't run annotations whose data source is a variable;
+        # with a type it uses the (first) Infinity data source
+        "datasource": {"type": INFINITY},
+        "target": {
+            "refId": "Anno",
+            "type": "json",
+            "source": "url",
+            "format": "table",
+            "parser": "backend",
+            "url": "${logsite_url}/history/events",
+            "url_options": {
+                "method": "GET",
+                "data": "",
+                "params": [
+                    {"key": "from", "value": "${__from}"},
+                    {"key": "to", "value": "${__to}"},
+                ],
+            },
+            "root_selector": "events",
+            "columns": [
+                {"selector": "time", "text": "time", "type": "timestamp_epoch"},
+                {"selector": "title", "text": "title", "type": "string"},
+                {"selector": "text", "text": "text", "type": "string"},
+                {"selector": "kind", "text": "tags", "type": "string"},
+            ],
+        },
+    }
+
+
+BUILTIN_ANNOTATIONS = {
+    "builtIn": 1,
+    "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+    "enable": True,
+    "hide": True,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard",
+}
 
 
 def build_dashboard(
@@ -545,6 +606,8 @@ def build_dashboard(
             ),
         ]
     extra: dict = {}
+    if error_groups_url:
+        extra["annotations"] = {"list": [BUILTIN_ANNOTATIONS, history_annotation()]}
     if generic:
         for panel in panels:
             panel["gridPos"]["y"] += 5

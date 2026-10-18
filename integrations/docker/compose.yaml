@@ -1,0 +1,14 @@
+# docker compose -f integrations/docker/compose.yaml up -d   (from your service's repository)
+services:
+  logsite:
+    build: .
+    ports: ["8085:8085"]
+    environment:
+      LOGSITE_ALERT_TOKEN: ${LOGSITE_ALERT_TOKEN:?set a shared secret for Grafana}
+      # LOKI_PASSWORD: ...           # whatever your [backend] password_env names
+    volumes:
+      - ../..:/repo:ro                # the repository: code, logsite.toml, .git
+      - logsite-history:/data
+    restart: unless-stopped
+volumes:
+  logsite-history:

@@ -266,6 +266,55 @@ class History:
                 done.append(row["fingerprint"])
         return done
 
+    def events(self, start: datetime, end: datetime, limit: int = 200) -> list[dict]:
+        """First seen, gone and came back, in ``start..end``: for Grafana annotations.
+        ``time`` is epoch milliseconds."""
+        a, b = _iso(start), _iso(end)
+        rows = self.db.execute(
+            "select * from groups where (first_seen between ? and ?) "
+            "or (resolved_at between ? and ?) or (reopened_at between ? and ?) "
+            "or (previous_fix is not null)",
+            (a, b, a, b, a, b),
+        ).fetchall()
+        out = []
+
+        def add(when, kind, row, text):
+            ts = _dt(when)
+            if ts is None or not (start <= ts <= end):
+                return
+            out.append({
+                "time": int(ts.timestamp() * 1000),
+                "kind": kind,
+                "title": f"{kind}: {row['title'][:120]}",
+                "text": text,
+                "tags": ["logsite", kind],
+                "group": row["fingerprint"][:8],
+            })  # fmt: skip
+
+        for row in rows:
+            where = row["raised_at"] or row["logged_at"] or ""
+            add(row["first_seen"], "first seen", row,
+                f"{where} · {row['first_release'] or ''}".strip(" ·"))  # fmt: skip
+            commits = json.loads(row["fixed_by"] or "[]")
+            fix = ", ".join(f"{c['sha']} {c['summary']}" for c in commits)
+            gone = f"after {row['resolved_release']}" if row["resolved_release"] else ""
+            add(row["resolved_at"], "gone", row, " · ".join(x for x in (gone, fix) if x))
+            previous = json.loads(row["previous_fix"] or "null") or {}
+            if previous.get("resolved_at"):
+                commits = previous.get("fixed_by") or []
+                fix = ", ".join(f"{c['sha']} {c['summary']}" for c in commits)
+                gone = f"after {previous['release']}" if previous.get("release") else ""
+                add(previous["resolved_at"], "gone", row, " · ".join(x for x in (gone, fix) if x))
+                text = "was gone " + (previous["resolved_at"] or "")[:10]
+                add(
+                    row["reopened_at"],
+                    "came back",
+                    row,
+                    text + (f", fixed by {fix}" if fix else ""),
+                )
+        out.sort(key=lambda e: e["time"])
+        return out[-limit:]
+
     def show(self, prefix: str) -> dict | None:
         """One group's history by its id (a fingerprint prefix), for `logsite seen`."""
         row = self.db.execute(
@@ -346,8 +395,9 @@ def open_history(cfg) -> History | None:
     hcfg = getattr(cfg, "history", None)
     if hcfg is None or not hcfg.enabled:
         return None
-    path = Path(hcfg.path) if hcfg.path else default_path(cfg.root)
-    if hcfg.path and not path.is_absolute():
+    configured = os.environ.get("LOGSITE_HISTORY") or hcfg.path  # the env wins: containers
+    path = Path(configured) if configured else default_path(cfg.root)
+    if configured and not path.is_absolute():
         path = cfg.root / path
     try:
         return History(path)
