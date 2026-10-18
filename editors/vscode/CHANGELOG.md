@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- History store: errors seen before, the fix that worked, and regressions, in the editor's language server and the CLI.
+
 ## 0.2.1
 
 - The project README is a short front page, with the details in the docs.
