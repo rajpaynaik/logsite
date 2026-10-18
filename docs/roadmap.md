@@ -23,7 +23,7 @@
 - [x] CI gate after a deploy: `logsite errors --since-deploy <ref> --fail-on-new` (and `--fail-on-spike`) exits 1
 - [x] Agent mode: `logsite agent -- <command>` groups test and build failures by cause (pytest, go, Maven/Gradle, tsc, javac...) and shows what changed since the last run
 - [ ] Agent mode, more: Jest / Vitest, Rust (cargo test), a Claude Code hook that routes test commands automatically
-- [ ] History store: "first seen ever", regressions after a fix
+- [x] History store: "first seen ever", regressions with the fix that worked before ([history](history.md))
 - [ ] Incident investigation, more: affected services and tenants, and a few full request timelines per incident
 - [ ] More MCP tools for incident investigation: recent messages for a line, so AI assistants can do root-cause analysis on logsite data
 - [x] Severity correctness: flag log levels that don't match the event, statically (`info`/`debug` inside `except`, or messages like "failed"/"timeout" logged below `warning`) and from production (INFO lines whose messages look like failures, ERROR lines firing constantly at high volume), so failures aren't hidden from alerting

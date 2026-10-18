@@ -14,7 +14,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .backends import LogBackend, TimeRange
@@ -120,6 +120,8 @@ class ErrorGroup:
     sample: dict = field(default_factory=dict)
     wrapped_in: list[str] = field(default_factory=list)  # framework wrappers around it
     trace_ids: set[str] = field(default_factory=set, repr=False)  # up to MAX_TRACE_IDS
+    hourly: Counter[str] = field(default_factory=Counter, repr=False)  # "2026-10-17T19" -> n
+    history: object | None = None  # history.GroupHistory, when a history store is in use
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -246,6 +248,7 @@ def group_errors(
         group._messages.add(tuple(e.message for e in info.chain) if info else first_line)
         ts = record.timestamp
         if ts is not None:
+            group.hourly[hour_of(ts)] += 1
             if group.first_seen is None or ts < group.first_seen:
                 group.first_seen = ts
             if group.last_seen is None or ts > group.last_seen:
@@ -279,6 +282,13 @@ def _normalize_title(title: str) -> str:
     """``"KeyError: 'EUR'"`` -> ``"KeyError: <str>"``: the type stays, values are masked."""
     exc_type, sep, message = title.partition(": ")
     return f"{exc_type}{sep}{normalize(message)}" if sep else title
+
+
+def hour_of(ts: datetime) -> str:
+    """The UTC hour a time falls in, as stored in the history: ``2026-10-17T19``."""
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(timezone.utc)
+    return ts.strftime("%Y-%m-%dT%H")
 
 
 def _trace_id(record: LogRecord) -> str | None:
@@ -412,7 +422,14 @@ def group_json(g: ErrorGroup) -> dict:
         "levels": dict(g.levels),
         "variants": g.variants,
         "sample": g.sample,
+        "history": history_json(g.history),
     }
+
+
+def history_json(h) -> dict | None:
+    from .history import history_json as convert  # history imports this module
+
+    return convert(h)
 
 
 def summary_json(s: ErrorSummary, top: int | None = None) -> dict:

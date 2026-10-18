@@ -253,3 +253,19 @@ def test_errors_endpoint_adds_links_and_short_names(server):
     assert first["trend_label"] == "new" and second["trend_label"] == "1.0x"
     assert first["raised_url"] is None  # the test enricher has no code host
     assert second["raised_name"] is None and second["logged_name"] == "OrderService.java:170"
+
+
+def test_render_says_when_an_error_is_back():
+    (alert,) = parse_grafana(PAYLOAD)
+    summary = json.loads(json.dumps(SUMMARY))
+    summary["groups"][0]["history"] = {
+        "regression": True,
+        "first_seen": "2026-08-03T12:00:00+00:00",
+        "resolved_at": "2026-09-03T09:50:00+00:00",
+        "resolved_release": "v1.3",
+        "fixed_by": [{"sha": "a1b2c3d4", "author": "Maya", "summary": "Retry carrier timeouts"}],
+    }
+    text = render(alert, summary, slack=False, trace_field="traceId")
+    assert f"1. {OPE}: Unable to save order ORD-<n>  ·  561  ·  back" in text
+    assert "    ↩ came back: seen 2026-08-03 → 2026-09-03, gone after v1.3" in text
+    assert "    fixed before by: a1b2c3d4 Maya: Retry carrier timeouts" in text

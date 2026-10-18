@@ -51,3 +51,9 @@ def repo(tmp_path):
     (tmp_path / "app" / "pay.py").write_text(V2)
     git(tmp_path, "commit", "-qam", "double the total", date="2026-02-01T00:00:00+00:00")
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _history_in_tmp(tmp_path_factory, monkeypatch):
+    """Keep the history store (under XDG_DATA_HOME) out of the real home directory."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path_factory.mktemp("data")))

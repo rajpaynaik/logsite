@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, replace
-from datetime import timezone
+from datetime import timedelta, timezone
 from pathlib import Path
 
 from . import __version__, report
@@ -483,6 +483,10 @@ def _error_summary(args: argparse.Namespace, cfg: Config):
         )
     except Exception as exc:
         sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
+    if not getattr(args, "no_history", False):
+        from . import history
+
+        history.apply(cfg, summary.groups, window.start, window.end)
     return summary, label, app
 
 
@@ -828,12 +832,17 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
     fields = list(dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"]))
 
     def summarize(start, end, labels):
-        backend = _backend_or_exit(cfg, with_selector(cfg.backend, labels, acfg.selector_labels))
+        narrowed = with_selector(cfg.backend, labels, acfg.selector_labels)
+        backend = _backend_or_exit(cfg, narrowed)
         sites, app = project()
         window = TimeRange(start, end)
         summary = summarize_errors(
             backend, sites, app, window, window.previous(), cfg.lint, cfg.leaks, args.limit, fields
         )
+        from . import history
+
+        # an alert narrowed to part of the selector saw only part: don't record it as watched
+        history.apply(cfg, summary.groups, start, end, record=narrowed == cfg.backend)
         return summary_json(summary)
 
     url_template = source_url(cfg.root)
@@ -880,6 +889,123 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    return 0
+
+
+def _duration(text: str) -> timedelta:
+    units = {"m": 1 / 60, "h": 1, "d": 24, "w": 168}
+    text = text.strip().lower()
+    try:
+        if text[-1:] in units:
+            return timedelta(hours=float(text[:-1]) * units[text[-1]])
+        return timedelta(hours=float(text))
+    except ValueError:
+        sys.exit(f"logsite: can't read the duration {text!r} (e.g. 15m, 6h, 30d)")
+
+
+def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
+    """Record the recent errors into the history store; on a schedule, or once to backfill."""
+    from datetime import datetime
+
+    from . import history
+
+    if not cfg.history.enabled:
+        sys.exit("logsite: the history is turned off ([history] enabled = false)")
+    backend = _backend_or_exit(cfg)
+    sites = _sites(cfg, None)
+    app = AppFiles.scan(cfg.root, DEFAULT_EXCLUDES | set(cfg.excludes))
+    fields = dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"])
+    end = datetime.now(timezone.utc)
+    span = _duration(args.backfill or args.last)
+    step = min(_duration(args.step), span)
+    start, groups, path = end - span, set(), None
+    while start < end:
+        chunk = TimeRange(start, min(start + step, end))
+        try:
+            summary = summarize_errors(
+                backend, sites, app, chunk, None, cfg.lint, cfg.leaks, args.limit, fields
+            )
+        except Exception as exc:
+            sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
+        path = history.apply(cfg, summary.groups, chunk.start, chunk.end, now=end) or path
+        groups |= {g.fingerprint for g in summary.groups}
+        if summary.truncated:
+            print(
+                f"logsite: {chunk.start:%Y-%m-%d %H:%M}: --limit {args.limit} reached, "
+                "counts are a lower bound (use a smaller --step)",
+                file=sys.stderr,
+            )
+        start = chunk.end
+    if path is None:
+        sys.exit("logsite: couldn't open the history store")
+    print(f"recorded {len(groups)} error group(s) over {args.backfill or args.last} → {path}")
+    return 0
+
+
+def cmd_seen(args: argparse.Namespace, cfg: Config) -> int:
+    """Everything the history store knows about one error group."""
+    from datetime import date
+
+    from . import history
+
+    store = history.open_history(cfg)
+    if store is None:
+        sys.exit("logsite: the history is turned off ([history] enabled = false)")
+    try:
+        row = store.show(args.id)
+    finally:
+        store.close()
+    if row is None:
+        sys.exit(f"logsite: no error group {args.id!r} in the history")
+    if args.format == "json":
+        json.dump(row, sys.stdout, indent=2)
+        print()
+        return 0
+    pal = palette(args.color, sys.stdout)
+    print(pal.bold_white(f"{row['fingerprint'][:8]}  {row['title']}"))
+    status = row["status"]
+    if row["regressions"] and status == "active":
+        status = f"active, came back {row['regressions']} time(s)"
+    first = f"{row['first_seen'][:16]} UTC"
+    if row["first_release"]:
+        first += f" ({row['first_release']})"
+    facts = [
+        ("Status", status),
+        ("First seen", first),
+        ("Last seen", f"{row['last_seen'][:16]} UTC"),
+        ("Raised at", row["raised_at"] or "—"),
+        ("Logged at", row["logged_at"] or "—"),
+    ]  # fmt: skip
+    previous = row["previous_fix"] or {}
+    for label, at, release in (
+        ("Gone since", row["resolved_at"], row["resolved_release"]),
+        ("Was gone", previous.get("resolved_at"), previous.get("release")),
+    ):
+        if at:
+            text = f"{at[:16]} UTC" + (f", after {release}" if release else "")
+            if label == "Was gone" and row["reopened_at"]:
+                text += f" → back {row['reopened_at'][:16]} UTC"
+            facts.append((label, text))
+    fix = row["fixed_by"] or (row["previous_fix"] or {}).get("fixed_by") or []
+    for i, c in enumerate(fix):
+        label = "Fixed by" if row["status"] == "resolved" else "Fixed before by"
+        facts.append(
+            (label if i == 0 else "", f"{c['sha']} {c['date'][:10]} {c['author']}: {c['summary']}")
+        )
+    for label, value in facts:
+        print(f"   {pal.gray(label.ljust(15))} {value}")
+    if row["daily"]:
+        peak = max(n for _, n in row["daily"])
+        print(f"   {pal.gray('Per day')}")
+        before = None
+        for day, n in row["daily"][-args.days :]:
+            if before is not None:
+                gap = (date.fromisoformat(day) - before).days - 1
+                if gap > 0:
+                    print(pal.gray(f"     … {gap} day(s) without it"))
+            before = date.fromisoformat(day)
+            bar = "█" * max(1, round(n / peak * 30)) if n else ""
+            print(f"     {pal.gray(day)}  {pal.red(bar)} {n:,}")
     return 0
 
 
@@ -1008,7 +1134,24 @@ def main(argv: list[str] | None = None) -> int:
         help="highlight your code (default: in a terminal; NO_COLOR turns it off)",
     )
     p.add_argument("--format", choices=["text", "json"], default="text")
+    p.add_argument("--no-history", action="store_true", help="don't read or update the history")
     p.set_defaults(func=cmd_errors)
+
+    p = sub.add_parser("sync", help="record recent errors in the history store (cron, backfill)")
+    p.add_argument("--last", default="1h", help="how far back to read (default 1h)")
+    p.add_argument("--backfill", metavar="SPAN", help="read this far back once, e.g. 30d")
+    p.add_argument("--step", default="6h", help="query this much at a time (default 6h)")
+    p.add_argument("--limit", type=int, default=5000, help="error records per step (5000)")
+    p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser(
+        "seen", help="the history of one error group: first seen, fixes, regressions"
+    )
+    p.add_argument("id", help="the group id, as `logsite errors --format json` shows it")
+    p.add_argument("--days", type=int, default=30, help="days of counts to show (30)")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_seen)
 
     p = sub.add_parser(
         "pipeline", help="Grafana Alloy rules that drop or sample noisy log calls before shipping"
@@ -1067,6 +1210,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
     p.add_argument("--format", choices=["text", "json"], default="text")
+    p.add_argument("--no-history", action="store_true", help="don't read or update the history")
     p.set_defaults(func=cmd_investigate)
 
     p = sub.add_parser(

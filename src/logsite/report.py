@@ -60,16 +60,59 @@ def _span(first: datetime | None, last: datetime | None) -> str:
     return text
 
 
+def is_regression(g: ErrorGroup) -> bool:
+    return bool(g.history is not None and g.history.regression)
+
+
 def trend_of(g: ErrorGroup) -> str:
+    if is_regression(g):
+        return "back"  # fixed before, and back
     return "" if g.trend is None else ("new" if g.is_new else g.trend)
 
 
 def _badge_text(g: ErrorGroup, pal: Palette) -> str:
-    """`` NEW `` as a coloured badge; plain ``new`` without colours."""
+    """`` NEW `` / `` BACK `` as a coloured badge; plain ``new`` without colours."""
     trend = trend_of(g)
     if not trend or not pal.enabled:
         return trend
-    return f" {trend.upper() if g.is_new else trend} "
+    return f" {trend.upper() if g.is_new or is_regression(g) else trend} "
+
+
+def _day(ts) -> str:
+    return f"{ts.day} {ts:%b %Y}" if ts else "?"
+
+
+def history_rows(g: ErrorGroup, pal: Palette) -> list[tuple[str, str]]:
+    """What the history store knows: back after a fix, first time ever, or how long it's
+    been around."""
+    h = g.history
+    if h is None:
+        return []
+    if h.regression:
+        text = pal.bold_red("↩ came back") + pal.gray(
+            f" · seen {_day(h.first_seen)} → {_day(h.resolved_at)}"
+        )
+        if h.resolved_release:
+            text += pal.gray(", gone after ") + pal.bold_yellow(h.resolved_release)
+        if h.regressions:
+            text += pal.gray(f" · came back {h.regressions} time(s) before")
+        rows = [("History", text)]
+        for i, c in enumerate(h.fixed_by):
+            line = (
+                f"{pal.yellow(c['sha'])} {pal.gray(c['date'][:10])} {c['author']}: {c['summary']}"
+            )
+            rows.append(("Fixed by" if i == 0 else "", line))
+        return rows
+    if h.new_ever:
+        since = pal.gray(f"  (history since {_day(h.watching_since)})")
+        return [("History", pal.red("first time ever") + since)]
+    if h.known and h.first_seen:
+        text = f"since {_day(h.first_seen)}"
+        if h.first_release:
+            text += f" ({h.first_release})"
+        text += f" · {h.total:,} errors on {h.days_seen} day(s) before this"
+        return [("History", pal.gray(text))]
+    return []
 
 
 class Style:
@@ -80,7 +123,9 @@ class Style:
         self.spiking = spiking
 
     def kind(self, g: ErrorGroup) -> str:
-        return "new" if g.is_new else ("spike" if self.spiking(g) else "steady")
+        if g.is_new or is_regression(g):
+            return "new"
+        return "spike" if self.spiking(g) else "steady"
 
     def badge(self, g: ErrorGroup, text: str | None = None) -> str:
         """`` NEW `` / `` 8.0x `` / `` 1.0x ``: coloured by what the trend means."""
@@ -214,6 +259,7 @@ def card(
     span = _span(g.first_seen, g.last_seen)
     if span:
         rows.append(("Seen", pal.white(span)))
+    rows += history_rows(g, pal)
     if g.services:
         services = ", ".join(f"{s} ({n:,})" for s, n in g.services.most_common(3))
         rows.append(("Services", pal.white(services)))
@@ -266,6 +312,9 @@ def headline(summary: ErrorSummary, label: str, pal: Palette) -> str:
     parts.append(pal.white(f"{len(groups)} group(s)"))
     if new:
         parts.append(pal.badge_red(f" {new} NEW ") if pal.enabled else f"{new} new")
+    back = sum(is_regression(g) for g in groups)
+    if back:
+        parts.append(pal.badge_red(f" {back} BACK ") if pal.enabled else f"{back} back")
     if summary.previous_events is not None:
         before = f"before: {summary.previous_events:,}"
         if summary.previous_events:
@@ -312,6 +361,7 @@ def incident_card(
         rows += _code(root, cause.raised_at, pal)
     elif cause.logged_at:
         rows.append(("Logged at", pal.bold_blue(cause.logged_at.id)))
+    rows += history_rows(cause, pal)
     for i, g in enumerate(inc.effects):
         when = _when(g.first_seen)[11:] if g.first_seen else "     "
         why = inc.reasons.get(g.id)

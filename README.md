@@ -83,6 +83,8 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
   before they're shipped. → [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
 - **Lint for logging**: lost stack traces, failures logged at `info`, secrets and card numbers
   in log calls, logs in hot loops, missing context like `request_id`. → [Lint rules](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md)
+- **History**: "seen before, fixed by `a1b2c3d` in v1.3, back since v1.4": logsite remembers
+  every error group, so a regression comes with the fix that worked last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
 - **Leaks**: secrets and personal data that actually reached production logs, per log call.
 - **Request timeline**: `logsite trace <id>`, every line of one request across services.
 - **MCP server**: AI assistants ask "what's failing in production, and why?" and get the
@@ -131,6 +133,7 @@ logsite cost --price-per-gb 0.5    # what each log call costs per month
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
 [Errors, incidents and the CI gate](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md) ·
 [Agent mode](https://github.com/rajpaynaik/logsite/blob/main/docs/agent.md) ·
+[History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
 [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
 [Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·
 [Lint rules](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md) ·

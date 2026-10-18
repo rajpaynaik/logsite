@@ -167,7 +167,8 @@ def render(
     if not groups:
         out.append("No error logs in this window: the alert isn't about logged errors.")
     for i, g in enumerate(groups, 1):
-        trend = "new" if g["new"] else (g["trend"] or "")
+        h = g.get("history") or {}
+        trend = "back" if h.get("regression") else ("new" if g["new"] else (g["trend"] or ""))
         out += [
             "",
             f"{i}. {bold(g['title'][:150])}  ·  {g['count']:,}"
@@ -192,10 +193,28 @@ def render(
         ).get("trace_id")
         if trace:
             out.append(f"    example: `logsite trace {trace}`")
+        out += _history_lines(h)
     rest = summary["groups_total"] - len(groups)
     if rest > 0:
         out += ["", f"+ {rest} more group(s): `logsite errors`"]
     return "\n".join(out)
+
+
+def _history_lines(h: dict) -> list[str]:
+    if h.get("regression"):
+        first, gone = (h.get("first_seen") or "")[:10], (h.get("resolved_at") or "")[:10]
+        text = f"    ↩ came back: seen {first} → {gone}"
+        if h.get("resolved_release"):
+            text += f", gone after {h['resolved_release']}"
+        lines = [text]
+        for c in h.get("fixed_by") or []:
+            lines.append(f"    fixed before by: {c['sha']} {c.get('author', '')}: {c['summary']}")
+        return lines
+    if h.get("new_ever"):
+        return ["    first time ever"]
+    if h.get("known") and h.get("first_seen"):
+        return [f"    seen since {h['first_seen'][:10]} ({h['days_seen']} day(s))"]
+    return []
 
 
 def post_json(url: str, body: dict, timeout: float = 10.0) -> None:

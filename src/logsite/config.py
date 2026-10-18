@@ -67,6 +67,7 @@ else:  # pragma: no cover
 
 from .alerts import AlertsConfig
 from .cost import CostConfig
+from .history import HistoryConfig
 from .leaks import LeakConfig
 from .lint import LintConfig
 from .pipeline import PipelineConfig
@@ -89,6 +90,7 @@ class Config:
     timeline: TimelineConfig = field(default_factory=TimelineConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
+    history: HistoryConfig = field(default_factory=HistoryConfig)
     window_hours: float = 24.0
     excludes: list[str] = field(default_factory=list)
 
@@ -175,6 +177,7 @@ def load_config(start: str | Path | None = None) -> Config:
         ),
         pipeline=PipelineConfig.from_dict(data.get("pipeline", {})),
         alerts=AlertsConfig.from_dict(data.get("alerts", {})),
+        history=HistoryConfig.from_dict(data.get("history", {})),
         window_hours=float(data.get("window_hours", 24)),
         excludes=list(data.get("exclude", [])),
     )

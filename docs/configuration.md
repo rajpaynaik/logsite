@@ -79,3 +79,10 @@ region = "us-east-1"
 # filter_pattern = "INFO"           # CloudWatch filter syntax
 # log_stream_prefix = "web-"
 ```
+
+```toml
+[history]                           # the history store: see docs/history.md
+enabled = true
+# path = "/var/lib/logsite/history.db"   # default: ~/.local/share/logsite/history/
+# resolve_after_hours = 24          # watched this long without it: gone
+```

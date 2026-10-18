@@ -300,6 +300,9 @@ def build_server(cfg: Config) -> MCPServer:
             )
         except Exception as exc:
             raise ToolError(f"couldn't query the {b.name} backend: {exc}") from exc
+        from . import history
+
+        history.apply(cfg, summary.groups, window.start, window.end)
         return summary_json(summary, top)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -336,6 +339,9 @@ def build_server(cfg: Config) -> MCPServer:
             )
         except Exception as exc:
             raise ToolError(f"couldn't query the {b.name} backend: {exc}") from exc
+        from . import history
+
+        history.apply(cfg, summary.groups, window.start, window.end)
         incidents, ongoing = find_incidents(summary.groups, cfg.lint)
         now = datetime.now(timezone.utc)
         for inc in incidents:
