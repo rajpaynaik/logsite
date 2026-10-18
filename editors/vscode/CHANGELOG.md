@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- The project README is a short front page, with the details in the docs.
+
 ## 0.2.0
 
 The extension itself is unchanged; it uses logsite 0.2.0, which adds:
