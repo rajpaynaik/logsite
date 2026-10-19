@@ -34,11 +34,11 @@ def test_a_change_right_before_and_touching_the_code_is_the_lead():
     assert change.title == "The change in v1.4: 0df4dac1 Lower carrier read timeout to 3s"
     assert change.supporting == [
         "v1.4 was deployed 4 min before the errors started",
-        "0df4dac1 changed the lines around a/Carrier.java:58, where it's raised",
+        "0df4dac1, in v1.4, changed the lines around a/Carrier.java:58, where it's raised",
         "the error wasn't there in the window before",
     ]
     assert change.next_check.startswith("read `git show 0df4dac1 -- a/Carrier.java`")
-    assert dependency.against == ["but a recent commit changed the code that makes the call"]
+    assert dependency.against == ["but v1.4, just before, changed the code that makes the call"]
     assert "slow for every caller" in dependency.next_check
     assert d.strength == "strong"
     assert d.unknown == ["traffic before and after isn't known, so rates couldn't be compared"]
@@ -64,6 +64,44 @@ def test_same_rate_at_three_times_the_traffic_is_traffic():
     )
     assert "the error was already there at the same rate before (1.0x)" in change.against
     assert diagnosis_json(d)["hypotheses"][0]["cause"] == "traffic"
+
+
+def test_a_commit_without_a_deploy_is_weak_evidence():
+    cause = group("c", 0, previous=0, exc="ValueError", raised="a.py:7")
+    (change,) = diagnose(incident(cause, suspects=[COMMIT]), CFG, had_before=False).hypotheses
+    assert change.score == 1
+    assert change.supporting == ["0df4dac1 changed the lines around a.py:7 recently"]
+    assert "no deploy ties that commit to when the errors started" in change.unknown
+    # no logs before: "new" isn't evidence
+    assert "no logs in the window before: whether the error is new isn't known" in change.unknown
+
+
+def test_connection_exhaustion_is_capacity():
+    from logsite.incidents import Related
+
+    api = group("api", 0, exc="DataAccessResourceFailureException", raised="r/Repo.java:142")
+    api.causes = ["org.postgresql.util.PSQLException: FATAL: sorry, too many clients already"]
+    api.path = ["OrderController.createOrder", "OrderRepository.save", "org.postgresql"]
+    kafka = group("kafka", 1, exc="DataAccessResourceFailureException", raised="r/Repo.java:142")
+    kafka.causes, kafka.path = list(api.causes), ["OrderEventConsumer.onMessage"]
+    inc = incident(api, suspects=[COMMIT], effects=[kafka])
+    inc.related = [
+        Related("warning", "HikariPool-1 - Connection is not available, request timed out "
+                "after 30000ms (total=40, active=40, idle=0, waiting=126)", "t1"),
+        Related("info", "request completed method=POST path=/api/v1/orders status=500 "
+                "duration_ms=30042", "t1"),
+    ]  # fmt: skip
+    d = diagnose(inc, CFG, had_before=False)
+    top = d.hypotheses[0]
+    assert top.key == "capacity" and top.title == "Capacity: database connections ran out"
+    assert top.score == 7 and d.strength == "strong"
+    assert any("total=40, active=40, idle=0, waiting=126" in t for t in top.supporting)
+    assert "pg_stat_activity" in top.next_check
+    from logsite.diagnose import impact, shared_root
+
+    assert shared_root(inc) == (api.causes[0], ["OrderController.createOrder",
+                                                "OrderEventConsumer.onMessage"])  # fmt: skip
+    assert impact(inc) == ["POST /api/v1/orders → 500 after 30,042 ms"]
 
 
 def test_nothing_to_go_on_is_unclear():
@@ -118,7 +156,7 @@ def test_report_when_the_rate_really_rose(tmp_path, monkeypatch, capsys):
     text = (tmp_path / "report.md").read_text()
     assert text.startswith("# Incident report: errors in the last 24h")
     assert "traffic 3.0x the window before" in text
-    assert "- 600 errors (30.0x, rate 10.0x)" in text
+    assert "- 600 error(s) (30.0x, rate 10.0x)" in text
     assert "the error rate is 10.0x: more than the traffic explains" in text
     assert "they aren't probabilities" in text
     assert main(["investigate", "--format", "json"]) == 0

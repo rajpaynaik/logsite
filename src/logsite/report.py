@@ -379,6 +379,16 @@ def incident_card(
         rows += _code(root, cause.raised_at, pal)
     elif cause.logged_at:
         rows.append(("Logged at", pal.bold_blue(cause.logged_at.id)))
+    from .diagnose import impact, shared_root
+
+    shared = shared_root(inc)
+    if shared:
+        rows.append(("Same root", pal.white(f"{len(shared[1])} entry points: ")
+                     + pal.cyan(", ".join(shared[1]))))  # fmt: skip
+    for r in [r for r in inc.related if r.level == "warning"][:2]:
+        rows.append(("Warning", pal.yellow(_cut(r.message, width - 20))))
+    for text in impact(inc)[:2]:
+        rows.append(("Impact", pal.white(text)))
     rows += history_rows(cause, pal)
     for i, g in enumerate(inc.effects):
         when = _when(g.first_seen)[11:] if g.first_seen else "     "

@@ -323,6 +323,9 @@ class OrderController {
 """
 
 
+DETAIL = " Detail: Query execution exceeded configured timeout of 5000 ms. SQLState: 57014"
+
+
 def test_spring_boot_trace_in_plain_text(tmp_path):
     """A Spring Boot error with three exceptions, proxies, `... N common frames omitted`
     and a PostgreSQL root cause with indented Detail / SQLState lines."""
@@ -343,7 +346,8 @@ def test_spring_boot_trace_in_plain_text(tmp_path):
     assert [e.type.rsplit(".", 1)[-1] for e in info.chain] == [
         "PSQLException", "QueryTimeoutException", "OrderProcessingException",
     ]  # fmt: skip
-    assert info.root.message == "ERROR: canceling statement due to statement timeout"
+    # the indented Detail / SQLState lines are part of the message: more evidence
+    assert info.root.message == ("ERROR: canceling statement due to statement timeout" + DETAIL)
 
     app = AppFiles(
         [
@@ -356,7 +360,8 @@ def test_spring_boot_trace_in_plain_text(tmp_path):
     groups = sorted(group_errors(records, sites, app).values(), key=lambda g: -len(g.causes))
     order, retry = groups
     assert order.causes == [
-        "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout",
+        "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout"
+        + DETAIL,
         "org.springframework.dao.QueryTimeoutException: JDBC statement timed out",
     ]
     # the root cause is all driver code: raised at the nearest frame of the project's own
@@ -397,3 +402,17 @@ def test_kafka_listener_failure_is_headlined_by_the_real_exception():
         "java.net",
     ]
     assert g.sample["ids"] == {"trace_id": "tr-91ac72"}
+
+
+def test_java_message_on_the_next_lines():
+    from logsite.tracebacks import parse_java_trace
+
+    chain = parse_java_trace(
+        "io.github.resilience4j.circuitbreaker.CallNotPermittedException:\n"
+        "  CircuitBreaker 'inventoryService' is OPEN and does not permit further calls\n"
+        "    at com.example.checkout.InventoryClient.getAvailability(InventoryClient.java:61)\n"
+    )
+    assert (
+        chain[0].message
+        == "CircuitBreaker 'inventoryService' is OPEN and does not permit further calls"
+    )

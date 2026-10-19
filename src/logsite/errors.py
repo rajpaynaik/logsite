@@ -49,6 +49,8 @@ _LOGGER_PREFIX = re.compile(r"^(?:\[[^\]]*\]\s*|\d+\s+---\s+)*(?:[\w$]+\.)+[\w$]
 _TEXT_ID = re.compile(
     r"\b(trace_?id|span_?id|request_?id|correlation_?id)[=:]\s*([\w-]{6,})", re.IGNORECASE
 )
+# Spring Sleuth's positional "[app,traceId,spanId]" ("[inventory-service,7f3a0000c2,a1]")
+_SLEUTH = re.compile(r"\[[A-Za-z][\w.-]*,(?P<trace>[0-9a-f]{8,32}),(?P<span>[0-9a-f]{1,32})[,\]]")
 TRACEBACK_CHARS = 4000  # of the sample traceback kept for display
 
 _VALUES = [
@@ -67,6 +69,10 @@ def normalize(message: str) -> str:
     return message
 
 
+TRACE_SUFFIXES = (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".kt", ".scala", ".groovy", ".rb",
+                  ".cs", ".rs", ".php")  # fmt: skip
+
+
 class AppFiles:
     """The project's Python files, to tell its own frames from library ones and to turn a
     deployed path (``/srv/app/checkout.py``) into a project path (``app/checkout.py``)."""
@@ -80,8 +86,12 @@ class AppFiles:
     def scan(
         cls, root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES, tests: bool = False
     ) -> AppFiles:
+        from .lang import EXTENSIONS
+
         root = root.resolve()
-        files = iter_source_files(root, excludes, tests=tests)
+        # stack frames come from any language, not only the ones whose log calls are indexed
+        suffixes = (*EXTENSIONS, *TRACE_SUFFIXES)
+        files = iter_source_files(root, excludes, suffixes=suffixes, tests=tests)
         return cls(f.relative_to(root).as_posix() for f in files)
 
     def resolve(self, frame: Frame) -> str | None:
@@ -202,7 +212,25 @@ def _fingerprint(info: ErrorInfo | None, record: LogRecord, site: LogSite | None
         key = f"site:{site.id}"
     else:
         key = "msg:" + normalize(record.message.split("\n", 1)[0])
+    err = error_field(record)
+    if info is None and err:  # one log call, different errors: "no space" vs "open files"
+        key += "|err:" + normalize(err)
     return hashlib.sha1(key.encode()).hexdigest()
+
+
+ERROR_FIELDS = ("error", "err", "error.message", "error_message", "reason", "cause")
+
+
+def error_field(record: LogRecord) -> str | None:
+    """The error a structured record carries in a field instead of a stack trace (zerolog's
+    and zap's ``error``, logrus' ``error``, ECS's ``error.message``)."""
+    for key in ERROR_FIELDS:
+        value = record.fields.get(key)
+        if value is None:
+            value = get_field(record, key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:500]
+    return None
 
 
 def _service(record: LogRecord) -> str | None:
@@ -212,7 +240,9 @@ def _service(record: LogRecord) -> str | None:
             value = get_field(record, key)
         if value not in (None, "") and not isinstance(value, dict):
             return str(value)
-    return None
+    from .timeline import text_head
+
+    return text_head(record)[1]  # "ERROR [payment-service] ..."
 
 
 def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
@@ -270,6 +300,9 @@ def group_errors(
                 exc_type = info.chain[head].type
             else:
                 title = _LOGGER_PREFIX.sub("", _PLAIN_PREFIX.sub("", first_line))
+                err = error_field(record)
+                if err and err not in title:
+                    title = f"{title}: {err}"
                 causes, exc_type = [], None
             group = groups[fp] = ErrorGroup(fp, redact(title, leaks), exc_type, causes)
             group.causes = [redact(c, leaks) for c in causes]
@@ -329,8 +362,12 @@ def _trace_id(record: LogRecord) -> str | None:
         value = get_field(record, name)
         if value is not None and not isinstance(value, (dict, list)):
             return str(value)
-    m = _TEXT_ID.search(record.message.split("\n", 1)[0])
-    return m.group(2) if m and "span" not in m.group(1).lower() else None
+    first = record.message.split("\n", 1)[0]
+    m = _TEXT_ID.search(first)
+    if m and "span" not in m.group(1).lower():
+        return m.group(2)
+    s = _SLEUTH.search(first[:300])
+    return s["trace"] if s else None
 
 
 def _sample(
@@ -345,6 +382,10 @@ def _sample(
         for m in _TEXT_ID.finditer(record.message.split("\n", 1)[0]):
             key = re.sub(r"(?<=[a-z])_?(id)$", "_id", m.group(1).lower())
             ids.setdefault(key, m.group(2))
+    if not ids:  # "[inventory-service,7f3a0000c2,a1]"
+        s = _SLEUTH.search(record.message.split("\n", 1)[0][:300])
+        if s:
+            ids["trace_id"], ids["span_id"] = s["trace"], s["span"]
     text = info.text if info and info.text else None
     if text and len(text) > TRACEBACK_CHARS:
         text = "…" + text[-TRACEBACK_CHARS:]  # the end says where it was raised

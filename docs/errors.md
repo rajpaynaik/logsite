@@ -111,9 +111,24 @@ with fewer than 100 events fall back to counts.
 `logsite investigate --report` (or `-o report.md`) writes an incident report that someone
 can check: what happened, then the explanations ranked by evidence, each with what
 supports it, what speaks against it, what logsite can't see, and the cheapest next check.
-The candidates are a **change** (the release and the commits around the code that raised),
-**traffic** (same error rate, more requests) and a **dependency** (timeouts, refused
-connections: a call that failed elsewhere). It's deterministic: no model writes it.
+Some errors already say what kind of failure they are, and get their own explanation and
+next check: a **deadlock**, an open **circuit breaker** (the dependency behind it is the
+cause), a **bug** (a null, an index out of range, at the line of yours that raised it) and
+**bad input data** (a value a message or request had that the code can't read, with where it
+came from). Otherwise the candidates are a **change** (the release and the commits around the code that raised),
+**traffic** (same error rate, more requests), a **dependency** (timeouts, refused
+connections: a call that failed elsewhere) and **capacity** (a connection pool, a database's
+connection limit, memory or threads running out). It's deterministic: no model writes it.
+
+Besides the errors, logsite reads a few of the failing requests in full (by trace id) for
+evidence the error lines don't carry: **warnings in the same requests** (a pool-exhausted
+warning with its numbers) and **impact** (the line that closed the request:
+`POST /api/v1/orders → 500 after 30,042 ms`). When several groups share **one root cause**
+reached from different entry points (an API and a Kafka consumer), it says so.
+
+A commit near the failing line only counts as strong evidence when a deploy ties it to when
+the errors started; without one it's a weak lead, and "the error is new" only counts when
+there were logs before to compare with.
 
 ```markdown
 ### Likely causes (strong evidence)
@@ -140,6 +155,42 @@ report says the evidence is unclear rather than picking one, and marks weak expl
 "unlikely". The terminal card shows the lead (`Likely`, with how strong the evidence is),
 and `investigate --format json` and the MCP `investigate` tool include the whole
 `diagnosis`.
+
+### Benchmark
+
+`tests/test_benchmark.py` runs incidents with a known cause through `logsite investigate`
+on every CI build and checks the top-ranked cause and how strong the evidence is:
+
+| Case | What happened | logsite's answer |
+|---|---|---|
+| `db-pool` | Postgres out of connections ("too many clients") behind Spring wrappers, from an API and a Kafka consumer; Hikari's `total=40, active=40, idle=0, waiting=126` warning in the same request; an old commit near the code, no deploy | **capacity**, strong (the commit ranks last) |
+| `regression-after-deploy` | read timeouts starting 4 minutes after a deploy whose commit changed the raising line | **change**, strong |
+| `dependency-without-a-change` | the same timeouts, no deploy, no commit near the code | **dependency**, moderate |
+| `busy-day` | 3× the errors at 3× the traffic | **no incident** |
+| `too-little-evidence` | a new error and nothing to tie it to | **unclear** |
+| `six-failures` | six unrelated failures in six services within 22 minutes: a deadlock, a carrier timeout, a Kafka message with `"UNKNOWN"` for a number, a null, out of memory in a CSV export, an open circuit breaker | **six incidents**, each with its own cause: concurrency, dependency (`carrier.example.com`), bad data, a bug (`getDiscount()` was null), capacity (memory, while `CsvExporter.export()` buffered), dependency (`inventoryService`) |
+
+And twelve worst cases (`tests/benchmark_hard.py`):
+
+| Case | What makes it hard | logsite's answer |
+|---|---|---|
+| `cascade` | inventory's database times out; checkout (Python) times out calling it *first*, the gateway (Go) returns 502s; trace ids in three formats | one incident; **inventory** is the cause (checkout's error names it), checkout and gateway are effects; the slow-query warning is evidence |
+| `red-herring` | a deploy 3 minutes before, whose commit changed the failing call, but the same DNS failure hits two services that weren't deployed | **dependency** (`catalog-db.internal` doesn't resolve) over the change |
+| `storm` | 20,000 copies of a known error and 3 of a new one, with a 5,000-record limit | the new one first; counts flagged as a lower bound |
+| `py-chain` | `raise ... from exc`: OrderLookupError over `database is locked` | root cause and raised-at from the original error |
+| `go-fatal` | `fatal error: concurrent map writes`: no timestamp, no level | found, new, raised at `Cache.Set()`; **concurrency** (a data race) |
+| `truncated` | `... 87 more`, `Suppressed:`, a frame cut by the collector | one group; root cause `RejectedExecutionException`; **capacity** (threads) |
+| `retries` | four WARN retries with the trace, then the ERROR | at most two groups; **dependency** (connection refused) |
+| `config` | an expired TLS certificate; a rotated database password | **config**, with the certificate check and the user that was rejected |
+| `no-trace-capacity` | `no space left on device` and `too many open files` only in an `error` field | two groups; **capacity** (disk space, file descriptors) |
+| `node` | an unhandled promise rejection with a Node.js stack | `Error: connect ECONNREFUSED`, raised at `src/cache/redis.js:44`; **dependency** |
+| `logstash` | Logstash JSON with `stack_trace`, `app` and a nested cause | the root cause and the service from the fields |
+| `interleaved` | two threads' traces mixed line by line | no exception merged into another or put on the wrong code |
+
+Interleaved traces can't be fully separated without a thread id on every line; logsite keeps
+them apart where the lines say so, and doesn't invent the rest.
+
+The traps matter as much as the hits. Every misdiagnosis found becomes a new case.
 
 ### CI gate
 

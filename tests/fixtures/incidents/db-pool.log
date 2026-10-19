@@ -1,0 +1,86 @@
+2026-10-18 21:41:52.101 ERROR [order-service,traceId=tr-82ac11,spanId=sp-001] [http-nio-8080-exec-17] c.e.orders.api.OrderController - Failed to create order orderId=ord-981204 customerId=cus-88412
+org.springframework.transaction.CannotCreateTransactionException: Could not open JDBC Connection for transaction
+    at org.springframework.jdbc.datasource.DataSourceTransactionManager.doBegin(DataSourceTransactionManager.java:313)
+    at org.springframework.transaction.support.AbstractPlatformTransactionManager.startTransaction(AbstractPlatformTransactionManager.java:532)
+    at org.springframework.transaction.interceptor.TransactionAspectSupport.createTransactionIfNecessary(TransactionAspectSupport.java:639)
+    at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:374)
+    at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
+    at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
+    at com.example.orders.service.OrderService$$SpringCGLIB$$0.createOrder(<generated>)
+    at com.example.orders.api.OrderController.createOrder(OrderController.java:87)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+Caused by: org.postgresql.util.PSQLException: FATAL: sorry, too many clients already
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2846)
+    at org.postgresql.core.v3.QueryExecutorImpl.<init>(QueryExecutorImpl.java:175)
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:342)
+    at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:54)
+    at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:273)
+    at org.postgresql.Driver.makeConnection(Driver.java:446)
+    at org.postgresql.Driver.connect(Driver.java:298)
+    at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:137)
+    at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:359)
+    at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:476)
+    at com.zaxxer.hikari.pool.HikariPool$PoolEntryCreator.call(HikariPool.java:740)
+    at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+    at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+    at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+    at java.base/java.lang.Thread.run(Thread.java:1581)
+
+2026-10-18 21:41:52.114 WARN  [order-service,traceId=tr-82ac11,spanId=sp-001] [http-nio-8080-exec-17] c.z.hikari.pool.HikariPool - HikariPool-1 - Connection is not available, request timed out after 30000ms (total=40, active=40, idle=0, waiting=126)
+
+2026-10-18 21:41:52.130 ERROR [order-service,traceId=tr-82ac11,spanId=sp-001] [http-nio-8080-exec-17] c.e.orders.api.GlobalExceptionHandler - Unhandled exception while processing POST /api/v1/orders
+org.springframework.dao.DataAccessResourceFailureException: Failed to obtain JDBC Connection
+    at org.springframework.jdbc.datasource.DataSourceUtils.getConnection(DataSourceUtils.java:82)
+    at org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:653)
+    at com.example.orders.repository.OrderRepository.save(OrderRepository.java:142)
+    at com.example.orders.service.OrderService.createOrder(OrderService.java:214)
+    at com.example.orders.api.OrderController.createOrder(OrderController.java:87)
+Caused by: org.postgresql.util.PSQLException: FATAL: sorry, too many clients already
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2846)
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:342)
+    at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:54)
+    at org.postgresql.Driver.connect(Driver.java:298)
+    at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:476)
+    at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:197)
+    at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:128)
+
+2026-10-18 21:41:52.151 INFO  [order-service,traceId=tr-82ac11,spanId=sp-001] [http-nio-8080-exec-17] c.e.orders.metrics.RequestMetrics - request completed method=POST path=/api/v1/orders status=500 duration_ms=30042
+
+2026-10-18 21:41:52.189 ERROR [order-service,traceId=tr-82ac12,spanId=sp-003] [http-nio-8080-exec-21] c.e.orders.repository.OrderRepository - Database operation failed operation=save orderId=ord-981205
+org.springframework.dao.DataAccessResourceFailureException: Failed to obtain JDBC Connection
+    at com.example.orders.repository.OrderRepository.save(OrderRepository.java:142)
+    at com.example.orders.service.OrderService.createOrder(OrderService.java:214)
+    at com.example.orders.api.OrderController.createOrder(OrderController.java:87)
+Caused by: org.postgresql.util.PSQLException: FATAL: sorry, too many clients already
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2846)
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:342)
+    at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:54)
+    at org.postgresql.Driver.connect(Driver.java:298)
+
+2026-10-18 21:41:53.007 WARN  [order-service,traceId=tr-82ac13,spanId=sp-004] [kafka-consumer-3] c.e.orders.events.OrderEventConsumer - Retry attempt=3 topic=order-events partition=4 offset=198204
+org.springframework.dao.DataAccessResourceFailureException: Failed to obtain JDBC Connection
+    at com.example.orders.repository.OrderRepository.save(OrderRepository.java:142)
+    at com.example.orders.events.OrderEventConsumer.handle(OrderEventConsumer.java:116)
+    at com.example.orders.events.OrderEventConsumer.onMessage(OrderEventConsumer.java:82)
+Caused by: org.postgresql.util.PSQLException: FATAL: sorry, too many clients already
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2846)
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:342)
+    at org.postgresql.core.v3.ConnectionFactory.openConnection(ConnectionFactory.java:54)
+    at org.postgresql.Driver.connect(Driver.java:298)
+
+2026-10-18 21:41:53.411 ERROR [order-service,traceId=tr-82ac14,spanId=sp-005] [kafka-consumer-4] c.e.orders.events.OrderEventConsumer - Event processing failed topic=order-events partition=7 offset=198221
+org.springframework.dao.DataAccessResourceFailureException: Failed to obtain JDBC Connection
+    at com.example.orders.repository.OrderRepository.save(OrderRepository.java:142)
+    at com.example.orders.events.OrderEventConsumer.handle(OrderEventConsumer.java:116)
+    at com.example.orders.events.OrderEventConsumer.onMessage(OrderEventConsumer.java:82)
+Caused by: org.postgresql.util.PSQLException: FATAL: sorry, too many clients already
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2846)
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:342)
+    at org.postgresql.core.v3.ConnectionFactory.openConnection(ConnectionFactory.java:54)
+    at org.postgresql.Driver.connect(Driver.java:298)

@@ -271,6 +271,13 @@ def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url
         if code:
             text += f"  `{code[:110]}`" if slack else f"   {code[:110]}"
         out.append(text)
+    shared = inc.get("shared_root_cause")
+    if shared and len(shared["entry_points"]) > 1:
+        entries = shared["entry_points"]
+        out.append(f"    {bold('Same root cause')} from {len(entries)} entry points: "
+                   + ", ".join(entries))  # fmt: skip
+    for text in inc.get("impact") or []:
+        out.append(f"    {bold('Impact')}: {text}")
     excerpt = _excerpt(g.get("sample") or {}, g.get("raised_at"))
     if excerpt:
         stamp = (g.get("sample") or {}).get("timestamp")
@@ -280,10 +287,14 @@ def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url
             out.append("```" + "\n".join(excerpt) + "```")
         else:
             out += [f"      {x}" for x in excerpt]
+    warnings = [r for r in inc.get("related") or [] if r["level"] == "warning"]
+    for i, r in enumerate(warnings[:2]):
+        head = f"{bold('Warnings in those requests')}: " if i == 0 else "      "
+        out.append(f"    {head}{r['message'][:200]}")
     for i, e in enumerate(inc.get("effects", [])[:3]):
         why = f" — {e['linked_by']}" if e.get("linked_by") else ""
-        label = bold("Then") if i == 0 else "        "
-        out.append(f"    {label}: {e['title'][:110]} · {e['count']:,}{why}")
+        head = f"{bold('Then')}: " if i == 0 else "      "
+        out.append(f"    {head}{e['title'][:110]} · {e['count']:,}{why}")
     if h.get("regression"):
         fixes = ", ".join(f"{c['sha']} {c['summary']}" for c in h.get("fixed_by") or [])
         gone = f" → {(h.get('resolved_at') or '')[:10]}" if h.get("resolved_at") else ""

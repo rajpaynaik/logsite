@@ -61,7 +61,10 @@ that fixed it, so the new suspect is easy to judge:
 ```
 
 `logsite investigate --report` ranks the explanations (the change, more traffic, a failing
-dependency) with the evidence for and against each, and the next check to tell them apart.
+dependency, a pool or a limit running out) with the evidence for and against each, including
+the warnings logged in the same requests, and the next check to tell them apart. A
+[benchmark of incidents with known causes](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md#benchmark)
+runs on every build.
 Spikes are measured as rates, so a busy day isn't an incident. `logsite errors --since-deploy
 $TAG --fail-on-new` turns it into a CI gate that stops a bad release.
 

@@ -3,6 +3,7 @@ across services, with lines from this codebase linked to the code that wrote the
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -66,6 +67,27 @@ class Timeline:
         return next((e for e in self.entries if e.is_problem), None)
 
 
+# Plain text: "2026-10-18 14:22:31.812 ERROR [payment-service] Logger - ..." or Spring
+# Sleuth's "[order-service,traceId=..,spanId=..]": the first bracket after the level, when it
+# names a service rather than a thread ("[main]", "[http-nio-8080-exec-17]").
+_TEXT_HEAD = re.compile(
+    r"^\S+[ T]\S+\s+(?P<level>TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|FATAL|CRITICAL)\s+"
+    r"(?:\[(?P<svc>[A-Za-z][\w.-]*?)(?:,[^\]]*)?\])?"
+)
+_THREADISH = re.compile(r"(^main$|^restartedMain$|nio|exec|thread|pool|scheduling|-\d+$|\d$)", re.I)
+
+
+def text_head(record: LogRecord) -> tuple[str | None, str | None]:
+    """``(level, service)`` from a plain-text line's prefix, for records without fields."""
+    m = _TEXT_HEAD.match(record.message)
+    if not m:
+        return None, None
+    svc = m["svc"]
+    if svc and _THREADISH.search(svc):
+        svc = None
+    return m["level"].lower(), svc
+
+
 def _first(record: LogRecord, keys: Iterable[str]) -> str | None:
     for key in keys:
         value = record.fields.get(key)  # dotted keys from flattened stores, e.g. service.name
@@ -93,8 +115,9 @@ def build_timeline(
     tl = Timeline(field=field_name, value=value)
     for r in records:
         site = matcher.match(r)
-        level = _first(r, LEVEL_FIELDS) or (site.level if site else None)
-        service = _first(r, SERVICE_FIELDS) or (here if site else None)
+        text_level, text_service = text_head(r)
+        level = _first(r, LEVEL_FIELDS) or text_level or (site.level if site else None)
+        service = _first(r, SERVICE_FIELDS) or text_service or (here if site else None)
         tl.entries.append(Entry(r.timestamp, service, level, redact(r.message, leaks), site))
     tl.entries.sort(key=lambda e: (e.timestamp is None, e.timestamp or datetime.min))
     return tl

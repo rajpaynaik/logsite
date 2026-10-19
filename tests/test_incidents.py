@@ -167,3 +167,25 @@ def test_git_missing_is_fine(tmp_path, monkeypatch):
     (inc,), _ = find_incidents([cause], CFG)
     add_context(inc, tmp_path, now=T0)  # not a git repo: no deploy, no suspects, no error
     assert inc.deploy is None and inc.suspects == []
+
+
+def test_time_links_dont_chain():
+    # each starts 6 min after the last: within link_minutes pairwise, 18 min end to end
+    a, b, c, d = (group(x, m) for x, m in (("a", 0), ("b", 6), ("c", 12), ("d", 18)))
+    incidents, _ = find_incidents([a, b, c, d], CFG)
+    assert [[g.fingerprint for g in i.groups] for i in incidents] == [["a", "b"], ["c", "d"]]
+
+
+def test_service_in_plain_text_brackets_keeps_services_apart():
+    from logsite.backends.base import parse_line
+    from logsite.timeline import text_head
+
+    def head(line):
+        return text_head(parse_line(line))
+
+    assert head("2026-10-18 14:22:31 ERROR [stock-svc] Repo - x") == ("error", "stock-svc")
+    assert head("2026-10-18 21:41:52 ERROR [order-service,traceId=t1] [exec-1] X - y") == (
+        "error", "order-service",
+    )  # fmt: skip
+    assert head("2026-10-18 21:41:53 WARN  [kafka-consumer-3] c.e.Y - z") == ("warn", None)
+    assert head("2026-10-18 10:00:00 INFO [main] App - started") == ("info", None)

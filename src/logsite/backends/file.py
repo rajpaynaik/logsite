@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import timezone
 from pathlib import Path
 
@@ -44,12 +45,23 @@ class FileBackend(LogBackend):
         limit: int,
         errors_only: bool = False,
     ) -> list[LogRecord]:
-        out: list[LogRecord] = []
+        # the newest ``limit``, like Loki's backward queries: when a window has more records
+        # than the limit, the recent ones (a new error) matter, not the first of the day
+        out: deque[LogRecord] = deque(maxlen=limit)
+        last_ts = None
         with self.path.open(encoding="utf-8", errors="replace") as fh:
             for raw in join_multiline(fh):  # a multi-line traceback is one event
-                if not raw.strip() or (contains and contains not in raw):
+                if not raw.strip():
                     continue
                 record = parse_line(raw)
+                if record.timestamp is None:
+                    # a line without a time (a Go runtime crash on stderr) happened right
+                    # after the last line that had one, not in every window
+                    record.timestamp = last_ts
+                else:
+                    last_ts = record.timestamp
+                if contains and contains not in raw:
+                    continue
                 if errors_only and not is_error(record):
                     continue
                 ts = record.timestamp
@@ -59,6 +71,4 @@ class FileBackend(LogBackend):
                     if not (time_range.start <= ts <= time_range.end):
                         continue
                 out.append(record)
-                if len(out) >= limit:
-                    break
-        return out
+        return list(out)

@@ -10,12 +10,13 @@ they started, the deploy just before it and the commits that touched the code th
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .errors import ErrorGroup
+from .errors import ErrorGroup, normalize
 from .git import Commit, line_history, tags_by_date
 from .lint import LintConfig, is_spike
 
@@ -32,6 +33,7 @@ class Incident:
     deploy: tuple[str, datetime] | None = None  # the release just before it started
     suspects: list[Commit] = field(default_factory=list)
     diagnosis: object | None = None  # diagnose.Diagnosis, once it's been explained
+    related: list[Related] = field(default_factory=list)  # warnings etc. in the same requests
 
     @property
     def cause(self) -> ErrorGroup:
@@ -60,11 +62,78 @@ class Incident:
         return any(g.is_new for g in self.groups)
 
 
+@dataclass
+class Related:
+    """A line that isn't an error but was logged in the same requests: a pool exhausted
+    warning, a retry, the request that ended in a 500."""
+
+    level: str  # warning | info
+    message: str
+    trace_id: str
+    count: int = 1  # how many of the requests looked at had it
+
+
+RELATED_TRACES = 3  # requests to look at
+_LEVEL_BRACKETS = re.compile(
+    r"^(?:(?:TRACE|DEBUG|INFO|NOTICE|WARN|WARNING)\s+)?(?:\[[^\]]*\]\s*)*", re.I
+)
+_WARN = re.compile(r"\b(WARN|WARNING)\b")
+_IMPACT = re.compile(r"\bstatus[=:]\s*\"?5\d\d\b|\bduration(_ms)?[=:]|\btook\b|\blatency", re.I)
+
+
+def _clean(record) -> str:
+    from .errors import _LOGGER_PREFIX, _PLAIN_PREFIX
+
+    first = _PLAIN_PREFIX.sub("", record.message.split("\n", 1)[0])
+    first = _LEVEL_BRACKETS.sub("", first)  # "WARN  [svc,traceId=..] [thread] "
+    return _LOGGER_PREFIX.sub("", first).strip()[:300]
+
+
+def add_related(inc: Incident, backend, window, trace_field: str = "trace_id") -> None:
+    """The warnings (and the request-completion lines) logged in a few of the incident's
+    requests: evidence the error lines themselves don't carry."""
+    from .tracebacks import is_error, level_of
+
+    traces: list[str] = []
+    for g in inc.groups:
+        ids = g.sample.get("ids") or {}
+        for key in (trace_field, "trace_id"):
+            if ids.get(key) and ids[key] not in traces:
+                traces.append(ids[key])
+        traces += sorted(t for t in g.trace_ids if t not in traces)[:RELATED_TRACES]
+    found: dict[str, Related] = {}
+    for tid in traces[:RELATED_TRACES]:
+        try:
+            records = backend.find_records(trace_field, tid, window, limit=200)
+        except Exception:
+            continue
+        seen_here = set()
+        for r in records:
+            if is_error(r):
+                continue  # already in the error groups
+            first = r.message.split("\n", 1)[0]
+            level = (level_of(r) or "").lower()
+            warn = level in ("warn", "warning") or (not level and _WARN.search(first[:120]))
+            if not (warn or _IMPACT.search(first)):
+                continue
+            text = _clean(r)
+            key = normalize(text)
+            if key in seen_here:
+                continue
+            seen_here.add(key)
+            if key in found:
+                found[key].count += 1
+            else:
+                found[key] = Related("warning" if warn else "info", text, tid)
+    inc.related = sorted(found.values(), key=lambda x: (x.level != "warning", -x.count))[:6]
+
+
 class _Links:
     """Union-find over groups, remembering why each pair was joined."""
 
     def __init__(self, groups: list[ErrorGroup]) -> None:
         self.parent = {g.fingerprint: g.fingerprint for g in groups}
+        self.starts = {g.fingerprint: [g.first_seen] if g.first_seen else [] for g in groups}
         self.why: dict[str, str] = {}
 
     def find(self, fp: str) -> str:
@@ -73,10 +142,16 @@ class _Links:
             fp = self.parent[fp]
         return fp
 
+    def span_with(self, a: ErrorGroup, b: ErrorGroup) -> float:
+        """Minutes between the earliest and latest start if a's and b's incidents merged."""
+        starts = [t for g in (a, b) for t in self.starts[self.find(g.fingerprint)]]
+        return (max(starts) - min(starts)).total_seconds() / 60 if starts else 0.0
+
     def join(self, a: ErrorGroup, b: ErrorGroup, why: str) -> None:
         ra, rb = self.find(a.fingerprint), self.find(b.fingerprint)
         if ra != rb:
             self.parent[rb] = ra
+            self.starts[ra] = self.starts[ra] + self.starts.pop(rb)
         self.why.setdefault(a.fingerprint, why)
         self.why.setdefault(b.fingerprint, why)
 
@@ -84,6 +159,27 @@ class _Links:
 def _active(g: ErrorGroup, cfg: LintConfig) -> bool:
     """New, or spiking: something that changed, as opposed to background errors."""
     return g.is_new or (g.baseline is not None and is_spike(g.count, g.baseline, cfg))
+
+
+def _stems(g: ErrorGroup) -> set[str]:
+    """``inventory-service`` -> {"inventory-service", "inventory"}: how others name it."""
+    out = set()
+    for s in g.services:
+        s = s.lower()
+        out.add(s)
+        stem = re.sub(r"[-_.](service|svc|api|app|server|worker|consumer)$", "", s)
+        if len(stem) >= 4:
+            out.add(stem)
+    return out
+
+
+def _calls(a: ErrorGroup, b: ErrorGroup) -> bool:
+    """Whether ``a``'s error is about calling ``b``'s service (it names it)."""
+    if not a.services or not b.services or a.services.keys() & b.services.keys():
+        return False
+    text = " ".join([a.title, *a.causes, a.sample.get("message") or "",
+                     a.sample.get("traceback") or ""]).lower()  # fmt: skip
+    return any(re.search(rf"\b{re.escape(stem)}", text) for stem in _stems(b))
 
 
 def _cause_first(groups: list[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
@@ -95,6 +191,10 @@ def _cause_first(groups: list[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
         return (g.first_seen is None, g.first_seen or datetime.max, -g.count)
 
     changed = [g for g in groups if _active(g, cfg)] or groups
+    # a caller's error names what it called ("inventory call failed"): the callee is
+    # upstream, even though its own error is often logged later (the caller timed out first)
+    upstream = [g for g in changed if not any(_calls(g, o) for o in groups if o is not g)]
+    changed = upstream or changed
     pool = [g for g in changed if g.exc_type] or changed
     cause = min(pool, key=lambda g: (start(g), g.raised_at is None))
     return [cause, *sorted((g for g in groups if g is not cause), key=start)]
@@ -131,7 +231,10 @@ def find_incidents(
             same_service = (
                 not a.services or not b.services or bool(a.services.keys() & b.services.keys())
             )
-            if gap <= link_minutes and same_service:
+            # no chains: A and B 3 min apart, B and C 6 min apart don't make A and C one
+            # incident; the whole incident has to start within link_minutes
+            spread = links.span_with(a, b)
+            if gap <= link_minutes and same_service and spread <= link_minutes:
                 links.join(a, b, "started together" if gap < 1 else f"started {gap:.0f} min apart")
     components: dict[str, list[ErrorGroup]] = {}
     for g in groups:
@@ -192,6 +295,21 @@ def incident_json(inc: Incident) -> dict:
             for c in inc.suspects
         ],
         "diagnosis": _diagnosis_json(inc),
+        "related": [
+            {"level": r.level, "message": r.message, "trace_id": r.trace_id, "count": r.count}
+            for r in inc.related
+        ],
+        **_shape(inc),
+    }
+
+
+def _shape(inc: Incident) -> dict:
+    from .diagnose import impact, shared_root
+
+    shared = shared_root(inc)
+    return {
+        "shared_root_cause": {"cause": shared[0], "entry_points": shared[1]} if shared else None,
+        "impact": impact(inc),
     }
 
 

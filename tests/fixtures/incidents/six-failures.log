@@ -1,0 +1,90 @@
+2026-10-18 14:22:31.812 ERROR [inventory-service] StockRepository - Failed to update stock sku=bk-8821
+
+org.springframework.dao.DeadlockLoserDataAccessException:
+  PreparedStatementCallback; SQL update failed
+    at org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator.doTranslate(SQLErrorCodeSQLExceptionTranslator.java:271)
+    at org.springframework.jdbc.core.JdbcTemplate.translateException(JdbcTemplate.java:1577)
+    at org.springframework.jdbc.core.JdbcTemplate.update(JdbcTemplate.java:1024)
+    at com.example.inventory.StockRepository.updateStock(StockRepository.java:118)
+    at com.example.inventory.StockService.reserve(StockService.java:204)
+    at com.example.inventory.StockController.reserve(StockController.java:76)
+Caused by: org.postgresql.util.PSQLException:
+  ERROR: deadlock detected
+  Detail: Process 421 waits for ShareLock on transaction 812;
+  blocked by process 438.
+  Process 438 waits for ShareLock on transaction 811;
+  blocked by process 421.
+    at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2733)
+    at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421)
+    at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:517)
+
+2026-10-18 14:25:12.114 ERROR [order-service] CarrierApiClient - Carrier request failed shipmentId=shp-12931
+
+org.springframework.web.client.ResourceAccessException:
+  I/O error on POST request for "https://carrier.example.com/labels"
+    at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:915)
+    at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:895)
+    at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:790)
+    at org.springframework.web.client.RestTemplate.postForObject(RestTemplate.java:507)
+    at com.example.shipping.CarrierApiClient.createLabel(CarrierApiClient.java:83)
+    at com.example.shipping.ShippingService.ship(ShippingService.java:151)
+Caused by: java.net.SocketTimeoutException: Read timed out
+    at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:288)
+    at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:314)
+    at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+    at java.base/sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:489)
+
+2026-10-18 14:31:09.422 ERROR [shipment-consumer] KafkaMessageListenerContainer - Listener failed
+
+org.springframework.kafka.listener.ListenerExecutionFailedException:
+  Listener method could not be invoked with the incoming message
+    at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.decorateException(KafkaMessageListenerContainer.java:2998)
+    at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.invokeOnMessage(KafkaMessageListenerContainer.java:2901)
+    at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.doInvokeRecordListener(KafkaMessageListenerContainer.java:2814)
+Caused by: org.apache.kafka.common.errors.SerializationException:
+  Error deserializing key/value for partition shipment-events-4 at offset 98122
+Caused by: org.apache.kafka.common.errors.SerializationException:
+  Can't deserialize data
+Caused by: com.fasterxml.jackson.databind.exc.InvalidFormatException:
+  Cannot deserialize value of type java.math.BigDecimal from String "UNKNOWN"
+    at com.fasterxml.jackson.databind.exc.InvalidFormatException.from(InvalidFormatException.java:67)
+    at com.fasterxml.jackson.databind.DeserializationContext.weirdStringException(DeserializationContext.java:1996)
+    at com.fasterxml.jackson.databind.deser.std.NumberDeserializers$BigDecimalDeserializer.deserialize(NumberDeserializers.java:1012)
+    at com.example.shipping.ShipmentEventDeserializer.deserialize(ShipmentEventDeserializer.java:44)
+
+2026-10-18 14:35:44.021 ERROR [cart-service] CartService - Failed to calculate cart total
+
+java.lang.NullPointerException:
+  Cannot invoke "java.math.BigDecimal.subtract(java.math.BigDecimal)"
+  because the return value of "com.example.cart.Cart.getDiscount()" is null
+    at com.example.cart.CartCalculator.total(CartCalculator.java:57)
+    at com.example.cart.CartService.getTotal(CartService.java:132)
+    at com.example.cart.CartController.total(CartController.java:68)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+
+2026-10-18 14:40:02.119 ERROR [reporting-service] ReportGenerator - Report generation failed
+
+java.lang.OutOfMemoryError: Java heap space
+    at java.base/java.util.Arrays.copyOf(Arrays.java:3537)
+    at java.base/java.io.ByteArrayOutputStream.ensureCapacity(ByteArrayOutputStream.java:100)
+    at java.base/java.io.ByteArrayOutputStream.write(ByteArrayOutputStream.java:130)
+    at com.example.reporting.CsvExporter.export(CsvExporter.java:164)
+    at com.example.reporting.ReportService.generate(ReportService.java:92)
+    at com.example.reporting.ReportController.download(ReportController.java:71)
+
+2026-10-18 14:40:02.130 ERROR [reporting-service] ErrorHandler - Request failed
+java.lang.OutOfMemoryError: Java heap space
+    at java.base/java.util.Arrays.copyOf(Arrays.java:3537)
+    at java.base/java.io.ByteArrayOutputStream.ensureCapacity(ByteArrayOutputStream.java:100)
+    at com.example.reporting.CsvExporter.export(CsvExporter.java:164)
+
+2026-10-18 14:44:19.702 ERROR [checkout-service] InventoryClient - Inventory request rejected
+
+io.github.resilience4j.circuitbreaker.CallNotPermittedException:
+  CircuitBreaker 'inventoryService' is OPEN and does not permit further calls
+    at io.github.resilience4j.circuitbreaker.CircuitBreaker.lambda$decorateSupplier$5(CircuitBreaker.java:194)
+    at io.github.resilience4j.circuitbreaker.CircuitBreaker.executeSupplier(CircuitBreaker.java:672)
+    at com.example.checkout.InventoryClient.getAvailability(InventoryClient.java:61)
+    at com.example.checkout.CheckoutService.validateInventory(CheckoutService.java:187)
+    at com.example.checkout.CheckoutController.checkout(CheckoutController.java:94)
