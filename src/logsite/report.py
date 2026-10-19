@@ -273,6 +273,15 @@ def card(
     span = _span(g.first_seen, g.last_seen)
     if span:
         rows.append(("Seen", pal.white(span)))
+    if g.severe and not g.is_new:
+        rows.append(
+            ("Severity", pal.bold_red("severe") + pal.gray(": fatal-level, or never noise"))
+        )
+    top = g.top_tenant
+    if top and top[1] >= 0.5:
+        rows.append(
+            ("Tenant", pal.white(f"{top[1]:.0%} from {top[0]}") + pal.gray(f" ({top[2]} affected)"))
+        )
     rows += trend_rows(g, pal)
     rows += history_rows(g, pal)
     if g.services:
@@ -389,6 +398,11 @@ def incident_card(
         rows.append(("Warning", pal.yellow(_cut(r.message, width - 20))))
     for text in impact(inc)[:2]:
         rows.append(("Impact", pal.white(text)))
+    top = cause.top_tenant
+    if top and top[1] >= 0.5:
+        rows.append(
+            ("Tenant", pal.white(f"{top[1]:.0%} from {top[0]}") + pal.gray(f" ({top[2]} affected)"))
+        )
     rows += history_rows(cause, pal)
     for i, g in enumerate(inc.effects):
         when = _when(g.first_seen)[11:] if g.first_seen else "     "

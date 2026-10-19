@@ -35,6 +35,8 @@ class AlertsConfig:
     lookback_minutes: float = 30.0  # summarize from this long before the alert started
     top: int = 3  # error groups per alert
     selector_labels: list[str] = field(default_factory=lambda: ["service_name"])
+    # alerts with the same cause within this long get one line, not another full report
+    dedupe_minutes: float = 30.0
 
     @classmethod
     def from_dict(cls, data: Mapping) -> AlertsConfig:
@@ -278,6 +280,10 @@ def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url
                    + ", ".join(entries))  # fmt: skip
     for text in inc.get("impact") or []:
         out.append(f"    {bold('Impact')}: {text}")
+    tenant = g.get("tenant")
+    if tenant and tenant["share"] >= 0.5:
+        out.append(f"    {bold('Tenant')}: {tenant['share']:.0%} from {tenant['top']} "
+                   f"({tenant['tenants']} affected)")  # fmt: skip
     excerpt = _excerpt(g.get("sample") or {}, g.get("raised_at"))
     if excerpt:
         stamp = (g.get("sample") or {}).get("timestamp")
@@ -315,6 +321,9 @@ def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url
             out.append(f"    {bold('Or')}: {hyps[1]['title']}")
         if top.get("next_check"):
             out.append(f"    {bold('Check first')}: {top['next_check']}")
+    for gap in d.get("unknown") or []:
+        if "order" in gap:
+            out.append(f"    {bold('Order')}: {gap}")
     trace = ((g.get("sample") or {}).get("ids") or {}).get(trace_field) or g.get("example_trace")
     if trace:
         out.append(f"    {bold('Example run')}: `logsite trace {trace}`")
@@ -323,6 +332,42 @@ def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url
 
 def _parse(value: str) -> datetime:
     return parse_iso(value)
+
+
+def _cause_key(summary: dict) -> str | None:
+    incidents = summary.get("incidents") or []
+    if incidents:
+        return incidents[0]["cause"]["id"]
+    groups = summary.get("groups") or []
+    return groups[0]["id"] if groups else None
+
+
+def _cause_title(summary: dict) -> str:
+    incidents = summary.get("incidents") or []
+    g = incidents[0]["cause"] if incidents else (summary.get("groups") or [{}])[0]
+    return (g.get("root_cause") or g.get("title") or "")[:150]
+
+
+def _services(summary: dict) -> set[str]:
+    out: set[str] = set()
+    for inc in summary.get("incidents") or []:
+        for g in [inc["cause"], *inc["effects"]]:
+            out |= set(g.get("services") or {})
+    for g in summary.get("groups") or []:
+        out |= set(g.get("services") or {})
+    return out
+
+
+def render_followup(alert: Alert, summary: dict, first: dict, *, slack: bool) -> str:
+    """One line for an alert whose cause was already reported."""
+    bold = (lambda s: f"*{s}*") if slack else (lambda s: s)
+    head = f"{':link: ' if slack else ''}{bold(alert.name)}: same cause as {first['alert']} "
+    head += f"({first['at']:%H:%M} UTC): {first['title']}"
+    new = first.get("new_services") or []
+    if new:
+        head += f" · now also in {', '.join(new)}"
+    n = len(first["alerts"])
+    return head + f" · {n} alerts for this incident so far"
 
 
 def _history_columns(h: dict) -> dict:
@@ -391,6 +436,7 @@ class Enricher:
         self.code_line, self.code_url = code_line, code_url
         self.trace_field = trace_field
         self.send = send
+        self.sent: dict[str, dict] = {}  # cause id -> the first message about it
         self.now = now or (lambda: datetime.now(timezone.utc))
 
     def with_links(self, summary: dict) -> dict:
@@ -431,12 +477,16 @@ class Enricher:
                 "code_url": self.code_url,
                 "trace_field": self.trace_field,
             }
-            text = render(alert, summary, slack=False, **kw)
+            first = self._same_cause(alert, summary)
+            if first is not None:
+                text = render_followup(alert, summary, first, slack=False)
+                slack_text = render_followup(alert, summary, first, slack=True)
+            else:
+                text = render(alert, summary, slack=False, **kw)
+                slack_text = render(alert, summary, slack=True, **kw)
             sent = []
             if self.cfg.slack_webhook:
-                self.send(
-                    self.cfg.slack_webhook, {"text": render(alert, summary, slack=True, **kw)}
-                )
+                self.send(self.cfg.slack_webhook, {"text": slack_text})
                 sent.append("slack")
             if self.cfg.webhook:
                 self.send(
@@ -451,9 +501,28 @@ class Enricher:
                     "sent": sent,
                     "text": text,
                     "summary": summary,
+                    "same_as": first["alert"] if first else None,
                 }
             )
         return results
+
+    def _same_cause(self, alert: Alert, summary: dict) -> dict | None:
+        """The earlier message about this alert's cause, if it's recent; else remember this
+        one as the first. One incident firing ten alerts sends one report."""
+        key = _cause_key(summary)
+        if key is None or self.cfg.dedupe_minutes <= 0:
+            return None
+        now = self.now()
+        first = self.sent.get(key)
+        services = _services(summary)
+        if first and now - first["at"] <= timedelta(minutes=self.cfg.dedupe_minutes):
+            first["alerts"].append(alert.name)
+            new = services - first["services"]
+            first["services"] |= services
+            return {**first, "new_services": sorted(new)}
+        self.sent[key] = {"at": now, "alert": alert.name, "alerts": [alert.name],
+                          "services": services, "title": _cause_title(summary)}  # fmt: skip
+        return None
 
 
 def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> ThreadingHTTPServer:

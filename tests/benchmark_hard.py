@@ -858,6 +858,206 @@ def check_logstash(inv, errors):
     return p
 
 
+# --- 13. a rare severe error under a steady storm ---------------------------------------------------
+
+
+def rare_severe(root):
+    code(root, "app/feed.py", {12: "    return cache.get(key)"})
+    code(root, "app/store.py", {48: "    raise CorruptionError(f'checksum mismatch in {segment}')"})
+    commit_all(root)
+    events = []
+    t = NOW - timedelta(hours=47)
+    i = 0
+    while t < NOW:  # steady in both windows: not new, not spiking
+        events.append(
+            (
+                t,
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t),
+                            "level": "error",
+                            "service": "feed",
+                            "msg": f"cache miss feed:{i}",
+                            "exc_info": f"Traceback (most recent call last):\n  File \"/srv/app/app/feed.py\", line 12, in item\n    return cache.get(key)\nKeyError: 'feed:{i}'",
+                        }
+                    )
+                ],
+            )
+        )
+        t += timedelta(seconds=20)
+        i += 1
+    for h in (40, 30, 15, 3):  # two a day, also in both windows
+        t = NOW - timedelta(hours=h)
+        events.append(
+            (
+                t,
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t),
+                            "level": "critical",
+                            "service": "store",
+                            "msg": "segment check failed",
+                            "exc_info": 'Traceback (most recent call last):\n  File "/srv/app/app/store.py", line 48, in verify\n'
+                            "    raise CorruptionError(f'checksum mismatch in {segment}')\n"
+                            "app.store.CorruptionError: checksum mismatch in segment 00042",
+                        }
+                    )
+                ],
+            )
+        )
+    write_log(root, events)
+    config(root)
+
+
+def check_rare_severe(inv, errors):
+    groups = errors["groups"]
+    if not groups or "CorruptionError" not in groups[0]["title"]:
+        return [
+            f"2 data-corruption errors must rank above 8,000 steady KeyErrors, got {[g['title'][:40] for g in groups[:2]]}"
+        ]
+    if not groups[0]["severe"]:
+        return ["the corruption error should be marked severe"]
+    return []
+
+
+# --- 14. the circuit breaker outlives the outage ---------------------------------------------------
+
+
+def breaker_recovered(root):
+    code(
+        root,
+        "src/main/java/com/example/checkout/InventoryClient.java",
+        {61: "        return breaker.executeSupplier(() -> api.availability(sku));"},
+    )
+    commit_all(root)
+    events = []
+    start = NOW - timedelta(minutes=40)
+    for i in range(30):  # real failures for 15 minutes
+        t = start + timedelta(seconds=30 * i)
+        events.append(
+            (
+                t,
+                [
+                    f"{ts(t)} ERROR [checkout-service] c.e.c.InventoryClient - inventory call failed sku=bk-{i}",
+                    'org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://inventory:8080/stock/bk-1": Read timed out',
+                    "\tat org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:895)",
+                    "\tat com.example.checkout.InventoryClient.getAvailability(InventoryClient.java:61)",
+                    "Caused by: java.net.SocketTimeoutException: Read timed out",
+                    "\tat java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:288)",
+                ],
+            )
+        )
+    for i in range(80):  # then only rejections, until now
+        t = start + timedelta(minutes=10, seconds=20 * i)
+        events.append(
+            (
+                t,
+                [
+                    f"{ts(t)} ERROR [checkout-service] c.e.c.InventoryClient - inventory request rejected",
+                    "io.github.resilience4j.circuitbreaker.CallNotPermittedException: CircuitBreaker 'inventoryService' is OPEN and does not permit further calls",
+                    "\tat io.github.resilience4j.circuitbreaker.CircuitBreaker.executeSupplier(CircuitBreaker.java:672)",
+                    "\tat com.example.checkout.InventoryClient.getAvailability(InventoryClient.java:61)",
+                ],
+            )
+        )
+    write_log(root, events)
+    config(root)
+
+
+def check_breaker_recovered(inv, errors):
+    for inc in inv["incidents"]:
+        for h in inc["diagnosis"]["hypotheses"]:
+            if "recovered" in h["title"]:
+                if not any("real failures stopped" in t for t in h["supporting"]):
+                    return ["should say when the real failures stopped"]
+                return []
+    titles = [h["title"] for i in inv["incidents"] for h in i["diagnosis"]["hypotheses"][:1]]
+    return [
+        f"real failures stopped 15 min ago but the breaker keeps rejecting: should say inventoryService may have recovered, got {titles}"
+    ]
+
+
+# --- 15. logs out of order: written late, a skewed clock ---------------------------------------------
+
+
+def out_of_order(root):
+    """The cascade, its events delivered in a shuffled order (each trace kept whole)."""
+    import random
+
+    cascade(root)
+    blocks, cur = [], []
+    for line in (root / "app.log").read_text().splitlines():
+        if line.startswith(("\t", "org.", "Caused by")):
+            cur.append(line)
+        else:
+            if cur:
+                blocks.append(cur)
+            cur = [line]
+    blocks.append(cur)
+    random.Random(7).shuffle(blocks)
+    (root / "app.log").write_text("\n".join(x for b in blocks for x in b) + "\n")
+
+
+def check_out_of_order(inv, errors):
+    p = check_cascade(inv, errors)
+    if inv["incidents"]:
+        unknown = " ".join(inv["incidents"][0]["diagnosis"]["unknown"])
+        if "order" not in unknown:
+            p.append(
+                "the callers logged before the cause: the report should say the order is uncertain"
+            )
+    return p
+
+
+# --- 16. one bad tenant -----------------------------------------------------------------------------------
+
+
+def one_tenant(root):
+    code(root, "billing/invoices.py", {33: "    region = settings['region']"})
+    commit_all(root)
+    events = []
+    t = NOW - timedelta(minutes=50)
+    for i in range(200):
+        tenant = "t-17" if i % 20 else ("t-02", "t-31", "t-44")[i % 3]
+        events.append(
+            (
+                t + timedelta(seconds=10 * i),
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t + timedelta(seconds=10 * i)),
+                            "level": "error",
+                            "service": "billing",
+                            "tenant_id": tenant,
+                            "msg": "invoice render failed",
+                            "exc_info": 'Traceback (most recent call last):\n  File "/srv/billing/billing/invoices.py", line 33, in render\n'
+                            "    region = settings['region']\nKeyError: 'region'",
+                        }
+                    )
+                ],
+            )
+        )
+    write_log(root, events)
+    config(root)
+
+
+def check_one_tenant(inv, errors):
+    if not inv["incidents"]:
+        return ["no incident"]
+    d = inv["incidents"][0]["diagnosis"]
+    top = d["hypotheses"][0] if d["hypotheses"] else None
+    if not top or top["cause"] != "tenant" or "t-17" not in top["title"]:
+        return [
+            f"95% from tenant t-17: expected the tenant first, got {[(h['cause'], h['score']) for h in d['hypotheses']]}"
+        ]
+    g = errors["groups"][0]
+    if g["tenant"] != {"top": "t-17", "share": 0.95, "tenants": 4}:
+        return [f"tenant summary should be shares only, got {g['tenant']}"]
+    return []
+
+
 CASES = {
     "cascade": (cascade, check_cascade),
     "red-herring": (red_herring, check_red_herring),
@@ -871,4 +1071,8 @@ CASES = {
     "no-trace-capacity": (no_trace_capacity, check_no_trace),
     "node": (node, check_node),
     "logstash": (logstash, check_logstash),
+    "rare-severe": (rare_severe, check_rare_severe),
+    "breaker-recovered": (breaker_recovered, check_breaker_recovered),
+    "out-of-order": (out_of_order, check_out_of_order),
+    "one-tenant": (one_tenant, check_one_tenant),
 }

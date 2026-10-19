@@ -69,6 +69,9 @@ location links to the line in your repository, and the labels are bold.
 - **Likely cause** comes from the same ranking as `logsite investigate --report` (a change,
   traffic, or a failing dependency); when the evidence doesn't point anywhere, it says
   "unclear" instead of guessing.
+- **One incident, many alerts:** when several alerts fire for the same cause within
+  `dedupe_minutes` (30), the first gets the report and each of the others one line, "same
+  cause as … · now also in checkout-service · 8 alerts for this incident so far".
 - Up to two incidents per alert; other failing groups are listed under **Also failing**.
   Without an incident (only steady errors), the message lists the top groups instead.
 - With PagerDuty, add the webhook next to PagerDuty in the same contact point: the page goes
@@ -100,6 +103,7 @@ token_env = "LOGSITE_ALERT_TOKEN"   # required unless it only listens on localho
 lookback_minutes = 30
 top = 3                             # groups per alert
 selector_labels = ["service_name"]  # alert labels that narrow the Loki selector
+dedupe_minutes = 30                 # alerts with the same cause: one report, then one line each
 ```
 
 #### The same summary on the dashboard

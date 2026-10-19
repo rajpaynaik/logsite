@@ -134,6 +134,7 @@ class ErrorGroup:
     hourly: Counter[str] = field(default_factory=Counter, repr=False)  # "2026-10-17T19" -> n
     history: object | None = None  # history.GroupHistory, when a history store is in use
     traffic_ratio: float | None = None  # the service's traffic vs the window before
+    tenants: Counter[str] = field(default_factory=Counter, repr=False)  # up to MAX_TENANTS
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -154,6 +155,22 @@ class ErrorGroup:
     @property
     def trend(self) -> str | None:
         return None if self.previous is None else describe_trend(self.count, self.previous)
+
+    @property
+    def severe(self) -> bool:
+        """Fatal-level, or the kind of failure that's never noise: out of memory, a crash,
+        data corruption. Ranked above ordinary steady errors however rare it is."""
+        if self.levels.keys() & {"fatal", "critical", "crit", "emerg", "alert", "panic"}:
+            return True
+        return bool(SEVERE.search(" ".join([self.title, *self.causes])))
+
+    @property
+    def top_tenant(self) -> tuple[str, float, int] | None:
+        """``(tenant, share of the errors, tenants seen)`` when the records carry one."""
+        if not self.tenants:
+            return None
+        tenant, n = self.tenants.most_common(1)[0]
+        return tenant, n / sum(self.tenants.values()), len(self.tenants)
 
     @property
     def baseline(self) -> float | None:
@@ -194,6 +211,26 @@ class ErrorSummary:
 
 
 MIN_TRAFFIC = 100  # log events per window below which traffic isn't compared
+MAX_TENANTS = 200  # tenants counted per group
+TENANT_FIELDS = ("tenant", "tenant_id", "tenantId", "customer_id", "customerId", "org_id",
+                 "orgId", "workspace_id", "account_id", "client_id")  # fmt: skip
+SEVERE = re.compile(
+    r"OutOfMemoryError|out of memory|Segmentation fault|SIGSEGV|core dumped|fatal error:|"
+    r"data corruption|corrupt(ed)?\b|checksum mismatch|integrity (check|violation) failed|"
+    r"data loss|lost (messages|writes)|split.?brain|StackOverflowError",
+    re.I,
+)
+
+
+def tenant_of(record: LogRecord) -> str | None:
+    for key in TENANT_FIELDS:
+        value = record.fields.get(key)
+        if value is None:
+            value = get_field(record, key)
+        if value not in (None, "") and not isinstance(value, (dict, list)):
+            return str(value)[:80]
+    m = re.search(r"\b(?:tenant|tenantId|tenant_id)[=:]\s*\"?([\w.-]+)", record.message[:400])
+    return m.group(1) if m else None
 
 
 def _fingerprint(info: ErrorInfo | None, record: LogRecord, site: LogSite | None, app) -> str:
@@ -330,8 +367,15 @@ def group_errors(
         if service:
             group.services[service] += 1
         level = level_of(record)
+        if not level:
+            from .timeline import text_head
+
+            level = text_head(record)[0]
         if level:
             group.levels[level.lower()] += 1
+        tenant = tenant_of(record)
+        if tenant and (tenant in group.tenants or len(group.tenants) < MAX_TENANTS):
+            group.tenants[tenant] += 1
     for group in groups.values():
         if group._logged:
             group.logged_at = group._sites[group._logged.most_common(1)[0][0]]
@@ -402,8 +446,10 @@ def rank(groups: Iterable[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
 
     def key(g: ErrorGroup):
         spiking = g.baseline is not None and is_spike(g.count, g.baseline, cfg)
+        # severe but rare (2 "data corruption" a day) must not sink under a steady storm
+        order = 0 if g.is_new else 1 if spiking else 2 if g.severe else 3
         # ties: a group with a stack trace explains more than a line of text
-        return (0 if g.is_new else 1 if spiking else 2, -g.count, g.exc_type is None, g.title)
+        return (order, -g.count, g.exc_type is None, g.title)
 
     return sorted(groups, key=key)
 
@@ -502,6 +548,8 @@ def group_json(g: ErrorGroup) -> dict:
         "previous": g.previous,
         "trend": g.trend,
         "traffic_ratio": round(g.traffic_ratio, 2) if g.traffic_ratio else None,
+        "severe": g.severe,
+        "tenant": _tenant_json(g),
         "rate_ratio": round(g.rate_ratio, 2) if g.rate_ratio is not None else None,
         "new": g.is_new,
         "first_seen": g.first_seen.isoformat() if g.first_seen else None,
@@ -518,6 +566,14 @@ def group_json(g: ErrorGroup) -> dict:
         "sample": g.sample,
         "history": history_json(g.history),
     }
+
+
+def _tenant_json(g: ErrorGroup) -> dict | None:
+    """Only the leading tenant and shares: never other tenants' ids."""
+    top = g.top_tenant
+    if top is None:
+        return None
+    return {"top": top[0], "share": round(top[1], 3), "tenants": top[2]}
 
 
 def history_json(h) -> dict | None:

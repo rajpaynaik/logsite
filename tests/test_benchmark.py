@@ -245,3 +245,58 @@ def test_benchmark_hard(name, tmp_path, monkeypatch, capsys):
     inv = json.loads(capsys.readouterr().out)
     problems = check(inv, errors)
     assert not problems, f"{name}: " + "; ".join(problems)
+
+
+def test_benchmark_alert_storm(tmp_path, monkeypatch):
+    """One incident fires eight alerts (latency, errors, 5xx... in three services): one
+    report, then one line per alert, and a full report again once the window is over."""
+    from datetime import timedelta
+
+    import benchmark_hard
+
+    from logsite.alerts import AlertsConfig, Enricher
+    from logsite.backends import TimeRange, from_config
+    from logsite.cli import _with_incidents
+    from logsite.config import load_config
+    from logsite.errors import AppFiles, summarize_errors
+    from logsite.index import index_project
+
+    benchmark_hard.cascade(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    cfg = load_config(None)
+    backend = from_config(cfg.backend)
+
+    def summarize(start, end, labels):
+        window = TimeRange.last(24)
+        s = summarize_errors(backend, index_project(tmp_path), AppFiles.scan(tmp_path, set()),
+                             window, window.previous(), cfg.lint)  # fmt: skip
+        return _with_incidents(s, cfg, backend)
+
+    sent = []
+    clock = [benchmark_hard.NOW]
+    enricher = Enricher(
+        AlertsConfig(slack_webhook="https://hooks.slack.test/x"), summarize,
+        send=lambda url, body: sent.append(body["text"]), now=lambda: clock[0],
+    )  # fmt: skip
+
+    def payload(*names):
+        return {"alerts": [{"status": "firing", "labels": {"alertname": n}, "annotations": {},
+                            "startsAt": (clock[0] - timedelta(minutes=5)).isoformat()}
+                           for n in names]}  # fmt: skip
+
+    enricher.handle(payload("inventory latency", "inventory errors", "checkout errors",
+                            "checkout 5xx", "gateway 502s", "gateway latency"))  # fmt: skip
+    clock[0] += timedelta(minutes=10)
+    enricher.handle(payload("checkout SLO burn"))
+    clock[0] += timedelta(minutes=5)
+    enricher.handle(payload("gateway SLO burn"))
+    assert len(sent) == 8
+    full, *lines = sent
+    assert "What failed" in full and "Likely cause" in full
+    assert all(
+        line.count("\n") == 0 and "same cause as inventory latency" in line for line in lines
+    )
+    assert lines[-1].endswith("8 alerts for this incident so far")
+    clock[0] += timedelta(minutes=40)  # past dedupe_minutes: a full report again
+    enricher.handle(payload("inventory errors"))
+    assert "What failed" in sent[-1]

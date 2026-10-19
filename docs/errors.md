@@ -126,6 +126,14 @@ warning with its numbers) and **impact** (the line that closed the request:
 `POST /api/v1/orders → 500 after 30,042 ms`). When several groups share **one root cause**
 reached from different entry points (an API and a Kafka consumer), it says so.
 
+Rare but **severe** errors (fatal level, out of memory, crashes, data corruption) rank above
+ordinary steady errors, so two corruption errors a day don't sink under a storm. When records
+carry a tenant (`tenant_id`, `customer_id`, `org_id`…), each group counts its tenants: "95% from
+`t-17`" becomes evidence of its own, and outputs show only the leading tenant and shares. A
+circuit breaker that keeps rejecting after the real failures stopped is reported as "the
+dependency may have recovered". When the cause was picked against the timestamps' order, or
+services started within a minute of each other, the report says the order is uncertain.
+
 A commit near the failing line only counts as strong evidence when a deploy ties it to when
 the errors started; without one it's a weak lead, and "the error is new" only counts when
 there were logs before to compare with.
@@ -186,6 +194,11 @@ And twelve worst cases (`tests/benchmark_hard.py`):
 | `node` | an unhandled promise rejection with a Node.js stack | `Error: connect ECONNREFUSED`, raised at `src/cache/redis.js:44`; **dependency** |
 | `logstash` | Logstash JSON with `stack_trace`, `app` and a nested cause | the root cause and the service from the fields |
 | `interleaved` | two threads' traces mixed line by line | no exception merged into another or put on the wrong code |
+| `rare-severe` | 4 "checksum mismatch" corruption errors under 8,000 steady KeyErrors, both steady | the corruption ranks first, marked **severe** |
+| `breaker-recovered` | real timeouts for 15 minutes, then only circuit-breaker rejections | "**inventoryService may have recovered**: its circuit breaker is still rejecting calls", with when the real failures stopped |
+| `out-of-order` | the cascade delivered in a shuffled order | the same answer, and "**the order is uncertain**": callers logged before the cause |
+| `one-tenant` | 95% of a KeyError from tenant `t-17` | "**One tenant: t-17**" first; the summary has shares only, no other tenants' ids |
+| alert storm | one incident fires 8 alerts in three calls | **one** full report, then one line per alert ("same cause as … · 8 alerts so far") |
 
 Interleaved traces can't be fully separated without a thread id on every line; logsite keeps
 them apart where the lines say so, and doesn't invent the rest.

@@ -304,7 +304,7 @@ CREDENTIALS = re.compile(
 )
 MISSING_CONFIG = re.compile(
     r"Could not resolve placeholder|NoSuchBeanDefinition|environment variable .* (not set|"
-    r"missing)|KeyError: '[A-Z_]{3,}'|missing required (config|setting|env)|"
+    r"missing)|(?-i:KeyError: '[A-Z][A-Z0-9_]{2,}')|missing required (config|setting|env)|"
     r"ConfigurationException|No such file or directory: '[^']*\.(ya?ml|json|toml|ini|pem|key)'",
     re.I,
 )
@@ -352,18 +352,67 @@ def _config(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
     return h
 
 
-def _breaker(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
+RECOVERED = timedelta(minutes=5)  # real failures stopped this long before the rejections
+
+
+def _real_failures(name: str, breaker: ErrorGroup, groups) -> list[ErrorGroup]:
+    """The groups of calls to ``name`` that failed for real (not rejected by the breaker)."""
+    stem = re.sub(r"(service|svc|client|api)$", "", name.lower()).strip("-_.") or name.lower()
+    out = []
+    for g in groups:
+        if g is breaker or BREAKER.search(_text(g)):
+            continue
+        text = " ".join([_text(g), g.sample.get("message") or "", g.sample.get("traceback") or ""])
+        if stem and stem in text.lower():
+            out.append(g)
+    return out
+
+
+BREAKER = re.compile(r"CircuitBreaker '[^']+' is OPEN|CallNotPermittedException|short-circuited|"
+                     r"circuit (breaker )?(is )?open", re.I)  # fmt: skip
+
+
+def _breaker_effect(inc: Incident, cause: ErrorGroup, others=()) -> Hypothesis | None:
+    """A breaker's rejections among the incident's effects (the real failures are the
+    cause): only worth saying when the breaker outlived the failures."""
+    for g in inc.effects:
+        if BREAKER.search(_text(g)):
+            h = _breaker(inc, g, others)
+            if h is not None and "recovered" in h.title:
+                return h
+    return None
+
+
+def _breaker(inc: Incident, cause: ErrorGroup, others=()) -> Hypothesis | None:
     t = _text(cause)
-    m = re.search(r"CircuitBreaker '([^']+)' is OPEN|CallNotPermittedException|short-circuited|"
-                  r"circuit (breaker )?(is )?open", t, re.I)  # fmt: skip
-    if not m:
+    if not BREAKER.search(t):
         return None
     named = re.search(r"CircuitBreaker '([^']+)'|circuit breaker '?([\w.-]+)'? is open", t, re.I)
     name = (named.group(1) or named.group(2)) if named else "the dependency"
     h = Hypothesis("dependency", f"A dependency failing: {name} (its circuit breaker is open)")
     h.add(4, f"the circuit breaker for {name} is open: calls to it failed enough to stop trying")
     h.add(1, "this error is the protection working: the cause is the failures that opened it")
-    h.unknown.append(f"the failures that opened it may be earlier than this window, or in {name}")
+    real = _real_failures(name, cause, [*inc.groups, *others])
+    rejected_until = cause.last_seen
+    if real:
+        n = sum(g.count for g in real)
+        last = max(g.last_seen for g in real if g.last_seen)
+        h.supporting.append(f"real failures calling {name}: {n:,} ({real[0].title[:90]}), "
+                            f"rejected calls: {cause.count:,}")  # fmt: skip
+        if rejected_until and last and rejected_until - last >= RECOVERED:
+            gap = _minutes(rejected_until - last)
+            h.title = f"{name} may have recovered: its circuit breaker is still rejecting calls"
+            h.add(1, f"the real failures stopped {gap} before the rejections did: since "
+                     f"{last:%H:%M} UTC only the breaker has been failing calls")  # fmt: skip
+            h.next_check = (
+                f"check whether {name} is healthy now, and the breaker's state and settings "
+                "(half-open probes, wait duration): it may be failing calls that would succeed"
+            )
+            return h
+    else:
+        h.unknown.append(
+            f"the failures that opened it aren't in this window: look earlier, or in {name}"
+        )
     since = f"{inc.started:%H:%M} UTC" if inc.started else "it opened"
     h.next_check = (
         f"look for the errors calling {name} before {since} (timeouts, 5xx, refused "
@@ -500,6 +549,38 @@ def _resource(text: str) -> str:
     return "resources"
 
 
+TENANT_SHARE = 0.8  # of the errors from one tenant
+TENANT_MIN = 10
+
+
+def _tenant(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
+    top = cause.top_tenant
+    if top is None:
+        return None
+    tenant, share, seen = top
+    n = cause.tenants[tenant]
+    if share < TENANT_SHARE or n < TENANT_MIN:
+        return None
+    h = Hypothesis("tenant", f"One tenant: {tenant}")
+    others = (
+        f" ({seen - 1} other tenant(s) had {sum(cause.tenants.values()) - n:,})" if seen > 1 else ""
+    )
+    h.add(
+        4 if share >= 0.9 else 3,
+        f"{share:.0%} of these errors ({n:,}) come from tenant {tenant}{others}",
+    )
+    if seen == 1:
+        h.unknown.append(
+            "no other tenant had these errors: whether others use this path isn't known"
+        )
+    h.next_check = (
+        f"look at what's different for {tenant}: its data (an unusual record or size), its "
+        "configuration or plan, or a client sending something new; the rest of the platform "
+        "isn't affected"
+    )
+    return h
+
+
 def shared_root(inc: Incident) -> tuple[str, list[str]] | None:
     """``(root cause, entry points)`` when several groups of the incident share one root
     cause: one failure reached through different code paths (an API and a consumer)."""
@@ -585,8 +666,9 @@ def diagnose(
         h
         for h in (_change(inc, cause, cfg, had_before),
                   _traffic(inc, cause, traffic_ratio, had_before),
-                  _breaker(inc, cause) or _dependency(inc, cause), _capacity(inc, cause),
-                  _deadlock(inc, cause), _code_or_data(inc, cause), _config(inc, cause))
+                  _breaker(inc, cause, others) or _dependency(inc, cause), _capacity(inc, cause),
+                  _deadlock(inc, cause), _code_or_data(inc, cause), _config(inc, cause),
+                  _tenant(inc, cause), _breaker_effect(inc, cause, others))
         if h is not None
     ]  # fmt: skip
     spread = elsewhere(inc, others)
@@ -604,7 +686,36 @@ def diagnose(
     gaps = []
     if traffic_ratio is None:
         gaps.append("traffic before and after isn't known, so rates couldn't be compared")
+    note = order_note(inc)
+    if note:
+        gaps.append(note)
     return Diagnosis(found, gaps)
+
+
+CLOSE_START = timedelta(seconds=60)
+
+
+def order_note(inc: Incident) -> str | None:
+    """When the order of the timestamps shouldn't be read as the order of events: the cause
+    was picked against it, or services started within seconds of each other (clocks and
+    log delivery drift by that much)."""
+    cause = inc.cause
+    if not cause.first_seen:
+        return None
+    earlier = [g for g in inc.effects if g.first_seen and g.first_seen < cause.first_seen]
+    if earlier:
+        svcs = ", ".join(sorted({s for g in earlier for s in g.services})) or "other groups"
+        return (
+            f"{svcs} logged errors before the cause did: callers time out before the call "
+            "they wait on fails, so the timestamps' order isn't the order of events"
+        )
+    mine = set(cause.services)
+    close = [g for g in inc.effects if g.first_seen and g.services.keys() - mine
+             and abs(g.first_seen - cause.first_seen) < CLOSE_START]  # fmt: skip
+    if close:
+        return ("services started failing within a minute of each other: clock skew and log "
+                "delivery can reorder that much, so which came first is uncertain")  # fmt: skip
+    return None
 
 
 def diagnosis_json(d: Diagnosis) -> dict:
@@ -675,6 +786,12 @@ def report_markdown(incidents: list[Incident], summary, label: str, cfg: LintCon
         out.append(f"- {cause.count:,} error(s) ({trend}{rate})")
         for text in impact(inc):
             out.append(f"- Impact: {text}")
+        top = cause.top_tenant
+        if top and top[2] > 0:
+            out.append(f"- Tenants: {top[1]:.0%} from `{top[0]}` ({top[2]} tenant(s) affected)")
+        note = order_note(inc)
+        if note:
+            out.append(f"- Order: {note}")
         for r in inc.related:
             if r.level == "warning":
                 out.append(f"- Warning in the same requests: `{r.message}`")
