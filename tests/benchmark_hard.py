@@ -1058,6 +1058,214 @@ def check_one_tenant(inv, errors):
     return []
 
 
+# --- 17. a wait cycle across two services --------------------------------------------------------
+
+
+def wait_cycle(root):
+    code(root, "orders/app.py", {30: "    reservation = inventory.reserve(order)"})
+    code(root, "inventory/app.py", {52: "    lock = orders_api.lock(order_id)"})
+    commit_all(root)
+    events = []
+    start = NOW - timedelta(minutes=20)
+    for i in range(25):
+        t = start + timedelta(seconds=30 * i)
+        tid = f"cyc{i:04d}"
+        events.append(
+            (
+                t + timedelta(seconds=5),
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t + timedelta(seconds=5)),
+                            "level": "error",
+                            "service": "inventory-service",
+                            "trace_id": tid,
+                            "msg": "lock call failed",
+                            "exc_info": 'Traceback (most recent call last):\n  File "/srv/inventory/app.py", line 52, in reserve\n'
+                            "    lock = orders_api.lock(order_id)\nhttpx.ReadTimeout: timed out calling http://order-service:8080/orders/lock",
+                        }
+                    )
+                ],
+            )
+        )
+        events.append(
+            (
+                t + timedelta(seconds=10),
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t + timedelta(seconds=10)),
+                            "level": "error",
+                            "service": "order-service",
+                            "trace_id": tid,
+                            "msg": "reserve call failed",
+                            "exc_info": 'Traceback (most recent call last):\n  File "/srv/orders/app.py", line 30, in place\n'
+                            "    reservation = inventory.reserve(order)\nhttpx.ReadTimeout: timed out calling http://inventory-service:8080/reserve",
+                        }
+                    )
+                ],
+            )
+        )
+    write_log(root, events)
+    config(root)
+
+
+def check_wait_cycle(inv, errors):
+    for inc in inv["incidents"]:
+        for h in inc["diagnosis"]["hypotheses"][:1]:
+            if h["title"].startswith("A wait cycle"):
+                return []
+    return [
+        f"order-service and inventory-service time out calling each other in the same requests: expected a wait cycle, got {[i['diagnosis']['hypotheses'][0]['title'] for i in inv['incidents'] if i['diagnosis']['hypotheses']]}"
+    ]
+
+
+# --- 18. work that goes on after the caller gave up ----------------------------------------------------
+
+
+def orphaned(root):
+    code(root, "checkout/app.py", {40: "    stock = inventory.check(cart, timeout=2)"})
+    commit_all(root)
+    events = []
+    start = NOW - timedelta(minutes=15)
+    for i in range(10):
+        t = start + timedelta(seconds=60 * i)
+        tid = f"orph{i:03d}"
+        events.append(
+            (
+                t,
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t),
+                            "level": "info",
+                            "service": "inventory-service",
+                            "trace_id": tid,
+                            "msg": "stock check started",
+                        }
+                    )
+                ],
+            )
+        )
+        events.append(
+            (
+                t + timedelta(seconds=2),
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t + timedelta(seconds=2)),
+                            "level": "error",
+                            "service": "checkout-service",
+                            "trace_id": tid,
+                            "msg": "inventory check failed",
+                            "exc_info": 'Traceback (most recent call last):\n  File "/srv/checkout/app.py", line 40, in place\n'
+                            "    stock = inventory.check(cart, timeout=2)\nhttpx.ReadTimeout: timed out",
+                        }
+                    )
+                ],
+            )
+        )
+        for k, secs in enumerate((6, 15, 28)):
+            tt = t + timedelta(seconds=secs)
+            events.append(
+                (
+                    tt,
+                    [
+                        json.dumps(
+                            {
+                                "ts": iso(tt),
+                                "level": "info",
+                                "service": "inventory-service",
+                                "trace_id": tid,
+                                "msg": f"stock check step {k + 2} of 4 done",
+                            }
+                        )
+                    ],
+                )
+            )
+    write_log(root, events)
+    config(root)
+
+
+def check_orphaned(inv, errors):
+    for inc in inv["incidents"]:
+        for h in inc["diagnosis"]["hypotheses"][:2]:
+            if h["title"].startswith("Orphaned work: inventory-service"):
+                if not any("26s after checkout-service" in t for t in h["supporting"]):
+                    return [f"should say how long it went on: {h['supporting']}"]
+                return []
+    return [
+        f"inventory-service keeps working 26s after checkout timed out: expected orphaned work, got {[(h['cause'], h['title'][:50]) for i in inv['incidents'] for h in i['diagnosis']['hypotheses']]}"
+    ]
+
+
+# --- 19. split brain -----------------------------------------------------------------------------------
+
+
+def split_brain(root):
+    code(
+        root,
+        "scheduler/store.go",
+        {64: '\t\treturn fmt.Errorf("write rejected: stale term %d (current %d)", t, cur)'},
+    )
+    commit_all(root)
+    events = []
+    start = NOW - timedelta(minutes=12)
+    for t, node, term in (
+        (start - timedelta(minutes=3), "node-1", 7),
+        (start - timedelta(seconds=40), "node-2", 8),
+    ):
+        events.append(
+            (
+                t,
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t),
+                            "level": "info",
+                            "service": "scheduler",
+                            "msg": f"node={node} became leader term={term}",
+                        }
+                    )
+                ],
+            )
+        )
+    for i in range(30):
+        t = start + timedelta(seconds=20 * i)
+        events.append(
+            (
+                t,
+                [
+                    json.dumps(
+                        {
+                            "ts": iso(t),
+                            "level": "error",
+                            "service": "scheduler",
+                            "caller": "scheduler/store.go:64",
+                            "msg": "job write failed",
+                            "node": "node-1",
+                            "error": f"write rejected: stale term 7 (current 8) job=job-{i}",
+                        }
+                    )
+                ],
+            )
+        )
+    write_log(root, events)
+    config(root)
+
+
+def check_split_brain(inv, errors):
+    for inc in inv["incidents"]:
+        hyps = inc["diagnosis"]["hypotheses"]
+        if hyps and hyps[0]["cause"] == "split-brain":
+            if "node-1" not in hyps[0]["title"] or "node-2" not in hyps[0]["title"]:
+                return [f"should name both nodes: {hyps[0]['title']}"]
+            return []
+    return [
+        f"stale-term writes after two leadership claims: expected split-brain, got {[(h['cause'], h['title'][:50]) for i in inv['incidents'] for h in i['diagnosis']['hypotheses'][:2]]}"
+    ]
+
+
 CASES = {
     "cascade": (cascade, check_cascade),
     "red-herring": (red_herring, check_red_herring),
@@ -1075,4 +1283,7 @@ CASES = {
     "breaker-recovered": (breaker_recovered, check_breaker_recovered),
     "out-of-order": (out_of_order, check_out_of_order),
     "one-tenant": (one_tenant, check_one_tenant),
+    "wait-cycle": (wait_cycle, check_wait_cycle),
+    "orphaned": (orphaned, check_orphaned),
+    "split-brain": (split_brain, check_split_brain),
 }

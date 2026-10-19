@@ -198,6 +198,9 @@ And twelve worst cases (`tests/benchmark_hard.py`):
 | `breaker-recovered` | real timeouts for 15 minutes, then only circuit-breaker rejections | "**inventoryService may have recovered**: its circuit breaker is still rejecting calls", with when the real failures stopped |
 | `out-of-order` | the cascade delivered in a shuffled order | the same answer, and "**the order is uncertain**": callers logged before the cause |
 | `one-tenant` | 95% of a KeyError from tenant `t-17` | "**One tenant: t-17**" first; the summary has shares only, no other tenants' ids |
+| `wait-cycle` | order-service and inventory-service time out calling each other in the same requests | "**A wait cycle**: inventory-service waits on order-service, which waits on inventory-service", with a request to follow |
+| `orphaned` | checkout gives up after 2s; inventory keeps working on the same requests for 26s more | "**Orphaned work**: inventory-service keeps working after checkout-service gave up"; pass deadlines on |
+| `split-brain` | writes rejected for a stale term after node-1 and node-2 both claimed leadership | "**Split-brain**: node-1 and node-2 both acted as leader"; check leases and fencing tokens |
 | alert storm | one incident fires 8 alerts in three calls | **one** full report, then one line per alert ("same cause as … · 8 alerts so far") |
 
 Interleaved traces can't be fully separated without a thread id on every line; logsite keeps

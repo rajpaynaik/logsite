@@ -34,6 +34,8 @@ class Incident:
     suspects: list[Commit] = field(default_factory=list)
     diagnosis: object | None = None  # diagnose.Diagnosis, once it's been explained
     related: list[Related] = field(default_factory=list)  # warnings etc. in the same requests
+    orphans: list[dict] = field(default_factory=list)  # work that went on after the caller quit
+    leadership: list[dict] = field(default_factory=list)  # leader claims around the start
 
     @property
     def cause(self) -> ErrorGroup:
@@ -102,11 +104,15 @@ def add_related(inc: Incident, backend, window, trace_field: str = "trace_id") -
                 traces.append(ids[key])
         traces += sorted(t for t in g.trace_ids if t not in traces)[:RELATED_TRACES]
     found: dict[str, Related] = {}
+    orphans: dict[str, dict] = {}
+    looked = 0
     for tid in traces[:RELATED_TRACES]:
         try:
             records = backend.find_records(trace_field, tid, window, limit=200)
         except Exception:
             continue
+        looked += 1
+        _orphaned(records, tid, orphans)
         seen_here = set()
         for r in records:
             if is_error(r):
@@ -126,6 +132,91 @@ def add_related(inc: Incident, backend, window, trace_field: str = "trace_id") -
             else:
                 found[key] = Related("warning" if warn else "info", text, tid)
     inc.related = sorted(found.values(), key=lambda x: (x.level != "warning", -x.count))[:6]
+    for o in orphans.values():
+        o["looked"] = looked
+    inc.orphans = sorted(orphans.values(), key=lambda o: -o["seconds"])
+
+
+GAVE_UP = re.compile(
+    r"timed? ?out|timeout|deadline exceeded|context canceled|cancelled|canceled|"
+    r"ReadTimeout|SocketTimeoutException|client disconnected|broken pipe",
+    re.I,
+)
+ORPHAN_GAP = 1.0  # seconds after the caller gave up
+
+
+def _orphaned(records, tid: str, out: dict) -> None:
+    """Lines one service logged for a request after the service that called it had already
+    given up on it (timed out, cancelled): the work went on with nobody waiting."""
+    from .errors import _service
+    from .tracebacks import is_error
+
+    timed = [(r.timestamp, _service(r), r) for r in records if r.timestamp is not None]
+
+    def text(r) -> str:  # the message and the fields (exc_info, error, ...)
+        values = " ".join(str(v)[:1000] for v in r.fields.values() if isinstance(v, str))
+        return f"{r.message[:2000]} {values}"
+
+    gave_up = [(t, s) for t, s, r in timed if s and is_error(r) and GAVE_UP.search(text(r))]
+    if not gave_up:
+        return
+    t0, caller = min(gave_up, key=lambda x: x[0])
+    for t, s, r in timed:
+        if not s or s == caller:
+            continue
+        if is_error(r) and GAVE_UP.search(text(r)):
+            continue  # giving up too (waiting on someone), not working
+        late = (t - t0).total_seconds()
+        if late <= ORPHAN_GAP:
+            continue
+        o = out.setdefault(s, {"service": s, "caller": caller, "seconds": 0.0, "traces": set(),
+                               "example": ""})  # fmt: skip
+        o["traces"].add(tid)
+        if late > o["seconds"]:
+            o["seconds"], o["example"] = late, _clean(r)[:200]
+
+
+LEADER_CLAIM = re.compile(
+    r"(became|elected( as)?|is now( the)?|acquired( the)?|promoted to|won( the)? election.*?)"
+    r"\s*(the )?(leader|primary|master)\b|leadership acquired|acquired (the )?lease",
+    re.I,
+)
+STALE = re.compile(
+    r"stale (term|epoch|leader|fencing)|fencing token|NotLeader|not the leader|"
+    r"not (the )?primary|READONLY You can't write|term mismatch|epoch mismatch|"
+    r"lost (the )?lease|split.?brain|conflicting write|write conflict",
+    re.I,
+)
+_NODE = re.compile(r"\b(?:node|member|instance|host|replica|broker)[=: _-]*([\w.-]+)", re.I)
+
+
+def add_leadership(inc: Incident, backend, window) -> None:
+    """When the errors are about a stale leader or fencing, the leadership claims logged
+    around the start: two nodes claiming at once is a split brain."""
+    text = " ".join(" ".join([g.title, *g.causes]) for g in inc.groups)
+    if not STALE.search(text) or inc.started is None:
+        return
+    from .errors import _service
+
+    claims = []
+    for word in ("leader", "primary", "lease"):
+        try:
+            records = backend.query_logs(window, contains=word, limit=500)
+        except Exception:
+            continue
+        for r in records:
+            first = r.message.split("\n", 1)[0]
+            if not LEADER_CLAIM.search(first) or r.timestamp is None:
+                continue
+            m = _NODE.search(first)
+            node = (m.group(1) if m else None) or r.fields.get("node") or _service(r)
+            claims.append({"at": r.timestamp, "node": str(node), "message": _clean(r)[:200]})
+    seen = set()
+    for c in sorted(claims, key=lambda c: c["at"]):
+        key = (c["at"], c["node"])
+        if key not in seen:
+            seen.add(key)
+            inc.leadership.append(c)
 
 
 class _Links:

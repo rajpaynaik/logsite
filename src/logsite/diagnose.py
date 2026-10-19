@@ -581,6 +581,82 @@ def _tenant(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
     return h
 
 
+def _cycle(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
+    """Two services each failing on a call to the other in the same requests: a wait cycle
+    (A holds a request open waiting on B, which calls back into A and waits)."""
+    from .incidents import _calls
+
+    for a in inc.groups:
+        for b in inc.groups:
+            if a is b or not (_calls(a, b) and _calls(b, a)):
+                continue
+            if not (a.trace_ids & b.trace_ids):
+                continue
+            sa, sb = next(iter(a.services)), next(iter(b.services))
+            h = Hypothesis("concurrency", f"A wait cycle: {sa} waits on {sb}, which waits on {sa}")
+            shared = len(a.trace_ids & b.trace_ids)
+            h.add(6, f"in the same requests ({shared:,}), {sa}'s errors are about calling {sb} "
+                     f"and {sb}'s about calling {sa}")  # fmt: skip
+            h.unknown.append(
+                "which call started first (and so which side to break) isn't in the errors"
+            )
+            h.next_check = (
+                f"follow one request (`logsite trace {sorted(a.trace_ids & b.trace_ids)[0]}`): the "
+                f"call from {sb} back into {sa} while {sa} waits is the cycle; break it (async, "
+                "a separate pool for callbacks, or no call back), and make the inner timeout "
+                "shorter than the outer"
+            )
+            return h
+    return None
+
+
+def _orphans(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
+    if not inc.orphans:
+        return None
+    o = inc.orphans[0]
+    n, looked = len(o["traces"]), o.get("looked") or len(o["traces"])
+    who, caller = o["service"], o["caller"]
+    h = Hypothesis("capacity", f"Orphaned work: {who} keeps working after {caller} gave up")
+    h.add(4, f"in {n} of {looked} requests looked at, {who} kept logging up to "
+             f"{o['seconds']:.0f}s after {caller} timed out (last: {o['example']})")  # fmt: skip
+    h.add(1, "work nobody waits for still holds connections and threads, and retries add more")
+    h.next_check = (
+        f"pass the caller's deadline on and stop on cancellation in {o['service']} (a request "
+        "context or gRPC deadline; stop when the client disconnects), and keep each "
+        "downstream timeout shorter than its caller's"
+    )
+    return h
+
+
+def _split_brain(inc: Incident, cause: ErrorGroup) -> Hypothesis | None:
+    from .incidents import STALE
+
+    t = " ".join(_text(g) for g in inc.groups)
+    stale = STALE.search(t)
+    if not stale:
+        return None
+    window = timedelta(minutes=15)
+    claims = [c for c in inc.leadership if inc.started and abs(c["at"] - inc.started) <= window]
+    nodes = sorted({c["node"] for c in claims})
+    if len(nodes) < 2:
+        h = Hypothesis("split-brain", "A stale leader: writes from a node that lost leadership")
+        h.add(3, f"the errors say so: {stale.group(0)}")
+        h.unknown.append("no leadership changes found in the logs around the start")
+        h.next_check = ("find which node made the rejected writes and when it lost leadership; "
+                        "check that writes carry and check a fencing token")  # fmt: skip
+        return h
+    h = Hypothesis("split-brain", f"Split-brain: {' and '.join(nodes[:3])} both acted as leader")
+    h.add(3, f"the errors say so: {stale.group(0)}")
+    for c in claims[:3]:
+        h.add(1, f"{c['at']:%H:%M:%S} {c['node']}: {c['message'][:120]}")
+    h.next_check = (
+        "check the election: lease or session timeout against GC pauses and network blips, "
+        "and whether the old leader kept writing after its lease; make writes carry a fencing "
+        "token the storage checks, then reconcile the conflicting writes"
+    )
+    return h
+
+
 def shared_root(inc: Incident) -> tuple[str, list[str]] | None:
     """``(root cause, entry points)`` when several groups of the incident share one root
     cause: one failure reached through different code paths (an API and a consumer)."""
@@ -623,10 +699,11 @@ def had_data_before(summary) -> bool:
 
 def explain(inc: Incident, summary, cfg: LintConfig, backend=None, trace_field="trace_id"):
     """Collect the related lines (when a backend is given) and diagnose the incident."""
-    from .incidents import add_related
+    from .incidents import add_leadership, add_related
 
     if backend is not None:
         add_related(inc, backend, summary.window, trace_field)
+        add_leadership(inc, backend, summary.window)
     inc.diagnosis = diagnose(
         inc, cfg, summary.traffic_ratio, had_data_before(summary), others=summary.groups
     )
@@ -668,7 +745,8 @@ def diagnose(
                   _traffic(inc, cause, traffic_ratio, had_before),
                   _breaker(inc, cause, others) or _dependency(inc, cause), _capacity(inc, cause),
                   _deadlock(inc, cause), _code_or_data(inc, cause), _config(inc, cause),
-                  _tenant(inc, cause), _breaker_effect(inc, cause, others))
+                  _tenant(inc, cause), _breaker_effect(inc, cause, others),
+                  _cycle(inc, cause), _orphans(inc, cause), _split_brain(inc, cause))
         if h is not None
     ]  # fmt: skip
     spread = elsewhere(inc, others)
