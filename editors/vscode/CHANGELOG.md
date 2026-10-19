@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Stack traces from more runtimes (Node.js, Go fatal errors) and wrapped Java messages are read in production logs.
+
 ## 0.3.1
 
 - Fix: an error that had stopped is no longer reported as back when a wide window re-reads its old records.
