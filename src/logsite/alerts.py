@@ -164,6 +164,25 @@ def render(
     if alert.silence_url and slack:
         line2 += " · " + _link("Silence", alert.silence_url, slack)
     out = [head, line2]
+    incidents = summary.get("incidents") or []
+    if incidents:
+        kw = {"code_line": code_line, "code_url": code_url, "trace_field": trace_field}
+        shown: set[str] = set()
+        for n, inc in enumerate(incidents[:MAX_INCIDENTS], 1):
+            out += _incident_lines(n, inc, slack=slack, bold=bold, **kw)
+            shown |= {inc["cause"]["id"], *(e["id"] for e in inc["effects"])}
+        others = [g for g in groups if g["id"] not in shown]
+        if others:
+            out += ["", bold("Also failing")]
+            for g in others[:3]:
+                trend = "new" if g["new"] else (g["trend"] or "")
+                out.append(
+                    f"• {g['title'][:120]}  ·  {g['count']:,}" + (f"  ·  {trend}" if trend else "")
+                )
+        rest = summary["groups_total"] - len(shown) - min(len(others), 3)
+        if rest > 0:
+            out += [f"+ {rest} more group(s): `logsite errors`"]
+        return "\n".join(out)
     if not groups:
         out.append("No error logs in this window: the alert isn't about logged errors.")
     for i, g in enumerate(groups, 1):
@@ -198,6 +217,101 @@ def render(
     if rest > 0:
         out += ["", f"+ {rest} more group(s): `logsite errors`"]
     return "\n".join(out)
+
+
+MAX_INCIDENTS = 2
+EXCERPT_LINES = 8
+
+
+def _excerpt(sample: dict, raised_at: str | None) -> list[str]:
+    """The exact issue as it was logged: the message, the exception chain (each exception's
+    first line) and the frame of yours where it was raised. Values are already masked."""
+    lines = [sample["message"]] if sample.get("message") else []
+    tb = sample.get("traceback") or ""
+    own = raised_at.rsplit("/", 1)[-1].rsplit(":", 1)[0] if raised_at else None
+    for line in tb.splitlines()[1:] if lines and tb.startswith(lines[0][:40]) else tb.splitlines():
+        text = line.rstrip()
+        stripped = text.strip()
+        if not stripped or stripped.startswith("..."):
+            continue
+        is_frame = stripped.startswith(("at ", "File ", "goroutine ")) or text[:1].isspace()
+        if not is_frame or (own and own in stripped):
+            if text not in lines:
+                lines.append(text if not is_frame else "    " + stripped)
+        if len(lines) >= EXCERPT_LINES:
+            break
+    return [x[:160] for x in lines]
+
+
+def _incident_lines(n: int, inc: dict, *, slack: bool, bold, code_line, code_url,
+                    trace_field: str) -> list[str]:  # fmt: skip
+    """One incident as evidence: what failed, the log, where, what followed, the likely
+    cause with what supports it, and what to check first."""
+    g = inc["cause"]
+    since = _when(_parse(inc["started"])) if inc.get("started") else "?"
+    state = "new" if g["new"] else (g["trend"] or "")
+    h = g.get("history") or {}
+    if h.get("regression"):
+        state = "back after a fix"
+    out = ["", f"{bold(f'{n}. What failed')}: {g['title'][:150]}"]
+    count = f"{g['count']:,} error(s) since {since}"
+    if inc["events"] > g["count"]:
+        count += f" ({inc['events']:,} with what followed)"
+    out.append(f"    {count}" + (f" · {state}" if state else ""))
+    if g.get("causes"):
+        origin = f" (thrown in {g['origin']})" if g.get("origin") else ""
+        out.append(f"    {bold('Root cause')}: {g['causes'][0][:150]}{origin}")
+    where = g.get("raised_at") or g.get("logged_at")
+    if where:
+        url = code_url(where) if code_url else None
+        code = code_line(where) if code_line else None
+        fn = f" in {g['raised_in']}()" if g.get("raised_at") and g.get("raised_in") else ""
+        label = "Raised at" if g.get("raised_at") else "Logged at"
+        text = f"    {bold(label)}: {_link(where, url, slack)}{fn}"
+        if code:
+            text += f"  `{code[:110]}`" if slack else f"   {code[:110]}"
+        out.append(text)
+    excerpt = _excerpt(g.get("sample") or {}, g.get("raised_at"))
+    if excerpt:
+        stamp = (g.get("sample") or {}).get("timestamp")
+        when = f" (latest, {_when(_parse(stamp))})" if stamp else ""
+        out.append(f"    {bold('From the log')}{when}:")
+        if slack:
+            out.append("```" + "\n".join(excerpt) + "```")
+        else:
+            out += [f"      {x}" for x in excerpt]
+    for i, e in enumerate(inc.get("effects", [])[:3]):
+        why = f" — {e['linked_by']}" if e.get("linked_by") else ""
+        label = bold("Then") if i == 0 else "        "
+        out.append(f"    {label}: {e['title'][:110]} · {e['count']:,}{why}")
+    if h.get("regression"):
+        fixes = ", ".join(f"{c['sha']} {c['summary']}" for c in h.get("fixed_by") or [])
+        gone = f" → {(h.get('resolved_at') or '')[:10]}" if h.get("resolved_at") else ""
+        if h.get("resolved_release"):
+            gone += f", gone after {h['resolved_release']}"
+        out.append(f"    {bold('Seen before')}: {(h.get('first_seen') or '')[:10]}{gone}"
+                   + (f"; fixed then by {fixes}" if fixes else ""))  # fmt: skip
+    d = inc.get("diagnosis") or {}
+    hyps = d.get("hypotheses") or []
+    if d.get("strength") == "unclear" or not hyps:
+        out.append(f"    {bold('Likely cause')}: unclear, not enough evidence to rank one")
+    else:
+        top = hyps[0]
+        out.append(f"    {bold('Likely cause')} ({d['strength']} evidence): {top['title']}")
+        out += [f"      • {t}" for t in top["supporting"][:4]]
+        out += [f"      • against: {t}" for t in top["against"][:2]]
+        if len(hyps) > 1 and hyps[1]["score"] > 0:
+            out.append(f"    {bold('Or')}: {hyps[1]['title']}")
+        if top.get("next_check"):
+            out.append(f"    {bold('Check first')}: {top['next_check']}")
+    trace = ((g.get("sample") or {}).get("ids") or {}).get(trace_field) or g.get("example_trace")
+    if trace:
+        out.append(f"    {bold('Example run')}: `logsite trace {trace}`")
+    return out
+
+
+def _parse(value: str) -> datetime:
+    return parse_iso(value)
 
 
 def _history_columns(h: dict) -> dict:

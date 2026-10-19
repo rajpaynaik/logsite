@@ -308,3 +308,43 @@ def test_history_columns_and_events_endpoint():
         assert call(f"{url}/history/events")[0] == 404
     finally:
         srv.shutdown()
+
+
+def test_alert_message_is_an_evidence_report(tmp_path, monkeypatch):
+    from test_incidents import project
+
+    from logsite.backends import TimeRange, from_config
+    from logsite.cli import _with_incidents
+    from logsite.config import load_config
+    from logsite.errors import AppFiles, summarize_errors
+    from logsite.index import index_project
+
+    project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    cfg = load_config(None)
+    window = TimeRange.last(24)
+    summary = summarize_errors(
+        from_config(cfg.backend), index_project(tmp_path), AppFiles.scan(tmp_path, set()),
+        window, window.previous(), cfg.lint,
+    )  # fmt: skip
+    data = _with_incidents(summary, cfg)
+    (alert,) = parse_grafana(PAYLOAD)
+    text = render(alert, data, slack=True, trace_field="traceId")
+    assert (
+        "*1. What failed*: java.lang.IllegalStateException: Shipping label request failed" in text
+    )
+    assert "10 error(s) since" in text and "(20 with what followed) · new" in text
+    assert (
+        "*Root cause*: java.net.SocketTimeoutException: Read timed out (thrown in java.net)" in text
+    )
+    assert "*Raised at*: `src/main/java/com/example/shipping/CarrierApiClient.java:3`" in text
+    # the exact issue, as logged: the message, the chain, the frame of yours
+    log = text.split("```", 2)[1]
+    assert "java.lang.IllegalStateException: Shipping label request failed" in log
+    assert "at com.example.shipping.CarrierApiClient.requestLabel(CarrierApiClient.java:3)" in log
+    assert "Caused by: java.net.SocketTimeoutException: Read timed out" in log
+    assert "NioSocketImpl" not in log  # library frames stay out
+    assert "*Then*: Record processing failed offset=<n> · 10 — started together" in text
+    assert "*Likely cause*" in text and "*Example run*: `logsite trace tr-0009`" in text
+    plain = render(alert, data, slack=False, trace_field="traceId")
+    assert "1. What failed: java.lang.IllegalStateException" in plain and "```" not in plain

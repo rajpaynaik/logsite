@@ -28,25 +28,51 @@ code link as dashboard variables instead; it's in
 
 ### Alerts: the error summary in the notification
 
-When a Grafana alert fires, `logsite alert-server` sends the error summary with it, so whoever
-is on call sees what broke and on which line without opening a single stack trace:
+When a Grafana alert fires, `logsite alert-server` sends an evidence report with it: what
+failed, the exact error as it was logged, the line of code that raised it, what followed, and
+the likely cause with the evidence for it and what to check first. Whoever is on call sees it
+in Slack next to the page, without opening a single stack trace:
 
 ```
-🔴 order-service errors: order-service is logging more than 10 errors in 5 minutes (firing since 16:49 UTC)
-758 error(s) in 2 group(s) · Open in Grafana · Silence
+🔴 xyz job failed: the shipping-label job is failing (firing since 01:55 UTC)
+732 error(s) in 2 group(s), 2 new · Open in Grafana · Silence
 
-1. com.example.orders.exception.OrderProcessingException: Unable to save order ORD-<n>  ·  561  ·  new
-    root cause: org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout (org.postgresql)
-    raised: src/main/java/com/example/orders/repository/OrderRepository.java:87  `return jpa.save(order);`
-    logged: src/main/java/com/example/orders/OrderController.java:56
-    example: `logsite trace 77064c2c`
-
-2. Retry failed for order ORD-<n>  ·  197  ·  1.0x
-    logged: src/main/java/com/example/orders/service/OrderService.java:170
+1. What failed: java.lang.IllegalStateException: Shipping label request failed for shipment 88121
+    366 error(s) since 01:52 UTC (732 with what followed) · back after a fix
+    Root cause: java.net.SocketTimeoutException: Read timed out (thrown in java.net)
+    Raised at: src/main/java/com/example/shipping/CarrierApiClient.java:58 in requestLabel()  `return restTemplate.postForObject(carrierUrl + "/labels", request, LabelResponse.class);`
+    From the log (latest, 02:52 UTC):
+      2026-10-19 02:52:00 ERROR [shipping] [traceId=tr-00480] c.e.s.ShipmentEventListener : label failed
+      java.lang.IllegalStateException: Shipping label request failed for shipment 88121
+          at com.example.shipping.CarrierApiClient.requestLabel(CarrierApiClient.java:58)
+      Caused by: org.springframework.web.client.ResourceAccessException: I/O error on POST request for "https://carrier.example.com/labels": Read timed out
+      Caused by: java.net.SocketTimeoutException: Read timed out
+    Then: Record processing failed topic=shipment-events offset=<n> · 366 — same requests (366 shared trace id(s))
+    Seen before: 2026-08-05 → 2026-09-03
+    Likely cause (strong evidence): The change in v1.4: 60b67447 Lower carrier read timeout to 3s
+      • v1.4 was deployed 4 min before the errors started
+      • 60b67447 changed the lines around src/main/java/com/example/shipping/CarrierApiClient.java:58, where it's raised
+      • the error wasn't there in the window before
+      • it was fixed before (an earlier release) and came back: the change may undo that fix
+    Or: A dependency failing: SocketTimeoutException from the service requestLabel() calls
+    Check first: read `git show 60b67447 -- src/main/java/com/example/shipping/CarrierApiClient.java`; revert it (or roll back) in staging and see whether the error stops
+    Example run: `logsite trace tr-00480`
 ```
 
-That's a real run: a Grafana 13 alert rule on Loki, its webhook contact point, and logsite
-summarizing the Spring Boot traces in the alert's window.
+That's a dry run of `alert-server` with a real Grafana 13 webhook payload, on the shipping
+example (a fix in v1.3, undone in v1.4). In Slack the log excerpt is a code block, the code
+location links to the line in your repository, and the labels are bold.
+
+- **From the log** is the latest occurrence as logged: the message, each exception in the
+  chain, and the frame of yours where it was raised; library frames are left out and values
+  are masked like everywhere else.
+- **Likely cause** comes from the same ranking as `logsite investigate --report` (a change,
+  traffic, or a failing dependency); when the evidence doesn't point anywhere, it says
+  "unclear" instead of guessing.
+- Up to two incidents per alert; other failing groups are listed under **Also failing**.
+  Without an incident (only steady errors), the message lists the top groups instead.
+- With PagerDuty, add the webhook next to PagerDuty in the same contact point: the page goes
+  out as usual and the report lands in Slack at the same time.
 
 1. Run it next to your checkout (it reads the code to tell your frames from library ones):
 

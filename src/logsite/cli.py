@@ -857,7 +857,7 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
 
         # an alert narrowed to part of the selector saw only part: don't record it as watched
         history.apply(cfg, summary.groups, start, end, record=narrowed == cfg.backend)
-        return summary_json(summary)
+        return _with_incidents(summary, cfg)
 
     url_template = source_url(cfg.root)
     ref = resolve_ref(cfg.root, "HEAD") or "HEAD"
@@ -978,6 +978,25 @@ def _sync(cfg: Config, span: timedelta, step: timedelta, limit: int, backend=Non
             )
         start = chunk.end
     return groups, path
+
+
+def _with_incidents(summary, cfg: Config) -> dict:
+    """``summary_json`` plus the incidents in it, each with its deploy, suspect commits and
+    ranked diagnosis: what an alert message is built from."""
+    from datetime import datetime
+
+    from .diagnose import diagnose
+    from .incidents import add_context, find_incidents, incident_json
+
+    out = summary_json(summary)
+    incidents, _ = find_incidents(summary.groups, cfg.lint)
+    now = datetime.now(timezone.utc)
+    for inc in incidents:
+        add_context(inc, cfg.root, now)
+        inc.diagnosis = diagnose(inc, cfg.lint, summary.traffic_ratio)
+    out["incidents"] = [incident_json(i) for i in incidents]
+    out["traffic_ratio"] = summary.traffic_ratio
+    return out
 
 
 def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
