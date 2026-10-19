@@ -82,6 +82,20 @@ def _day(ts) -> str:
     return f"{ts.day} {ts:%b %Y}" if ts else "?"
 
 
+TRAFFIC_NOTE = 0.2  # say what traffic did when it moved more than 20%
+
+
+def trend_rows(g: ErrorGroup, pal: Palette) -> list[tuple[str, str]]:
+    """When traffic changed, the error count's trend alone misleads: say what the rate did."""
+    ratio, rate = g.traffic_ratio, g.rate_ratio
+    if rate is None or ratio is None or abs(ratio - 1) < TRAFFIC_NOTE:
+        return []
+    text = f"{g.count / g.previous:.1f}x errors at {ratio:.1f}x traffic: the rate is {rate:.1f}x"
+    if rate < 1.3:
+        text += ", it grew with traffic"
+    return [("Trend", pal.white(text))]
+
+
 def history_rows(g: ErrorGroup, pal: Palette) -> list[tuple[str, str]]:
     """What the history store knows: back after a fix, first time ever, or how long it's
     been around."""
@@ -259,6 +273,7 @@ def card(
     span = _span(g.first_seen, g.last_seen)
     if span:
         rows.append(("Seen", pal.white(span)))
+    rows += trend_rows(g, pal)
     rows += history_rows(g, pal)
     if g.services:
         services = ", ".join(f"{s} ({n:,})" for s, n in g.services.most_common(3))
@@ -322,6 +337,9 @@ def headline(summary: ErrorSummary, label: str, pal: Palette) -> str:
         parts.append(pal.gray(before))
     if summary.resolved:
         parts.append(pal.gray(f"{summary.resolved} gone since the window before"))
+    ratio = summary.traffic_ratio
+    if ratio is not None and abs(ratio - 1) >= TRAFFIC_NOTE:
+        parts.append(pal.gray(f"traffic {ratio:.1f}x"))
     return pal.gray(" · ").join(parts)
 
 
@@ -395,6 +413,16 @@ def incident_card(
     trace = ids.get(trace_field) or ids.get("trace_id")
     if trace:
         rows.append(("Example", pal.gray("logsite trace ") + pal.bold_yellow(trace)))
+    d = inc.diagnosis
+    if d is not None and d.strength == "unclear":
+        rows.append(("Likely", pal.gray("unclear: not enough evidence to rank a cause")))
+        rows.append(("", pal.gray("what was checked: logsite investigate --report")))
+    elif d is not None and d.hypotheses:
+        first, *rest = d.hypotheses
+        rows.append(("Likely", pal.white(first.title) + pal.gray(f"  · {d.strength} evidence")))
+        if rest:
+            rows.append(("Or", pal.white(rest[0].title)))
+        rows.append(("", pal.gray("why, and what to check next: logsite investigate --report")))
     for label, value in rows:
         lines.append(f"   {pal.gray(label.ljust(LABEL_WIDTH))}   {value}")
     return lines

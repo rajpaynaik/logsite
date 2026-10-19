@@ -72,6 +72,12 @@ class LogBackend(ABC):
         """
         return [r for r in self.query_logs(time_range, limit=limit) if is_error(r)]
 
+    def count_total(self, time_range: TimeRange) -> int | None:
+        """All log events in ``time_range`` (every level), counted server-side; None when
+        the backend can't count them cheaply. Used as the service's traffic, so error
+        spikes are measured as rates."""
+        return None
+
     def usage_by_line(
         self, sites: Iterable[LogSite], time_range: TimeRange, limit: int = 5000
     ) -> dict[str, Usage]:

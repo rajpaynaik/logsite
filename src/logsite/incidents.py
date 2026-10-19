@@ -31,6 +31,7 @@ class Incident:
     reasons: dict[str, str] = field(default_factory=dict)  # group id -> why it's linked
     deploy: tuple[str, datetime] | None = None  # the release just before it started
     suspects: list[Commit] = field(default_factory=list)
+    diagnosis: object | None = None  # diagnose.Diagnosis, once it's been explained
 
     @property
     def cause(self) -> ErrorGroup:
@@ -82,7 +83,7 @@ class _Links:
 
 def _active(g: ErrorGroup, cfg: LintConfig) -> bool:
     """New, or spiking: something that changed, as opposed to background errors."""
-    return g.is_new or (g.previous is not None and is_spike(g.count, g.previous, cfg))
+    return g.is_new or (g.baseline is not None and is_spike(g.count, g.baseline, cfg))
 
 
 def _cause_first(groups: list[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
@@ -190,4 +191,11 @@ def incident_json(inc: Incident) -> dict:
             {"sha": c.sha, "author": c.author, "date": c.date.isoformat(), "summary": c.summary}
             for c in inc.suspects
         ],
+        "diagnosis": _diagnosis_json(inc),
     }
+
+
+def _diagnosis_json(inc: Incident) -> dict | None:
+    from .diagnose import diagnosis_json
+
+    return diagnosis_json(inc.diagnosis) if inc.diagnosis is not None else None

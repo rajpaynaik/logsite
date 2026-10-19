@@ -188,6 +188,17 @@ class OpenSearchBackend(LogBackend):
         records = self.parse_response(self._search(body), self.timestamp_field, self.message_field)
         return [r for r in records if is_error(r)]
 
+    def count_total(self, time_range: TimeRange) -> int | None:
+        body = {"query": {"bool": {"filter": self._filters(time_range)}}}
+        req = urllib.request.Request(
+            f"{self.url}/{self.index}/_count",
+            data=json.dumps(body).encode(),
+            headers=self.headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            return int(json.load(resp).get("count", 0))
+
     def _search(self, body: dict[str, Any]) -> dict:
         req = urllib.request.Request(
             f"{self.url}/{self.index}/_search",

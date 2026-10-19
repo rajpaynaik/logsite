@@ -175,7 +175,7 @@ class LintConfig:
         return cfg
 
 
-def is_spike(current: int, previous: int, cfg: LintConfig) -> bool:
+def is_spike(current: int, previous: float, cfg: LintConfig) -> bool:
     """True if a line went from ``previous`` to ``current`` emits fast enough to flag."""
     return current >= cfg.spike_min_count and current >= cfg.spike_ratio * max(previous, 1)
 

@@ -494,8 +494,8 @@ def _gate(args: argparse.Namespace, summary, cfg: Config, label: str) -> int:
     """The CI gate: 1 when --fail-on-new / --fail-on-spike find what they look for."""
     new = [g for g in summary.groups if g.is_new] if args.fail_on_new else []
     spikes = (
-        [g for g in summary.groups if not g.is_new and g.previous is not None
-         and is_spike(g.count, g.previous, cfg.lint)]
+        [g for g in summary.groups if not g.is_new and g.baseline is not None
+         and is_spike(g.count, g.baseline, cfg.lint)]
         if args.fail_on_spike
         else []
     )  # fmt: skip
@@ -521,7 +521,7 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
     shown = summary.groups[: args.top]
 
     def spiking(g):
-        return g.previous is not None and is_spike(g.count, g.previous, cfg.lint)
+        return g.baseline is not None and is_spike(g.count, g.baseline, cfg.lint)
 
     print(report.headline(summary, label, pal))
     print()
@@ -556,6 +556,7 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
 def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
     from datetime import datetime
 
+    from .diagnose import diagnose, report_markdown
     from .incidents import add_context, find_incidents, incident_json
 
     summary, label, _ = _error_summary(args, cfg)
@@ -563,6 +564,15 @@ def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
     now = datetime.now(timezone.utc)
     for inc in incidents:
         add_context(inc, cfg.root, now)
+        inc.diagnosis = diagnose(inc, cfg.lint, summary.traffic_ratio)
+    if args.report:
+        text = report_markdown(incidents, summary, label, cfg.lint)
+        if args.output:
+            Path(args.output).write_text(text, encoding="utf-8")
+            print(f"report written to {args.output}", file=sys.stderr)
+        else:
+            sys.stdout.write(text)
+        return 0
     if args.format == "json":
         out = {
             "window": summary_json(summary)["window"],
@@ -579,7 +589,7 @@ def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
     width = report.terminal_width() if pal.enabled else 120
 
     def spiking(g):
-        return g.previous is not None and is_spike(g.count, g.previous, cfg.lint)
+        return g.baseline is not None and is_spike(g.count, g.baseline, cfg.lint)
 
     count = f"{len(incidents)} incident(s)" if incidents else "no incidents"
     print(
@@ -1286,6 +1296,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.add_argument("--no-history", action="store_true", help="don't read or update the history")
+    p.add_argument(
+        "--report", action="store_true", help="a Markdown report: ranked causes with evidence"
+    )
+    p.add_argument("-o", "--output", metavar="FILE", help="write the report to FILE")
     p.set_defaults(func=cmd_investigate)
 
     p = sub.add_parser(

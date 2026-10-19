@@ -90,6 +90,57 @@ says what changed just before:
 - `--format json` and the MCP tool `investigate` give an AI assistant the whole incident in one
   call, with an example trace id for `request_timeline`.
 
+### Rates, not counts
+
+Twice the errors at twice the traffic isn't a regression. logsite counts every log event of
+the service in both windows (server-side on Loki and OpenSearch; files too) and measures
+spikes against the window before **scaled to today's traffic**, so the CI gate, incidents
+and alerts don't fire on a busy day:
+
+```
+60 errors in the last 24h · 1 group(s) · before: 20, 3.0x · traffic 3.0x
+   Trend        3.0x errors at 3.0x traffic: the rate is 1.0x, it grew with traffic
+```
+
+`--format json` has `traffic_ratio` and `rate_ratio` per group. Traffic is the service's
+non-error log volume: a stand-in for requests, not a request count. CloudWatch and windows
+with fewer than 100 events fall back to counts.
+
+### Incident report: ranked causes with the evidence
+
+`logsite investigate --report` (or `-o report.md`) writes an incident report that someone
+can check: what happened, then the explanations ranked by evidence, each with what
+supports it, what speaks against it, what logsite can't see, and the cheapest next check.
+The candidates are a **change** (the release and the commits around the code that raised),
+**traffic** (same error rate, more requests) and a **dependency** (timeouts, refused
+connections: a call that failed elsewhere). It's deterministic: no model writes it.
+
+```markdown
+### Likely causes (strong evidence)
+
+**1. The change in v1.4: 0df4dac1 Lower carrier read timeout to 3s** (score 9)
+
+- For: v1.4 was deployed 4 min before the errors started
+- For: 0df4dac1 changed the lines around src/main/java/com/example/shipping/CarrierApiClient.java:58, where it's raised
+- For: the error wasn't there in the window before
+- For: it was fixed before (41bdce40) and came back: the change may undo that fix
+- **Next check:** read `git show 0df4dac1 -- src/main/java/com/example/shipping/CarrierApiClient.java`; revert it (or roll back) in staging and see whether the error stops
+
+**2. A dependency failing: SocketTimeoutException from the service requestLabel() calls** (score 2)
+
+- For: the root cause is SocketTimeoutException: a call to another service or database failed
+- For: it was thrown inside java.net, not by your code
+- Against: but a recent commit changed the code that makes the call
+- Unknown: logsite reads logs only: the latency and status of the service requestLabel() calls aren't in them
+- **Next check:** check the latency and error rate of the service requestLabel() calls since 02:52 UTC (its dashboard or status page); if it's slow for every caller, the change isn't the cause
+```
+
+Scores only rank the explanations; they aren't probabilities. When nothing stands out, the
+report says the evidence is unclear rather than picking one, and marks weak explanations
+"unlikely". The terminal card shows the lead (`Likely`, with how strong the evidence is),
+and `investigate --format json` and the MCP `investigate` tool include the whole
+`diagnosis`.
+
 ### CI gate
 
 ```bash

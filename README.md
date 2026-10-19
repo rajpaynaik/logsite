@@ -60,7 +60,10 @@ that fixed it, so the new suspect is easy to judge:
    Fixed by     41bdce40 2026-09-03 Maya: Retry carrier timeouts with backoff
 ```
 
-`logsite errors --since-deploy $TAG --fail-on-new` turns it into a CI gate that stops a bad release.
+`logsite investigate --report` ranks the explanations (the change, more traffic, a failing
+dependency) with the evidence for and against each, and the next check to tell them apart.
+Spikes are measured as rates, so a busy day isn't an incident. `logsite errors --since-deploy
+$TAG --fail-on-new` turns it into a CI gate that stops a bad release.
 
 ## Failing tests, for you and your AI assistant
 

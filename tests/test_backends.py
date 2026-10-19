@@ -298,3 +298,34 @@ def test_from_config_errors():
         from_config({"type": "splunk"})
     with pytest.raises(ValueError, match="'loki' needs 'url'"):
         from_config({"type": "loki"})
+
+
+def test_count_total_loki_and_opensearch_against_stub_servers(tmp_path):
+    def loki(path, body):
+        return {"data": {"resultType": "vector", "result": [{"metric": {}, "value": [1, "4321"]}]}}
+
+    with stub_server(loki) as (url, requests):
+        b = from_config({"type": "loki", "url": url, "selector": '{app="x"}'})
+        assert b.count_total(TimeRange.last(1)) == 4321
+    (req,) = requests
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(req[0]).query)["query"][0]
+    assert query == 'sum(count_over_time({app="x"} [3600s]))'
+
+    def opensearch(path, body):
+        return {"count": 987}
+
+    with stub_server(opensearch) as (url, requests):
+        b = from_config({"type": "opensearch", "url": url, "index": "logs-*"})
+        assert b.count_total(TimeRange.last(1)) == 987
+    assert urllib.parse.urlparse(requests[0][0]).path == "/logs-*/_count"
+
+
+def test_count_total_file(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    lines = [f"{(now - timedelta(minutes=m)):%Y-%m-%d %H:%M:%S} INFO ok" for m in range(10)]
+    lines += [f"{(now - timedelta(hours=5)):%Y-%m-%d %H:%M:%S} INFO old", "no time here"]
+    (tmp_path / "a.log").write_text("\n".join(lines) + "\n")
+    b = from_config({"type": "file", "path": str(tmp_path / "a.log")})
+    assert b.count_total(TimeRange.last(1)) == 10  # untimed lines don't count anywhere

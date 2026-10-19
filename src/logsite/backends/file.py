@@ -24,6 +24,19 @@ class FileBackend(LogBackend):
     def query_errors(self, time_range: TimeRange, limit: int = 5000) -> list[LogRecord]:
         return self._read(time_range, None, limit, errors_only=True)
 
+    def count_total(self, time_range: TimeRange) -> int | None:
+        n = 0
+        with self.path.open(encoding="utf-8", errors="replace") as fh:
+            for raw in join_multiline(fh):
+                if not raw.strip():
+                    continue
+                ts = parse_line(raw).timestamp
+                if ts is not None and ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                if ts is not None and time_range.start <= ts <= time_range.end:
+                    n += 1  # lines without a time would count in every window
+        return n
+
     def _read(
         self,
         time_range: TimeRange,

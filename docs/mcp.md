@@ -14,6 +14,7 @@ All tools are read-only:
 | Tool | What it answers |
 |------|-----------------|
 | `production_context` | Before changing `app/checkout.py:42`: which errors are raised, logged or pass through there (and did one come back after a fix?), what its log calls cost, the last commits, lint findings. |
+| `investigate` | What's the outage and what caused it? Incidents with their cause, the deploy and suspect commits, and a `diagnosis`: ranked explanations with evidence for and against, and the next check. |
 | `error_summary` | What's failing in production right now (or since release `v1.4.0`), grouped by cause, and where is it raised? |
 | `request_timeline` | What happened to request `4bf92f35…`, service by service, and where did it first go wrong? |
 | `compare_deploy` | What spiked or started erroring after release `v1.4.0`, and which commits in it are to blame? |

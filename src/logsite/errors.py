@@ -123,6 +123,7 @@ class ErrorGroup:
     trace_ids: set[str] = field(default_factory=set, repr=False)  # up to MAX_TRACE_IDS
     hourly: Counter[str] = field(default_factory=Counter, repr=False)  # "2026-10-17T19" -> n
     history: object | None = None  # history.GroupHistory, when a history store is in use
+    traffic_ratio: float | None = None  # the service's traffic vs the window before
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -144,6 +145,22 @@ class ErrorGroup:
     def trend(self) -> str | None:
         return None if self.previous is None else describe_trend(self.count, self.previous)
 
+    @property
+    def baseline(self) -> float | None:
+        """What the window before would predict at today's traffic: ``previous`` scaled by
+        the traffic ratio. Spikes are measured against it, so twice the errors at twice the
+        traffic isn't one."""
+        if self.previous is None:
+            return None
+        return self.previous * self.traffic_ratio if self.traffic_ratio else float(self.previous)
+
+    @property
+    def rate_ratio(self) -> float | None:
+        """The error rate now vs the window before (errors per log event of the service)."""
+        if not self.previous or not self.traffic_ratio:
+            return None
+        return self.count / (self.previous * self.traffic_ratio)
+
 
 @dataclass
 class ErrorSummary:
@@ -154,6 +171,19 @@ class ErrorSummary:
     previous_events: int | None
     truncated: bool  # the record limit was reached: counts are a lower bound
     resolved: int = 0  # groups seen in the previous window but not in this one
+    traffic: int | None = None  # log events that aren't errors: the service's activity
+    previous_traffic: int | None = None
+
+    @property
+    def traffic_ratio(self) -> float | None:
+        if self.traffic is None or not self.previous_traffic:
+            return None
+        if self.previous_traffic < MIN_TRAFFIC or self.traffic < MIN_TRAFFIC:
+            return None  # too little to compare
+        return self.traffic / self.previous_traffic
+
+
+MIN_TRAFFIC = 100  # log events per window below which traffic isn't compared
 
 
 def _fingerprint(info: ErrorInfo | None, record: LogRecord, site: LogSite | None, app) -> str:
@@ -330,7 +360,7 @@ def rank(groups: Iterable[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
     """New groups first, then spiking ones, then the biggest."""
 
     def key(g: ErrorGroup):
-        spiking = g.previous is not None and is_spike(g.count, g.previous, cfg)
+        spiking = g.baseline is not None and is_spike(g.count, g.baseline, cfg)
         # ties: a group with a stack trace explains more than a line of text
         return (0 if g.is_new else 1 if spiking else 2, -g.count, g.exc_type is None, g.title)
 
@@ -378,6 +408,7 @@ def summarize_errors(
     previous_events = None
     resolved = 0
     truncated = len(records) >= limit
+    traffic = previous_traffic = None
     if previous is not None:
         before_records = backend.query_errors(previous, limit=limit)
         before = group_errors(before_records, sites, app, leaks, sample_fields)
@@ -386,15 +417,33 @@ def summarize_errors(
         previous_events = len(before_records)
         resolved = len(before.keys() - groups.keys())
         truncated = truncated or len(before_records) >= limit
-    return ErrorSummary(
+        traffic = _activity(backend, window, len(records))
+        previous_traffic = _activity(backend, previous, previous_events)
+    summary = ErrorSummary(
         window=window,
         previous_window=previous,
-        groups=rank(groups.values(), cfg),
+        groups=[],
         events=len(records),
         previous_events=previous_events,
         truncated=truncated,
         resolved=resolved,
+        traffic=traffic,
+        previous_traffic=previous_traffic,
     )
+    for g in groups.values():
+        g.traffic_ratio = summary.traffic_ratio
+    summary.groups = rank(groups.values(), cfg)
+    return summary
+
+
+def _activity(backend: LogBackend, window: TimeRange, errors: int) -> int | None:
+    """Log events in ``window`` that aren't errors: a stand-in for the service's traffic
+    (requests log as they're handled). None when the backend can't count them."""
+    try:
+        total = backend.count_total(window)
+    except Exception:  # traffic is extra evidence; the summary works without it
+        return None
+    return None if total is None else max(total - errors, 0)
 
 
 def group_json(g: ErrorGroup) -> dict:
@@ -411,6 +460,8 @@ def group_json(g: ErrorGroup) -> dict:
         "count": g.count,
         "previous": g.previous,
         "trend": g.trend,
+        "traffic_ratio": round(g.traffic_ratio, 2) if g.traffic_ratio else None,
+        "rate_ratio": round(g.rate_ratio, 2) if g.rate_ratio is not None else None,
         "new": g.is_new,
         "first_seen": g.first_seen.isoformat() if g.first_seen else None,
         "last_seen": g.last_seen.isoformat() if g.last_seen else None,

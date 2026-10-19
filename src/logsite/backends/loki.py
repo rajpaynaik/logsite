@@ -107,6 +107,18 @@ class LokiBackend(LogBackend):
                 u.bytes += sizes.get(loc, 0)
         return usage
 
+    def count_total(self, time_range: TimeRange) -> int | None:
+        seconds = max(1, round((time_range.end - time_range.start).total_seconds()))
+        payload = self._get(
+            "query",
+            {
+                "query": f"sum(count_over_time({self.selector} [{seconds}s]))",
+                "time": str(int(time_range.end.timestamp() * 1e9)),
+            },
+        )
+        result = payload.get("data", {}).get("result", [])
+        return int(float(result[0]["value"][1])) if result else 0
+
     def _located(
         self, time_range: TimeRange, fn: str = "count_over_time"
     ) -> dict[tuple[str, int], int]:

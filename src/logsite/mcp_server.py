@@ -348,8 +348,11 @@ def build_server(cfg: Config) -> MCPServer:
         history.apply(cfg, summary.groups, window.start, window.end)
         incidents, ongoing = find_incidents(summary.groups, cfg.lint)
         now = datetime.now(timezone.utc)
+        from .diagnose import diagnose
+
         for inc in incidents:
             add_context(inc, cfg.root, now)
+            inc.diagnosis = diagnose(inc, cfg.lint, summary.traffic_ratio)
         from .errors import group_json
 
         return {
