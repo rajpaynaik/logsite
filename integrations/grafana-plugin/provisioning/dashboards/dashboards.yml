@@ -1,0 +1,10 @@
+apiVersion: 1
+
+# The dashboard the plugin ships with (src/dashboards/errors.json), opened from the plugin's
+# own directory.
+providers:
+  - name: 'logsite'
+    folder: ''
+    type: file
+    options:
+      path: /var/lib/grafana/plugins/rajpaynaik-logsite-datasource/dashboards

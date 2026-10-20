@@ -11,17 +11,45 @@
       "name": "Raj Paynaik",
       "url": "https://github.com/rajpaynaik"
     },
-    "keywords": ["errors", "logs", "loki", "opensearch", "elasticsearch", "cloudwatch", "incidents", "root cause", "stack traces"],
+    "keywords": [
+      "errors",
+      "logs",
+      "loki",
+      "opensearch",
+      "elasticsearch",
+      "cloudwatch",
+      "incidents",
+      "root cause",
+      "stack traces"
+    ],
     "logos": {
       "small": "img/logo.png",
       "large": "img/logo.png"
     },
     "links": [
-      { "name": "Website", "url": "https://github.com/rajpaynaik/logsite" },
-      { "name": "Documentation", "url": "https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md" },
-      { "name": "License", "url": "https://github.com/rajpaynaik/logsite/blob/main/LICENSE" }
+      {
+        "name": "Website",
+        "url": "https://github.com/rajpaynaik/logsite"
+      },
+      {
+        "name": "Documentation",
+        "url": "https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md"
+      },
+      {
+        "name": "License",
+        "url": "https://github.com/rajpaynaik/logsite/blob/main/LICENSE"
+      }
     ],
-    "screenshots": [],
+    "screenshots": [
+      {
+        "name": "The logsite errors dashboard",
+        "path": "img/dashboard.jpg"
+      },
+      {
+        "name": "Data source settings",
+        "path": "img/settings.jpg"
+      }
+    ],
     "version": "%VERSION%",
     "updated": "%TODAY%"
   },
@@ -29,10 +57,21 @@
     {
       "path": "logsite",
       "url": "{{ .JsonData.url }}",
-      "headers": [{ "name": "Authorization", "content": "Bearer {{ .SecureJsonData.token }}" }]
+      "headers": [
+        {
+          "name": "Authorization",
+          "content": "Bearer {{ .SecureJsonData.token }}"
+        }
+      ]
     }
   ],
-  "includes": [{ "type": "dashboard", "name": "logsite errors", "path": "dashboards/errors.json" }],
+  "includes": [
+    {
+      "type": "dashboard",
+      "name": "logsite errors",
+      "path": "dashboards/errors.json"
+    }
+  ],
   "dependencies": {
     "grafanaDependency": ">=13.2.0",
     "plugins": []

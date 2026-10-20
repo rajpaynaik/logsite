@@ -1,5 +1,25 @@
+# Try the plugin: `npm run build && docker compose up`, then open http://localhost:3000 and the
+# "logsite errors" dashboard. The logsite service makes demo errors (provisioning/demo).
 services:
   grafana:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
+    depends_on:
+      logsite:
+        condition: service_healthy
+
+  logsite:
+    image: python:3.13-slim
+    command: sh -c 'pip install --quiet --disable-pip-version-check "logsite>=0.3.2" && exec /entrypoint.sh'
+    environment:
+      LOGSITE_ALERT_TOKEN: review-token
+    volumes:
+      - ./provisioning/demo/make_demo.py:/make_demo.py:ro
+      - ./provisioning/demo/entrypoint.sh:/entrypoint.sh:ro
+    ports:
+      - 8085:8085
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8085/healthz")']
+      interval: 5s
+      retries: 60

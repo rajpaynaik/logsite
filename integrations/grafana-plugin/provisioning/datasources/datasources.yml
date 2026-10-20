@@ -1,16 +1,18 @@
 apiVersion: 1
 
-# For `npm run server`: logsite alert-server on the host, e.g.
-#   logsite alert-server --host 0.0.0.0 --token dev-token
+# The logsite server from docker-compose.yaml (demo errors). For your own project, run
+#   logsite alert-server --host 0.0.0.0 --token <token>
+# next to your code and point `url` at it.
 datasources:
   - name: 'logsite'
+    uid: 'logsite'
     type: 'rajpaynaik-logsite-datasource'
     access: proxy
-    isDefault: false
+    isDefault: true
     orgId: 1
     version: 1
     editable: true
     jsonData:
-      url: 'http://host.docker.internal:8085'
+      url: 'http://logsite:8085'
     secureJsonData:
-      token: 'dev-token'
+      token: 'review-token'

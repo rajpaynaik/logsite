@@ -2,10 +2,7 @@
   "title": "logsite errors",
   "uid": "logsite-plugin-errors",
   "description": "Production errors grouped by cause, the incidents they make up and the ranked explanations, from logsite.",
-  "tags": [
-    "logsite",
-    "errors"
-  ],
+  "tags": ["logsite", "errors"],
   "editable": true,
   "schemaVersion": 41,
   "time": {
@@ -152,9 +149,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },

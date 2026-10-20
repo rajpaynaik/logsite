@@ -69,3 +69,24 @@ jobs:
       - run: npm run lint
       - run: npm run test:ci
       - run: npm run build
+      - name: Package
+        run: |
+          id=rajpaynaik-logsite-datasource
+          cp -r dist "$id" && zip -qr "$id.zip" "$id" && rm -r "$id"
+      - name: Grafana's plugin validator (what the catalog review runs first)
+        run: >
+          docker run --rm -v "$PWD/rajpaynaik-logsite-datasource.zip:/archive.zip" -v "$PWD:/src"
+          grafana/plugin-validator-cli -sourceCodeUri file:///src /archive.zip
+      - name: The reviewers' test environment works (docker compose up)
+        run: |
+          docker compose up -d --build --wait
+          g=http://localhost:3000  # the dev image signs everyone in as admin
+          for i in $(seq 60); do curl -sf "$g/api/health" > /dev/null && break; sleep 2; done
+          for i in $(seq 30); do curl -sf "$g/api/dashboards/uid/logsite-plugin-errors" > /dev/null && break; sleep 2; done
+          curl -sf "$g/api/dashboards/uid/logsite-plugin-errors" > /dev/null
+          to=$(($(date +%s) * 1000)); from=$((to - 6 * 3600 * 1000))
+          curl -sf "$g/api/datasources/proxy/uid/logsite/logsite/errors?from=$from&to=$to" > errors.json
+          jq -e '.groups_total == 3 and (.incidents | length) == 1' errors.json
+          jq -r '.incidents[0].diagnosis.hypotheses[0].title' errors.json
+      - if: failure()
+        run: docker compose logs --tail 80

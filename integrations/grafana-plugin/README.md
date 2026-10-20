@@ -21,9 +21,13 @@ npm run typecheck && npm run lint
 Run it in Grafana with the plugin directory pointing at `dist/`:
 
 ```bash
-logsite alert-server --host 0.0.0.0 --token dev-token   # in a project with a logsite.toml
-npm run server         # Docker: Grafana on :3000 with the plugin and a provisioned data source
+npm run build && docker compose up   # Grafana on :3000, plus a logsite server with demo errors
 ```
+
+Open http://localhost:3000 and the **logsite errors** dashboard. The demo
+(`provisioning/demo/make_demo.py`) is a slow database query spreading through three services in
+the last 30 minutes; it's regenerated every hour. This is also the test environment for the
+Grafana catalog review, and CI checks that it works.
 
 Without Docker, set `plugins = <a directory>` with a link named
 `rajpaynaik-logsite-datasource` to `dist/`, and
