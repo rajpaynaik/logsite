@@ -74,9 +74,11 @@ jobs:
           id=rajpaynaik-logsite-datasource
           cp -r dist "$id" && zip -qr "$id.zip" "$id" && rm -r "$id"
       - name: Grafana's plugin validator (what the catalog review runs first)
-        run: >
-          docker run --rm -v "$PWD/rajpaynaik-logsite-datasource.zip:/archive.zip" -v "$PWD:/src"
-          grafana/plugin-validator-cli -sourceCodeUri file:///src /archive.zip
+        run: |
+          # the source as the reviewers get it from GitHub: no node_modules or build output
+          mkdir -p /tmp/source && git archive HEAD . | tar -x -C /tmp/source
+          docker run --rm -v "$PWD/rajpaynaik-logsite-datasource.zip:/archive.zip" -v /tmp/source:/src \
+            grafana/plugin-validator-cli -sourceCodeUri file:///src /archive.zip
       - name: The reviewers' test environment works (docker compose up)
         run: |
           docker compose up -d --build --wait

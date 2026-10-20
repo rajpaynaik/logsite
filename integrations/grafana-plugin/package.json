@@ -84,5 +84,8 @@
     "type": "git",
     "url": "https://github.com/rajpaynaik/logsite",
     "directory": "integrations/grafana-plugin"
+  },
+  "overrides": {
+    "basic-ftp": "^6.2.1"
   }
 }
