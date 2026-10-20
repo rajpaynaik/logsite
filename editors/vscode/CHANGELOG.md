@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- No extension changes; released with logsite 0.3.4, which adds the Grafana data source plugin.
+
 ## 0.3.3
 
 - The extension page now explains the error summaries: error groups on the line that raised them, and `logsite errors`, `investigate` and `--report` in the terminal.
