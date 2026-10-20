@@ -1,0 +1,16 @@
+apiVersion: 1
+
+# For `npm run server`: logsite alert-server on the host, e.g.
+#   logsite alert-server --host 0.0.0.0 --token dev-token
+datasources:
+  - name: 'logsite'
+    type: 'rajpaynaik-logsite-datasource'
+    access: proxy
+    isDefault: false
+    orgId: 1
+    version: 1
+    editable: true
+    jsonData:
+      url: 'http://host.docker.internal:8085'
+    secureJsonData:
+      token: 'dev-token'

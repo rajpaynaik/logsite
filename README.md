@@ -119,7 +119,8 @@ and `/logsite:log-cost`:
   line that raised an error marked with how often it did, and log-quality warnings as you type.
   [VS Code](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite), or any LSP editor with `logsite serve`.
 - **Cost per line of code**: which `logger.info(...)` calls make up your log bill. → [Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md)
-- **Grafana**: a generated dashboard of cost and errors per code line, with "back after a fix"
+- **Grafana**: a logsite data source under Connections (error groups, incidents, ranked
+  explanations), a generated dashboard of cost and errors per code line, with "back after a fix"
   markers on the graphs; the error summary in your alert notifications (Slack / webhook);
   Alloy rules that drop or sample noisy lines before they're shipped; one Docker container. → [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
 - **Lint for logging**: lost stack traces, failures logged at `info`, secrets and card numbers

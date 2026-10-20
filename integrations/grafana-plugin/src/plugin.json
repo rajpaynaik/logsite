@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "datasource",
+  "name": "logsite",
+  "id": "rajpaynaik-logsite-datasource",
+  "metrics": true,
+  "annotations": true,
+  "info": {
+    "description": "Production errors grouped by cause, mapped to the line of code that raised them, with the incident, the deploy, the suspect commit and the ranked explanations.",
+    "author": {
+      "name": "Raj Paynaik",
+      "url": "https://github.com/rajpaynaik"
+    },
+    "keywords": ["errors", "logs", "loki", "opensearch", "elasticsearch", "cloudwatch", "incidents", "root cause", "stack traces"],
+    "logos": {
+      "small": "img/logo.png",
+      "large": "img/logo.png"
+    },
+    "links": [
+      { "name": "Website", "url": "https://github.com/rajpaynaik/logsite" },
+      { "name": "Documentation", "url": "https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md" },
+      { "name": "License", "url": "https://github.com/rajpaynaik/logsite/blob/main/LICENSE" }
+    ],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "routes": [
+    {
+      "path": "logsite",
+      "url": "{{ .JsonData.url }}",
+      "headers": [{ "name": "Authorization", "content": "Bearer {{ .SecureJsonData.token }}" }]
+    }
+  ],
+  "includes": [{ "type": "dashboard", "name": "logsite errors", "path": "dashboards/errors.json" }],
+  "dependencies": {
+    "grafanaDependency": ">=13.2.0",
+    "plugins": []
+  }
+}

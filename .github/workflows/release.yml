@@ -42,6 +42,12 @@ jobs:
       - name: VS Code extension
         working-directory: editors/vscode
         run: npm ci && npx vsce package -o ../../dist/
+      - name: Grafana plugin (versioned on its own, in its package.json)
+        working-directory: integrations/grafana-plugin
+        run: |
+          npm ci && npm run build
+          id=rajpaynaik-logsite-datasource
+          mv dist "$id" && zip -qr "../../dist/$id-$(node -p "require('./package.json').version").zip" "$id"
       - uses: actions/upload-artifact@v7
         with:
           name: dist
@@ -60,7 +66,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - run: rm dist/*.vsix
+      - run: rm dist/*.vsix dist/*.zip
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   vscode:

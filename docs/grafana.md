@@ -106,6 +106,33 @@ selector_labels = ["service_name"]  # alert labels that narrow the Loki selector
 dedupe_minutes = 30                 # alerts with the same cause: one report, then one line each
 ```
 
+#### The logsite data source (Grafana plugin)
+
+The [logsite data source plugin](../integrations/grafana-plugin/) puts logsite under
+**Connections** in Grafana, like Loki: you set the alert-server's URL and token once, and
+panels pick what to show from a list. It replaces the Infinity setup below, and it comes with
+a **logsite errors** dashboard (the data source's **Dashboards** tab):
+
+- **Summary**: errors, groups, new groups and incidents, for stat panels
+- **Error groups**: the table below, with the code links and the history columns
+- **Incidents**: the cause first, the deploy, the suspect commit, the most likely
+  explanation and what to check first
+- **Ranked explanations**: each incident's explanations with the evidence for and against
+- **History events**: first seen / gone / came back, as annotations
+
+Grafana keeps the token on its server and adds it to each request; the browser never sees
+it. Until the plugin is in the Grafana catalog, install it from the release's
+`rajpaynaik-logsite-datasource-<version>.zip` into Grafana's plugins directory and allow it
+unsigned:
+
+```ini
+[plugins]
+allow_loading_unsigned_plugins = rajpaynaik-logsite-datasource
+```
+
+Grafana Cloud and other managed Grafana instances load only plugins signed by Grafana Labs,
+so there it needs the catalog version.
+
 #### The same summary on the dashboard
 
 `logsite grafana --error-groups http://<logsite host>:8085` adds an **Error groups** panel at

@@ -1,0 +1,317 @@
+{
+ "window": {
+  "start": "2020-01-01T00:00:00+00:00",
+  "end": "2026-10-20T01:52:42.719828+00:00"
+ },
+ "events": 180,
+ "previous_events": 0,
+ "groups_total": 3,
+ "resolved": 0,
+ "truncated": false,
+ "groups": [
+  {
+   "id": "dbd1a078",
+   "title": "httpx.ReadTimeout: timed out",
+   "type": "httpx.ReadTimeout",
+   "causes": [],
+   "root_cause": null,
+   "wrapped_in": [],
+   "example_trace": "7f3a0059c2",
+   "count": 60,
+   "previous": 0,
+   "trend": "new",
+   "traffic_ratio": null,
+   "severe": false,
+   "tenant": null,
+   "rate_ratio": null,
+   "new": true,
+   "first_seen": "2026-10-19T03:05:32.005000+00:00",
+   "last_seen": "2026-10-19T03:25:12.005000+00:00",
+   "raised_at": "checkout/inventory_client.py:18",
+   "raised_in": "stock",
+   "origin": "httpx",
+   "logged_at": null,
+   "logged_template": null,
+   "path": [
+    "views.place_order",
+    "inventory_client.stock",
+    "httpx"
+   ],
+   "services": {
+    "checkout-service": 60
+   },
+   "levels": {
+    "error": 60
+   },
+   "variants": 1,
+   "history": null,
+   "raised_url": null,
+   "raised_code": "resp = client.get(f'{INVENTORY}/stock/{sku}', timeout=2.0)",
+   "raised_name": "inventory_client.py:18",
+   "logged_url": null,
+   "logged_code": null,
+   "logged_name": null,
+   "trend_label": "new",
+   "history_label": null,
+   "first_seen_ever": null,
+   "fixed_before": null,
+   "title_short": "ReadTimeout: timed out",
+   "root_cause_short": null
+  },
+  {
+   "id": "f5110e22",
+   "title": "org.springframework.dao.QueryTimeoutException: PreparedStatementCallback; SQL [select qty from stock where sku = ?]; ERROR: canceling statement due to statement timeout",
+   "type": "org.springframework.dao.QueryTimeoutException",
+   "causes": [
+    "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout"
+   ],
+   "root_cause": "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout",
+   "wrapped_in": [],
+   "example_trace": "7f3a0059c2",
+   "count": 60,
+   "previous": 0,
+   "trend": "new",
+   "traffic_ratio": null,
+   "severe": false,
+   "tenant": null,
+   "rate_ratio": null,
+   "new": true,
+   "first_seen": "2026-10-19T03:05:38+00:00",
+   "last_seen": "2026-10-19T03:25:18+00:00",
+   "raised_at": "src/main/java/com/example/inventory/StockRepository.java:54",
+   "raised_in": "find",
+   "origin": "org.postgresql",
+   "logged_at": null,
+   "logged_template": null,
+   "path": [
+    "StockController.stock",
+    "StockRepository.find",
+    "org.postgresql"
+   ],
+   "services": {
+    "inventory-service": 60
+   },
+   "levels": {
+    "error": 60
+   },
+   "variants": 1,
+   "history": null,
+   "raised_url": null,
+   "raised_code": "return jdbc.query(STOCK_FOR_SKU, mapper, sku);",
+   "raised_name": "StockRepository.java:54",
+   "logged_url": null,
+   "logged_code": null,
+   "logged_name": null,
+   "trend_label": "new",
+   "history_label": null,
+   "first_seen_ever": null,
+   "fixed_before": null,
+   "title_short": "QueryTimeoutException: PreparedStatementCallback; SQL [select qty from stock where sku = ?]; ERROR: canceling statement due to statement timeout",
+   "root_cause_short": "PSQLException: ERROR: canceling statement due to statement timeout"
+  },
+  {
+   "id": "67839eae",
+   "title": "upstream failed",
+   "type": null,
+   "causes": [],
+   "root_cause": null,
+   "wrapped_in": [],
+   "example_trace": "7f3a0059c2",
+   "count": 60,
+   "previous": 0,
+   "trend": "new",
+   "traffic_ratio": null,
+   "severe": false,
+   "tenant": null,
+   "rate_ratio": null,
+   "new": true,
+   "first_seen": "2026-10-19T03:05:32.040000+00:00",
+   "last_seen": "2026-10-19T03:25:12.040000+00:00",
+   "raised_at": null,
+   "raised_in": null,
+   "origin": null,
+   "logged_at": "gateway/proxy.go:72",
+   "logged_template": "upstream failed",
+   "path": [],
+   "services": {
+    "gateway": 60
+   },
+   "levels": {
+    "error": 60
+   },
+   "variants": 1,
+   "history": null,
+   "raised_url": null,
+   "raised_code": null,
+   "raised_name": null,
+   "logged_url": null,
+   "logged_code": "log.Error(\"upstream failed\", zap.String(\"upstream\", \"checkout\"), zap.Int(\"status\", resp.StatusCode))",
+   "logged_name": "proxy.go:72",
+   "trend_label": "new",
+   "history_label": null,
+   "first_seen_ever": null,
+   "fixed_before": null,
+   "title_short": "upstream failed",
+   "root_cause_short": null
+  }
+ ],
+ "incidents": [
+  {
+   "started": "2026-10-19T03:05:32.005000+00:00",
+   "last_seen": "2026-10-19T03:25:18+00:00",
+   "events": 180,
+   "new": true,
+   "cause": {
+    "id": "f5110e22",
+    "title": "org.springframework.dao.QueryTimeoutException: PreparedStatementCallback; SQL [select qty from stock where sku = ?]; ERROR: canceling statement due to statement timeout",
+    "type": "org.springframework.dao.QueryTimeoutException",
+    "causes": [
+     "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout"
+    ],
+    "root_cause": "org.postgresql.util.PSQLException: ERROR: canceling statement due to statement timeout",
+    "wrapped_in": [],
+    "example_trace": "7f3a0059c2",
+    "count": 60,
+    "previous": 0,
+    "trend": "new",
+    "traffic_ratio": null,
+    "severe": false,
+    "tenant": null,
+    "rate_ratio": null,
+    "new": true,
+    "first_seen": "2026-10-19T03:05:38+00:00",
+    "last_seen": "2026-10-19T03:25:18+00:00",
+    "raised_at": "src/main/java/com/example/inventory/StockRepository.java:54",
+    "raised_in": "find",
+    "origin": "org.postgresql",
+    "logged_at": null,
+    "logged_template": null,
+    "path": [
+     "StockController.stock",
+     "StockRepository.find",
+     "org.postgresql"
+    ],
+    "services": {
+     "inventory-service": 60
+    },
+    "levels": {
+     "error": 60
+    },
+    "variants": 1,
+    "history": null
+   },
+   "effects": [
+    {
+     "id": "dbd1a078",
+     "title": "httpx.ReadTimeout: timed out",
+     "type": "httpx.ReadTimeout",
+     "causes": [],
+     "root_cause": null,
+     "wrapped_in": [],
+     "example_trace": "7f3a0059c2",
+     "count": 60,
+     "previous": 0,
+     "trend": "new",
+     "traffic_ratio": null,
+     "severe": false,
+     "tenant": null,
+     "rate_ratio": null,
+     "new": true,
+     "first_seen": "2026-10-19T03:05:32.005000+00:00",
+     "last_seen": "2026-10-19T03:25:12.005000+00:00",
+     "raised_at": "checkout/inventory_client.py:18",
+     "raised_in": "stock",
+     "origin": "httpx",
+     "logged_at": null,
+     "logged_template": null,
+     "path": [
+      "views.place_order",
+      "inventory_client.stock",
+      "httpx"
+     ],
+     "services": {
+      "checkout-service": 60
+     },
+     "levels": {
+      "error": 60
+     },
+     "variants": 1,
+     "history": null,
+     "linked_by": "same requests (60 shared trace id(s))"
+    },
+    {
+     "id": "67839eae",
+     "title": "upstream failed",
+     "type": null,
+     "causes": [],
+     "root_cause": null,
+     "wrapped_in": [],
+     "example_trace": "7f3a0059c2",
+     "count": 60,
+     "previous": 0,
+     "trend": "new",
+     "traffic_ratio": null,
+     "severe": false,
+     "tenant": null,
+     "rate_ratio": null,
+     "new": true,
+     "first_seen": "2026-10-19T03:05:32.040000+00:00",
+     "last_seen": "2026-10-19T03:25:12.040000+00:00",
+     "raised_at": null,
+     "raised_in": null,
+     "origin": null,
+     "logged_at": "gateway/proxy.go:72",
+     "logged_template": "upstream failed",
+     "path": [],
+     "services": {
+      "gateway": 60
+     },
+     "levels": {
+      "error": 60
+     },
+     "variants": 1,
+     "history": null,
+     "linked_by": "same requests (60 shared trace id(s))"
+    }
+   ],
+   "deploy": null,
+   "suspect_commits": [],
+   "diagnosis": {
+    "strength": "moderate",
+    "hypotheses": [
+     {
+      "cause": "dependency",
+      "title": "A dependency failing: PSQLException from the service find() calls",
+      "score": 4,
+      "supporting": [
+       "the root cause is PSQLException: a call to another service or database failed",
+       "it was thrown inside org.postgresql, not by your code",
+       "3 services failed at the same time"
+      ],
+      "against": [],
+      "unknown": [
+       "logsite reads logs only: the latency and status of the service find() calls aren't in them"
+      ],
+      "next_check": "check the latency and error rate of the service find() calls since 03:05 UTC (its dashboard or status page); if it's slow for every caller, the change isn't the cause"
+     }
+    ],
+    "unknown": [
+     "traffic before and after isn't known, so rates couldn't be compared",
+     "checkout-service, gateway logged errors before the cause did: callers time out before the call they wait on fails, so the timestamps' order isn't the order of events"
+    ],
+    "note": "scores rank the explanations by evidence; they aren't probabilities"
+   },
+   "related": [
+    {
+     "level": "warning",
+     "message": "slow query sku=bk-59 took 8012ms",
+     "trace_id": "7f3a0059c2",
+     "count": 3
+    }
+   ],
+   "shared_root_cause": null,
+   "impact": []
+  }
+ ],
+ "traffic_ratio": null
+}
