@@ -15,9 +15,17 @@ export const DEFAULT_QUERY: Partial<LogsiteQuery> = {
 };
 
 export const QUERY_TYPES: Array<{ value: QueryType; label: string; description: string }> = [
-  { value: 'summary', label: 'Summary', description: 'Errors, groups, new groups and incidents: one row, for stat panels' },
+  {
+    value: 'summary',
+    label: 'Summary',
+    description: 'Errors, groups, new groups and incidents: one row, for stat panels',
+  },
   { value: 'groups', label: 'Error groups', description: 'Production errors grouped by cause, new and spiking first' },
-  { value: 'incidents', label: 'Incidents', description: 'Linked groups with the cause first, the deploy and the suspect commit' },
+  {
+    value: 'incidents',
+    label: 'Incidents',
+    description: 'Linked groups with the cause first, the deploy and the suspect commit',
+  },
   {
     value: 'explanations',
     label: 'Ranked explanations',
@@ -45,7 +53,13 @@ export interface Commit {
   summary: string;
 }
 
-export interface Group {
+/**
+ * The JSON's `new` flag. Declared this way, not as a `new:` member, because Grafana's plugin
+ * validator (Semgrep) can't parse that; read it as `x['new']`.
+ */
+type IsNew = Record<'new', boolean>;
+
+export interface Group extends IsNew {
   id: string;
   title: string;
   title_short?: string;
@@ -56,7 +70,6 @@ export interface Group {
   previous: number;
   trend?: string | null;
   trend_label?: string;
-  new: boolean;
   severe?: boolean;
   first_seen?: string | null;
   last_seen?: string | null;
@@ -84,11 +97,10 @@ export interface Hypothesis {
   next_check?: string | null;
 }
 
-export interface Incident {
+export interface Incident extends IsNew {
   started?: string | null;
   last_seen?: string | null;
   events: number;
-  new: boolean;
   cause: Group;
   effects: Group[];
   deploy?: { ref: string; at: string } | null;

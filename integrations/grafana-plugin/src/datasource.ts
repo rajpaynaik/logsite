@@ -74,7 +74,9 @@ export class DataSource extends DataSourceApi<LogsiteQuery, LogsiteOptions> {
   /** `app=$app, namespace=prod` -> {app: "checkout", namespace: "prod"}; empty values mean all. */
   labels(text: string | undefined, scopedVars: ScopedVars): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const part of getTemplateSrv().replace(text ?? '', scopedVars).split(',')) {
+    for (const part of getTemplateSrv()
+      .replace(text ?? '', scopedVars)
+      .split(',')) {
       const [key, ...rest] = part.split('=');
       const value = rest.join('=').trim();
       if (key.trim() && value && value !== '$__all') {

@@ -20,13 +20,7 @@ export function QueryEditor({ query, onChange, onRunQuery }: Props) {
   return (
     <Stack gap={0} wrap="wrap">
       <InlineField label="Show" labelWidth={10}>
-        <Combobox
-          id="query-editor-type"
-          options={QUERY_TYPES}
-          value={type}
-          onChange={onTypeChange}
-          width={30}
-        />
+        <Combobox id="query-editor-type" options={QUERY_TYPES} value={type} onChange={onTypeChange} width={30} />
       </InlineField>
       {type !== 'history' && (
         <InlineField

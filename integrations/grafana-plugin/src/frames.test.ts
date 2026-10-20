@@ -65,7 +65,14 @@ describe('ranked explanations', () => {
 describe('history events', () => {
   it('makes annotation fields', () => {
     const frame = historyFrame('A', [
-      { time: 1760000000000, kind: 'came back', title: 'came back: x', text: 'was gone', tags: ['logsite'], group: 'ab' },
+      {
+        time: 1760000000000,
+        kind: 'came back',
+        title: 'came back: x',
+        text: 'was gone',
+        tags: ['logsite'],
+        group: 'ab',
+      },
     ]);
     expect(frame.fields.map((f) => f.name)).toEqual(['time', 'title', 'text', 'tags', 'kind', 'group']);
   });

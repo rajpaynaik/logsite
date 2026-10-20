@@ -26,7 +26,7 @@ export function summaryFrame(refId: string, r: ErrorsResponse): DataFrame {
       { name: 'Errors', type: FieldType.number, values: [r.events] },
       { name: 'Before', type: FieldType.number, values: [r.previous_events] },
       { name: 'Groups', type: FieldType.number, values: [r.groups_total] },
-      { name: 'New groups', type: FieldType.number, values: [r.groups.filter((g) => g.new).length] },
+      { name: 'New groups', type: FieldType.number, values: [r.groups.filter((g) => g['new']).length] },
       { name: 'Incidents', type: FieldType.number, values: [(r.incidents ?? []).length] },
     ],
   });
@@ -38,7 +38,11 @@ export function groupsFrame(refId: string, r: ErrorsResponse): DataFrame {
     refId,
     meta: { preferredVisualisationType: 'table' },
     fields: [
-      { name: 'Trend', type: FieldType.string, values: g.map((x) => x.trend_label ?? (x.new ? 'new' : x.trend ?? '')) },
+      {
+        name: 'Trend',
+        type: FieldType.string,
+        values: g.map((x) => x.trend_label ?? (x['new'] ? 'new' : (x.trend ?? ''))),
+      },
       { name: 'Count', type: FieldType.number, values: g.map((x) => x.count) },
       { name: 'Error', type: FieldType.string, values: g.map((x) => x.title_short || x.title) },
       { name: 'Root cause', type: FieldType.string, values: g.map((x) => x.root_cause_short ?? '') },
@@ -115,9 +119,7 @@ export function incidentsFrame(refId: string, r: ErrorsResponse): DataFrame {
 }
 
 export function explanationsFrame(refId: string, r: ErrorsResponse): DataFrame {
-  const rows = (r.incidents ?? []).flatMap((i, n) =>
-    (i.diagnosis?.hypotheses ?? []).map((h) => ({ n: n + 1, i, h }))
-  );
+  const rows = (r.incidents ?? []).flatMap((i, n) => (i.diagnosis?.hypotheses ?? []).map((h) => ({ n: n + 1, i, h })));
   const lines = (xs: string[]) => xs.map((x) => `• ${x}`).join('\n');
   return createDataFrame({
     refId,

@@ -67,13 +67,13 @@ datasources:
 
 ## Queries
 
-| Show | One row per |
-|---|---|
-| Summary | the time range: errors, before, groups, new groups, incidents (for stat panels) |
-| Error groups | error group, new and spiking first |
-| Incidents | incident, with the most likely explanation and what to check first |
-| Ranked explanations | explanation of each incident, with the evidence for and against |
-| History events | first seen / gone / came back (for annotations) |
+| Show                | One row per                                                                     |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Summary             | the time range: errors, before, groups, new groups, incidents (for stat panels) |
+| Error groups        | error group, new and spiking first                                              |
+| Incidents           | incident, with the most likely explanation and what to check first              |
+| Ranked explanations | explanation of each incident, with the evidence for and against                 |
+| History events      | first seen / gone / came back (for annotations)                                 |
 
 **Labels** narrows the Loki selector, like an alert's labels do: `app=$app, namespace=prod`.
 The keys must be listed in `[alerts] selector_labels` in `logsite.toml`.
