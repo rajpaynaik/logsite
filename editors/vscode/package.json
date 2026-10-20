@@ -1,8 +1,8 @@
 {
   "name": "logsite",
   "displayName": "logsite",
-  "description": "See how often each log line fires in production, what it costs, and catch bad logging, right next to the log call. Python, Java and Go.",
-  "version": "0.3.2",
+  "description": "Production errors grouped by cause and marked on the line that raised them, log volume and cost per log call, and logging lint. Python, Java and Go.",
+  "version": "0.3.3",
   "preview": true,
   "publisher": "rajpaynaik",
   "license": "MIT",

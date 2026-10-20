@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- The extension page now explains the error summaries: error groups on the line that raised them, and `logsite errors`, `investigate` and `--report` in the terminal.
+
 ## 0.3.2
 
 - Stack traces from more runtimes (Node.js, Go fatal errors) and wrapped Java messages are read in production logs.
