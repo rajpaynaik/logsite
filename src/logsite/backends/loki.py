@@ -13,14 +13,20 @@ import json
 import urllib.parse
 import urllib.request
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ..matching import Matcher
 from ..models import LogRecord, LogSite, Usage
-from ..tracebacks import is_error
+from ..tracebacks import is_error, is_trace_piece, join_multiline
 from .base import LogBackend, TimeRange, measure, parse_line, tally
 
 ERROR_FILTER = "(?i)(error|exception|traceback|critical|fatal)"
+# Stack traces the shipper split into one entry per line are joined back from the lines around
+# each error, read again without the filter: this much before and after, in at most this
+# many extra queries (else the errors stay as they are, and `logsite errors` says why).
+STITCH_BEFORE = timedelta(seconds=1)
+STITCH_AFTER = timedelta(seconds=5)
+MAX_STITCH_QUERIES = 20
 
 
 class LokiBackend(LogBackend):
@@ -169,10 +175,68 @@ class LokiBackend(LogBackend):
 
     def query_errors(self, time_range: TimeRange, limit: int = 5000) -> list[LogRecord]:
         """A case-insensitive line filter narrows to likely errors server-side; levels and
-        tracebacks are then checked client-side."""
-        query = f"{self.selector} |~ {json.dumps(ERROR_FILTER)}"
-        records = self.query_logs(time_range, limit=limit, query=query)
+        tracebacks are then checked client-side. Stack traces that arrive one line per entry
+        are joined back together first (:meth:`_stitch`)."""
+        params = self._range_params(
+            time_range, limit, f"{self.selector} |~ {json.dumps(ERROR_FILTER)}"
+        )
+        payload = self._get("query_range", params)
+        records = self.parse_response(payload)
+        if any(is_trace_piece(r.message) for r in records):
+            stitched = self._stitch(payload, time_range, limit)
+            if stitched is not None:
+                records = stitched
         return [r for r in records if is_error(r)]
+
+    def _range_params(self, time_range: TimeRange, limit: int, query: str, direction="backward"):
+        return {
+            "query": query,
+            "start": str(int(time_range.start.timestamp() * 1e9)),
+            "end": str(int(time_range.end.timestamp() * 1e9)),
+            "limit": str(limit),
+            "direction": direction,
+        }
+
+    def _stitch(self, payload: dict, time_range: TimeRange, limit: int) -> list[LogRecord] | None:
+        """Read every line around the errors of each stream, in order, and join each stack
+        trace into one record, as the file backend does. None when it would take more than
+        ``MAX_STITCH_QUERIES`` queries."""
+        plans = []  # (labels, window)
+        for stream in payload.get("data", {}).get("result", []):
+            labels = stream.get("stream", {})
+            times = sorted(int(ts) for ts, _ in stream.get("values", []))
+            windows: list[list[int]] = []
+            for t in times:
+                start = t - int(STITCH_BEFORE.total_seconds() * 1e9)
+                end = t + int(STITCH_AFTER.total_seconds() * 1e9)
+                if windows and start <= windows[-1][1]:
+                    windows[-1][1] = max(windows[-1][1], end)
+                else:
+                    windows.append([start, end])
+            plans += [(labels, w) for w in windows]
+        if not plans or len(plans) > MAX_STITCH_QUERIES:
+            return None
+        records: list[LogRecord] = []
+        for labels, (start, end) in plans:
+            selector = (
+                "{" + ",".join(f"{k}={json.dumps(v)}" for k, v in sorted(labels.items())) + "}"
+            )
+            window = TimeRange(
+                max(time_range.start, datetime.fromtimestamp(start / 1e9, tz=timezone.utc)),
+                min(time_range.end, datetime.fromtimestamp(end / 1e9, tz=timezone.utc)),
+            )
+            result = self._get(
+                "query_range", self._range_params(window, limit, selector, "forward")
+            )
+            lines = [
+                (int(ts), line)
+                for s in result.get("data", {}).get("result", [])
+                if s.get("stream", {}) == labels  # not a stream with more labels
+                for ts, line in s.get("values", [])
+            ]
+            lines.sort(key=lambda x: x[0])  # stable: same-time lines keep Loki's order
+            records += _joined(lines, labels)
+        return records
 
     @staticmethod
     def parse_response(payload: dict) -> list[LogRecord]:
@@ -185,3 +249,17 @@ class LokiBackend(LogBackend):
                 record.fields = {**labels, **record.fields}
                 records.append(record)
         return records
+
+
+def _joined(lines: list[tuple[int, str]], labels: dict) -> list[LogRecord]:
+    """``(ns, line)`` pairs in order -> one record per event, timed by its first line."""
+    out: list[LogRecord] = []
+    pending = [(ts, line) for ts, line in lines if line.strip()]
+    i = 0
+    for event in join_multiline(line for _, line in pending):
+        ts = datetime.fromtimestamp(pending[i][0] / 1e9, tz=timezone.utc)
+        i += event.count("\n") + 1
+        record = parse_line(event, timestamp=ts)
+        record.fields = {**labels, **record.fields}
+        out.append(record)
+    return out

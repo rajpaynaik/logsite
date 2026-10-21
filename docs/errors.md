@@ -58,9 +58,14 @@ filter pattern), so `--limit` isn't used up by `info` lines.
 ### Stack traces split into lines (Loki)
 
 A Java, Python or Node stack trace is many lines. If the log shipper sends each line as its
-own Loki entry, logsite sees the `ERROR` line without its exception: errors are grouped by
-message, with no root cause and no "raised at", and pieces like `Caused by: …` show up as
-errors of their own. `logsite errors` says so:
+own Loki entry, the error query sees the `ERROR` line without its exception, and pieces like
+`Caused by: …` look like errors of their own.
+
+logsite joins them back: when the errors it reads from Loki include pieces of a trace, it
+reads every line of the same stream for a few seconds around each error (1 s before, 5 s
+after), in order, and joins each trace into one event, as it does for a log file. That takes
+one extra query per burst of errors per stream, up to 20; beyond that, errors stay as they
+arrived and `logsite errors` says why:
 
 ```
 note: 20 record(s) are single lines of a stack trace, so the log shipper sends each line
@@ -81,9 +86,12 @@ klog header or a Go panic starts a record, and every other line (`at …`, `Caus
 500 lines per record. Reading `/var/log/pods` files directly? Put `stage.cri {}` before it.
 A different first line: `multiline_firstline` in `[pipeline]` (RE2).
 
-Checked with Alloy and Loki on 20 Spring errors with 8-line traces: shipped line by line,
-logsite found 3 groups and no root cause; through `--multiline`, 1 group with
-`PSQLException` as the root cause, raised at `StockRepository.java:54`.
+Joining at the shipper is still better: Grafana's own log views and alerts see whole
+events too, and logsite needs no extra queries.
+
+Checked with Alloy and Loki on 20 Spring errors with 8-line traces, shipped line by line:
+without joining, 3 groups and no root cause; joined by logsite or by `--multiline`, 1 group
+with `PSQLException` as the root cause, raised at `StockRepository.java:54`.
 
 In the editor, the line that raised an error gets a code lens
 (`TimeoutError 3k (new) in 24h`) and a hover with the groups; the log call that logged it

@@ -1,7 +1,9 @@
 import json
+import re
 import threading
 import urllib.parse
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -329,3 +331,58 @@ def test_count_total_file(tmp_path):
     (tmp_path / "a.log").write_text("\n".join(lines) + "\n")
     b = from_config({"type": "file", "path": str(tmp_path / "a.log")})
     assert b.count_total(TimeRange.last(1)) == 10  # untimed lines don't count anywhere
+
+
+def _split_loki(monkeypatch):
+    """A Loki that stores a Java trace one line per entry; records the queries it gets."""
+    from logsite.backends import loki as lk
+
+    t0 = 1_760_000_000 * 10**9
+    trace = [
+        "2026-10-18 14:22:31.812 INFO  [stock] c.e.s.StockController - lookup sku=bk-1",
+        "2026-10-18 14:22:31.813 ERROR [stock] c.e.s.StockController - stock lookup failed",
+        "org.springframework.dao.QueryTimeoutException: statement timeout",
+        "\tat com.example.stock.StockRepository.find(StockRepository.java:54)",
+        "Caused by: org.postgresql.util.PSQLException: ERROR: canceling statement",
+        "\tat org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:27)",
+        "2026-10-18 14:22:32.100 INFO  [stock] c.e.s.StockController - lookup sku=bk-2",
+    ]
+    entries = [(str(t0 + i), line) for i, line in enumerate(trace)]
+    labels = {"app": "stock", "pod": "stock-1"}
+    queries = []
+
+    def get(self, endpoint, params):
+        queries.append(params["query"])
+        if "|~" in params["query"]:  # the error filter: frame lines don't match it
+            hit = [(ts, line) for ts, line in entries if re.search(lk.ERROR_FILTER, line)]
+            return {"data": {"result": [{"stream": labels, "values": hit[::-1]}]}}
+        other = {"stream": {**labels, "container": "sidecar"}, "values": [(str(t0), "noise")]}
+        return {"data": {"result": [{"stream": labels, "values": entries}, other]}}
+
+    monkeypatch.setattr(lk.LokiBackend, "_get", get)
+    return lk, queries, t0
+
+
+def test_loki_joins_stack_traces_split_into_entries(monkeypatch):
+    lk, queries, t0 = _split_loki(monkeypatch)
+    b = lk.LokiBackend("http://loki", '{app="stock"}')
+    window = TimeRange.last(1)
+    records = b.query_errors(TimeRange(window.start.replace(year=2025), window.end))
+    assert len(records) == 1  # one error, its trace joined; INFO lines and the sidecar dropped
+    r = records[0]
+    assert "Caused by: org.postgresql.util.PSQLException" in r.message
+    assert "StockRepository.java:54" in r.message
+    assert r.timestamp == datetime.fromtimestamp((t0 + 1) / 1e9, tz=timezone.utc)
+    assert r.fields["pod"] == "stock-1"
+    assert queries[1] == '{app="stock",pod="stock-1"}'  # the stream itself, unfiltered
+
+
+def test_loki_keeps_split_errors_when_joining_takes_too_many_queries(monkeypatch):
+    lk, queries, _ = _split_loki(monkeypatch)
+    monkeypatch.setattr(lk, "MAX_STITCH_QUERIES", 0)
+    b = lk.LokiBackend("http://loki", '{app="stock"}')
+    window = TimeRange.last(1)
+    records = b.query_errors(TimeRange(window.start.replace(year=2025), window.end))
+    # as before: the ERROR line and a "Caused by:" piece, on their own; `errors` warns
+    assert len(queries) == 1 and len(records) == 2
+    assert any(r.message.startswith("Caused by:") for r in records)

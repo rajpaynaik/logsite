@@ -26,7 +26,7 @@ from .lint import LintConfig, describe_trend, is_spike
 from .matching import Matcher
 from .models import LogRecord, LogSite, parse_iso
 from .timeline import SERVICE_FIELDS
-from .tracebacks import ErrorInfo, Frame, extract_error, level_of
+from .tracebacks import ErrorInfo, Frame, extract_error, is_trace_piece, level_of
 
 ID_FIELDS = ("trace_id", "request_id", "span_id")
 MAX_TRACE_IDS = 500  # per group, to link groups that the same requests ran into
@@ -478,11 +478,6 @@ def error_window(
     return TimeRange(deploy.at, end), f"since {deploy.ref} ({deploy.at:%Y-%m-%d %H:%M} UTC)"
 
 
-# A record that is only one line of a stack trace ("Caused by: …", "\tat com.x.Y(Y.java:3)",
-# '  File "a.py", line 3'): the log shipper sent each line as its own entry.
-_TRACE_PIECE = re.compile(r"\s*(Caused by: |at [\w$.<>/]+\(|File \"[^\"]+\", line \d+)")
-
-
 def summarize_errors(
     backend: LogBackend,
     sites: Iterable[LogSite],
@@ -516,7 +511,7 @@ def summarize_errors(
         window=window,
         previous_window=previous,
         groups=[],
-        split_traces=sum(1 for r in records if _TRACE_PIECE.match(r.message)),
+        split_traces=sum(1 for r in records if is_trace_piece(r.message)),
         events=len(records),
         previous_events=previous_events,
         truncated=truncated,

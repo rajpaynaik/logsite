@@ -421,6 +421,15 @@ def is_error(record: LogRecord) -> bool:
     return extract_error(record, fields) is not None
 
 
+# A record that is only one line of a stack trace ("Caused by: …", "\tat com.x.Y(Y.java:3)",
+# '  File "a.py", line 3'): the log shipper sent each line as its own entry.
+_TRACE_PIECE = re.compile(r"\s*(Caused by: |at [\w$.<>/]+\(|File \"[^\"]+\", line \d+)")
+
+
+def is_trace_piece(message: str) -> bool:
+    return bool(_TRACE_PIECE.match(message))
+
+
 def join_multiline(lines: Iterable[str]) -> Iterator[str]:
     """Join plain-text tracebacks that span several lines back into one event each.
 
