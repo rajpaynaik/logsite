@@ -447,3 +447,27 @@ def test_plain_text_errors_from_loki_carry_stream_labels():
     record = LogRecord(None, "2026-10-17 12:00:01 ERROR [svc] c.a.S : Retry failed", {"app": "x"})
     assert is_error(record)
     assert not is_error(LogRecord(None, "2026-10-17 12:00:01 INFO retry ok", {"app": "x"}))
+
+
+def test_split_stack_traces_are_noticed(tmp_path, monkeypatch, capsys):
+    """A shipper that sends each line of a trace separately: errors still show, with a note
+    on how to join them."""
+    from logsite.cli import main as cli
+
+    lines = [
+        {"ts": "2026-10-18T14:22:31Z", "level": "error", "msg": "stock lookup failed"},
+        {"ts": "2026-10-18T14:22:31Z", "level": "error",
+         "msg": "Caused by: org.postgresql.util.PSQLException: ERROR: deadlock detected"},
+        {"ts": "2026-10-18T14:22:31Z", "level": "error",
+         "msg": "\tat com.example.stock.StockRepository.find(StockRepository.java:54)"},
+    ]  # fmt: skip
+    (tmp_path / "app.log").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    (tmp_path / "logsite.toml").write_text(
+        '[backend]\ntype = "file"\npath = "app.log"\n[history]\nenabled = false\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    cli(["errors", "--hours", "100000", "--format", "json"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["split_traces"] == 2
+    cli(["errors", "--hours", "100000"])
+    assert "logsite pipeline --multiline" in capsys.readouterr().err

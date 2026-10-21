@@ -27,6 +27,15 @@ ELIGIBLE = {"trace", "debug", "info", "notice", "success"}
 ERROR_GUARD = "(?i)(error|exception|traceback|critical|fatal)"
 MIN_TEMPLATE_TEXT = 8  # fixed characters a template needs to be matched safely
 MATCH_MODES = ("auto", "location", "template")
+# Where a new record starts, for joining stack traces (RE2): a timestamp (2026-10-18 14:22:31,
+# 2026-10-18T…, [2026-…], Oct 18 14:22:31, 14:22:31), a JSON object, logfmt time= / level=,
+# a klog header (E1018 …), or a Go panic. Every other line ("\tat …", "Caused by: …",
+# "Traceback …", "... 12 more", a wrapped message) continues the record above it.
+MULTILINE_FIRSTLINE = (
+    r"^(\[?\d{4}-\d{2}-\d{2}[T ]|\{|[A-Z][a-z]{2} +\d{1,2} \d{2}:\d{2}:\d{2}|\d{2}:\d{2}:\d{2}"
+    r"|(time|ts|level)=|[IWEF]\d{4} |panic: |fatal error: )"
+)
+MULTILINE_MAX_LINES = 500  # Alloy's default is 128: shorter than many Java traces
 FORMATS = ("json", "logfmt")
 
 
@@ -42,6 +51,8 @@ class PipelineConfig:
     line_field: str | None = None  # default: the Loki backend's line_label, else "lineno"
     selector: str | None = None  # stream selector for template rules (default: the backend's)
     forward_to: str = "loki.write.default.receiver"
+    multiline: bool = False  # join stack traces into one entry before shipping
+    multiline_firstline: str | None = None  # RE2 for where a record starts (MULTILINE_FIRSTLINE)
 
     @classmethod
     def from_dict(cls, data: Mapping) -> PipelineConfig:
@@ -231,13 +242,13 @@ def to_alloy(
 ) -> str:
     """A ``loki.process`` component applying the plan. ``match`` is ``location`` (by the
     file and line fields each record carries) or ``template`` (by the message text)."""
-    if match == "template" and not selector:
+    if match == "template" and not selector and plan.rules:
         raise ValueError("template rules need a stream selector: set [pipeline] selector")
     out = [
         "// logsite pipeline rules: drop or sample chosen log calls before they're shipped.",
         f"// {generated_by}",
     ]
-    total = f"// {len(plan.rules)} rule(s)"
+    total = f"// {len(plan.rules)} rule(s)" + (", stack traces joined" if cfg.multiline else "")
     if plan.saved_bytes_per_month:
         total += f", saving about {format_bytes(plan.saved_bytes_per_month)}/month"
         if cost.priced:
@@ -250,6 +261,18 @@ def to_alloy(
         'loki.process "logsite" {',
         f"  forward_to = [{cfg.forward_to}]",
     ]
+    if cfg.multiline:
+        out += [
+            "",
+            "  // One entry per record: a stack trace's lines (at …, Caused by: …, Traceback …)",
+            "  // join the line that logged it, so Loki and logsite see the whole exception.",
+            "  // Reading /var/log/pods files directly? Put stage.cri {} before this.",
+            "  stage.multiline {",
+            f"    firstline     = {_str(cfg.multiline_firstline or MULTILINE_FIRSTLINE)}",
+            f"    max_lines     = {MULTILINE_MAX_LINES}",
+            '    max_wait_time = "3s"',
+            "  }",
+        ]
     if match == "location" and plan.rules:
         stage = "stage.json" if format == "json" else "stage.logfmt"
         key = "expressions" if format == "json" else "mapping"

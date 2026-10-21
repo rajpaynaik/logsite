@@ -200,6 +200,7 @@ class ErrorSummary:
     resolved: int = 0  # groups seen in the previous window but not in this one
     traffic: int | None = None  # log events that aren't errors: the service's activity
     previous_traffic: int | None = None
+    split_traces: int = 0  # records that are a piece of a stack trace: the shipper split them
 
     @property
     def traffic_ratio(self) -> float | None:
@@ -477,6 +478,11 @@ def error_window(
     return TimeRange(deploy.at, end), f"since {deploy.ref} ({deploy.at:%Y-%m-%d %H:%M} UTC)"
 
 
+# A record that is only one line of a stack trace ("Caused by: …", "\tat com.x.Y(Y.java:3)",
+# '  File "a.py", line 3'): the log shipper sent each line as its own entry.
+_TRACE_PIECE = re.compile(r"\s*(Caused by: |at [\w$.<>/]+\(|File \"[^\"]+\", line \d+)")
+
+
 def summarize_errors(
     backend: LogBackend,
     sites: Iterable[LogSite],
@@ -510,6 +516,7 @@ def summarize_errors(
         window=window,
         previous_window=previous,
         groups=[],
+        split_traces=sum(1 for r in records if _TRACE_PIECE.match(r.message)),
         events=len(records),
         previous_events=previous_events,
         truncated=truncated,
@@ -590,5 +597,6 @@ def summary_json(s: ErrorSummary, top: int | None = None) -> dict:
         "groups_total": len(s.groups),
         "resolved": s.resolved,
         "truncated": s.truncated,
+        "split_traces": s.split_traces,
         "groups": [group_json(g) for g in s.groups[:top]],
     }

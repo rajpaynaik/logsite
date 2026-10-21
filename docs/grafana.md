@@ -242,12 +242,16 @@ volume and priced like `logsite cost`:
 Checked against Alloy 1.20 and Loki: of 2,530 lines, the noisy line was kept at 1 in 10, the
 debug line dropped, and all 30 error lines kept.
 
+`--multiline` also joins each stack trace into one entry before the rules run, so Loki
+(and logsite) see whole exceptions: see [stack traces split into lines](errors.md#stack-traces-split-into-lines-loki).
+
 ```toml
 [pipeline]
 drop = ["app/health.py:12"]
 sample = { "app/api.py:88" = 0.01 }   # keep 1 in 100
 max_per_window = 100000
 drop_levels = ["debug"]
+multiline = true                    # join stack traces into one entry (--multiline)
 # match = "auto"                    # location | template
 # selector = '{app="checkout"}'     # template rules: the stream as Alloy sees it
 # forward_to = "loki.write.default.receiver"

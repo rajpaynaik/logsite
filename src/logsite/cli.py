@@ -550,7 +550,18 @@ def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
             "(raise --limit)",
             file=sys.stderr,
         )
+    _warn_split(summary)
     return _gate(args, summary, cfg, label)
+
+
+def _warn_split(summary) -> None:
+    if summary.split_traces:
+        print(
+            f"note: {summary.split_traces:,} record(s) are single lines of a stack trace, so "
+            "the log shipper sends each line separately and errors lose their exception "
+            "chain. Join them before shipping: logsite pipeline --multiline (docs/errors.md)",
+            file=sys.stderr,
+        )
 
 
 def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
@@ -560,6 +571,7 @@ def cmd_investigate(args: argparse.Namespace, cfg: Config) -> int:
     from .incidents import add_context, find_incidents, incident_json
 
     summary, label, _ = _error_summary(args, cfg)
+    _warn_split(summary)
     incidents, ongoing = find_incidents(summary.groups, cfg.lint, args.link_minutes)
     now = datetime.now(timezone.utc)
     backend = _backend_or_exit(cfg)
@@ -686,6 +698,8 @@ def cmd_pipeline(args: argparse.Namespace, cfg: Config) -> int:
         pcfg.drop_levels = [x.lower() for x in args.drop_level]
     if args.match:
         pcfg.match = args.match
+    if args.multiline:
+        pcfg.multiline = True
     backend = _backend_or_exit(cfg)
     sites = _sites(cfg, None)
     hours = args.hours or cfg.window_hours
@@ -730,9 +744,13 @@ def cmd_pipeline(args: argparse.Namespace, cfg: Config) -> int:
         print(f"  {keep:<12} {r.site.id:<40} {saved:>22}  ({r.reason})", file=sys.stderr)
     for sid, why in plan.skipped:
         print(f"  skipped      {sid:<40} {why}", file=sys.stderr)
-    if not plan.rules:
+    if not plan.rules and pcfg.multiline:
+        where = f", written to {args.output}" if args.output else ""
+        print(f"joins stack traces only, no drop or sample rules{where}", file=sys.stderr)
+    elif not plan.rules:
         print(
-            "no rules: add [pipeline] drop / sample, or pass --max-per-window / --drop-level",
+            "no rules: add [pipeline] drop / sample, pass --max-per-window / --drop-level, "
+            "or --multiline to join stack traces",
             file=sys.stderr,
         )
     else:
@@ -1265,6 +1283,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-per-window", type=int, help="sample lines above this down to it")
     p.add_argument("--drop-level", action="append", metavar="LEVEL", help="drop lines at LEVEL")
     p.add_argument("--match", choices=["auto", "location", "template"])
+    p.add_argument(
+        "--multiline", action="store_true", help="also join stack traces into one entry each"
+    )
     p.add_argument("--format", choices=["alloy", "json"], default="alloy")
     p.add_argument("-o", "--output", metavar="FILE")
     p.set_defaults(func=cmd_pipeline)

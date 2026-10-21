@@ -55,6 +55,36 @@ OpenTelemetry `exception.stacktrace`, loguru's `serialize=True` output, structlo
 backend asks for errors only (a LogQL line filter, an OpenSearch query, a CloudWatch
 filter pattern), so `--limit` isn't used up by `info` lines.
 
+### Stack traces split into lines (Loki)
+
+A Java, Python or Node stack trace is many lines. If the log shipper sends each line as its
+own Loki entry, logsite sees the `ERROR` line without its exception: errors are grouped by
+message, with no root cause and no "raised at", and pieces like `Caused by: …` show up as
+errors of their own. `logsite errors` says so:
+
+```
+note: 20 record(s) are single lines of a stack trace, so the log shipper sends each line
+separately and errors lose their exception chain. Join them before shipping: logsite
+pipeline --multiline (docs/errors.md)
+```
+
+Join them where they're shipped, so every tool reading Loki gets whole events:
+
+```bash
+logsite pipeline --multiline -o logsite.alloy
+```
+
+adds a `stage.multiline` block to the Alloy rules (on its own, if you have no drop or
+sample rules): a line that starts with a timestamp, a JSON object, `level=` / `time=`, a
+klog header or a Go panic starts a record, and every other line (`at …`, `Caused by: …`,
+`Traceback …`, `... 12 more`, a wrapped message) belongs to the one above. It handles up to
+500 lines per record. Reading `/var/log/pods` files directly? Put `stage.cri {}` before it.
+A different first line: `multiline_firstline` in `[pipeline]` (RE2).
+
+Checked with Alloy and Loki on 20 Spring errors with 8-line traces: shipped line by line,
+logsite found 3 groups and no root cause; through `--multiline`, 1 group with
+`PSQLException` as the root cause, raised at `StockRepository.java:54`.
+
 In the editor, the line that raised an error gets a code lens
 (`TimeoutError 3k (new) in 24h`) and a hover with the groups; the log call that logged it
 lists them too. The MCP tool `error_summary` gives an AI assistant the same groups, with

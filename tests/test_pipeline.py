@@ -11,6 +11,7 @@ from logsite.cost import CostConfig
 from logsite.index import index_source
 from logsite.models import Usage
 from logsite.pipeline import (
+    MULTILINE_FIRSTLINE,
     PipelineConfig,
     location_regex,
     make_plan,
@@ -47,7 +48,7 @@ def plan(**cfg):
     return make_plan(SITES, USAGE, PipelineConfig(**cfg), PRICED, window_hours=24)
 
 
-def alloy(p, **kw):
+def alloy(p, cfg=None, **kw):
     args = {
         "match": "location",
         "format": "json",
@@ -56,7 +57,7 @@ def alloy(p, **kw):
         "selector": '{app="shop"}',
         "generated_by": "test",
     }
-    return to_alloy(p, PipelineConfig(), PRICED, **{**args, **kw})
+    return to_alloy(p, cfg or PipelineConfig(), PRICED, **{**args, **kw})
 
 
 def test_config_is_validated():
@@ -143,7 +144,8 @@ ALLOY = os.environ.get("LOGSITE_ALLOY") or shutil.which("alloy")
 def test_alloy_accepts_the_config(tmp_path):
     for match in ("location", "template"):
         path = tmp_path / f"{match}.alloy"
-        path.write_text(alloy(plan(drop_levels=["debug"], max_per_window=200), match=match))
+        p = plan(drop_levels=["debug"], max_per_window=200)
+        path.write_text(alloy(p, PipelineConfig(multiline=True), match=match))
         proc = subprocess.run([ALLOY, "fmt", str(path)], capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
 
@@ -197,3 +199,51 @@ def test_only_known_low_levels_get_a_rule():
     # drop_levels can't make warning or error lines eligible either
     p = plan(drop_levels=["warning", "error"])
     assert all(r.site.level in ("debug", "info") for r in p.rules)
+
+
+def test_multiline_joins_stack_traces_before_the_rules():
+    text = alloy(plan(drop_levels=["debug"]), PipelineConfig(multiline=True))
+    assert "stage.multiline {" in text and "max_lines     = 500" in text
+    assert text.index("stage.multiline") < text.index("stage.json")  # first: before parsing
+    assert "stack traces joined" in text
+    assert "stage.multiline" not in alloy(plan())  # opt-in
+
+
+def test_multiline_firstline_starts_records_and_continues_traces():
+    import re
+
+    first = re.compile(MULTILINE_FIRSTLINE)
+    starts = [
+        "2026-10-18 14:22:31.812 ERROR [stock-service] StockRepository - failed",
+        "2026-10-18T14:22:31.812Z  INFO 1 --- [main] c.e.App : started",
+        '{"ts": "2026-10-18T14:22:31Z", "level": "error"}',
+        "Oct 18 14:22:31 host app[1]: started",
+        "level=error msg=failed",
+        "E1018 14:22:31.123456 1 main.go:10] failed",
+        "panic: runtime error: index out of range",
+    ]
+    continues = [
+        "\tat com.example.stock.StockRepository.find(StockRepository.java:54)",
+        "Caused by: org.postgresql.util.PSQLException: ERROR: deadlock detected",
+        "\t... 12 more",
+        "org.springframework.dao.QueryTimeoutException: PreparedStatementCallback",
+        "  Detail: Process 421 waits for ShareLock on transaction 812",
+        "Traceback (most recent call last):",
+        '  File "/srv/app/views.py", line 40, in place_order',
+        "    at Object.<anonymous> (/srv/app/index.js:3:9)",
+        "goroutine 1 [running]:",
+    ]
+    assert [x for x in starts if not first.match(x)] == []
+    assert [x for x in continues if first.match(x)] == []
+
+
+def test_cli_pipeline_multiline_only(tmp_path, monkeypatch, capsys):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "api.py").write_text(CODE)
+    (tmp_path / "prod.log").write_text("")
+    (tmp_path / "logsite.toml").write_text('[backend]\ntype = "file"\npath = "prod.log"\n')
+    monkeypatch.chdir(tmp_path)
+    # no drop or sample rules, and no stream selector: joining traces needs neither
+    assert main(["pipeline", "--multiline", "-o", "join.alloy"]) == 0
+    assert "joins stack traces only" in capsys.readouterr().err
+    assert "stage.multiline {" in (tmp_path / "join.alloy").read_text()
