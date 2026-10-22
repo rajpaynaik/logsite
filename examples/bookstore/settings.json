@@ -1,0 +1,4 @@
+{
+  "supplier": {"url": "http://127.0.0.1:8099", "timeout_seconds": 0.2, "retries": 3},
+  "shipping": {"rates_per_kg": {"domestic": 4.5, "eu": 9.0, "world": 14.0}, "free_over": 50.0}
+}

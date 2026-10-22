@@ -1,0 +1,20 @@
+{
+  "supplier-timeout": {
+    "oracle": "oracles/test_supplier_timeout.py",
+    "fix": {"file": "bookstore/supplier.py",
+            "old": "except urllib.error.URLError as exc:",
+            "new": "except (urllib.error.URLError, TimeoutError) as exc:"}
+  },
+  "isbn-spaces": {
+    "oracle": "oracles/test_isbn_spaces.py",
+    "fix": {"file": "bookstore/catalog.py",
+            "old": "digits = raw.replace(\"-\", \"\")",
+            "new": "digits = raw.replace(\"-\", \"\").replace(\" \", \"\")"}
+  },
+  "shipping-config": {
+    "oracle": "oracles/test_shipping_config.py",
+    "fix": {"file": "bookstore/shipping.py",
+            "old": "rate = shipping[\"rate_per_kg\"][zone]",
+            "new": "rate = shipping[\"rates_per_kg\"][zone]"}
+  }
+}

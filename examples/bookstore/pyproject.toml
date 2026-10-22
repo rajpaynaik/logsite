@@ -1,0 +1,8 @@
+[project]
+name = "bookstore"
+version = "0.1.0"
+description = "A small bookstore service, with three bugs planted for the logsite repro benchmark."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
