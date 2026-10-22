@@ -8,6 +8,6 @@
   },
   "homepage": "https://github.com/rajpaynaik/logsite",
   "repository": "https://github.com/rajpaynaik/logsite",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["logs", "observability", "errors", "loki", "grafana", "tests"]
 }

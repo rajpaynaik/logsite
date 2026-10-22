@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/logsite?cacheSeconds=86400)](https://pypi.org/project/logsite/)
 [![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
 [![CI](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/rajpaynaik/logsite/blob/main/LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/rajpaynaik/logsite/blob/main/LICENSE)
 
 **Find the line of code behind every production error, noisy log line and failing test.**
 
@@ -198,4 +198,4 @@ a new log backend is a good first PR.
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](https://github.com/rajpaynaik/logsite/blob/main/LICENSE).

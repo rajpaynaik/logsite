@@ -7,7 +7,7 @@ name = "logsite"
 dynamic = ["version"]
 description = "See production log volume and log-quality issues inline, next to the log calls in your code."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "Raj Paynaik", email = "rajpaynaik18@gmail.com" }]
 keywords = ["logging", "observability", "lsp", "linter", "loki", "opensearch", "elasticsearch", "cloudwatch", "vscode", "mcp", "structlog", "loguru", "java", "go", "slf4j", "slog", "zap"]
