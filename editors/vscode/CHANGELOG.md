@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- No extension changes; released with logsite 0.3.5, which joins stack traces split into separate Loki entries (`logsite pipeline --multiline`, and when reading them).
+
 ## 0.3.4
 
 - No extension changes; released with logsite 0.3.4, which adds the Grafana data source plugin.
