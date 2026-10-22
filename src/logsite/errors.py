@@ -135,6 +135,7 @@ class ErrorGroup:
     history: object | None = None  # history.GroupHistory, when a history store is in use
     traffic_ratio: float | None = None  # the service's traffic vs the window before
     tenants: Counter[str] = field(default_factory=Counter, repr=False)  # up to MAX_TENANTS
+    record: LogRecord | None = field(default=None, repr=False)  # the latest, for repro
     _messages: set = field(default_factory=set, repr=False)  # message (chain) variants
     _logged: Counter[str] = field(default_factory=Counter, repr=False)
     _sites: dict[str, LogSite] = field(default_factory=dict, repr=False)
@@ -347,6 +348,7 @@ def group_errors(
             group.wrapped_in = wrapped
             _describe(group, info, app)
             group.sample = _sample(record, info, leaks, sample_fields)
+            group.record = record
         group.count += 1
         group._messages.add(tuple(e.message for e in info.chain) if info else first_line)
         ts = record.timestamp
@@ -357,6 +359,7 @@ def group_errors(
             if group.last_seen is None or ts > group.last_seen:
                 group.last_seen = ts
                 group.sample = _sample(record, info, leaks, sample_fields)  # the latest
+                group.record = record
         if site is not None:
             group._logged[site.id] += 1
             group._sites[site.id] = site

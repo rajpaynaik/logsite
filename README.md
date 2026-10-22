@@ -87,6 +87,30 @@ pytest: 3 failed (was 30), 39 passed · 1 cause(s) · exit 1
 ✓ fixed   sqlite3.OperationalError: no such column: discount_code  (27 test(s))
 ```
 
+## A production error, as a failing test
+
+`logsite repro` reads the error from a downloaded log or a pasted stack trace (no access to
+the log store needed), and writes a pytest test from what production logged: the function
+to call, the values the failing request logged, the dependency to fake. `--expect` checks
+the test fails **the way production did** (same exception, through the same line), so a
+test that only looks right doesn't pass the check:
+
+```
+$ logsite repro --from incident.log --write-test
+Reproduce 2d27bfe0 · TimeoutError: timed out · 4 error(s)
+  Fail with    TimeoutError through app/supplier.py:10 (restock)
+  Call         reorder(sku, qty, warehouse)  from app.inventory  app/inventory.py:11
+  Fake         app/supplier.py:10 calls urllib.request.urlopen(…): patch urllib.request.urlopen raise TimeoutError
+  Inputs       sku       = BK-103                logged at app/inventory.py:12
+               qty       = 5                     logged at app/inventory.py:12
+
+$ logsite agent --expect 2d27bfe0 -- pytest tests/test_repro_2d27bfe0.py
+✓ 2d27bfe0 reproduced: TimeoutError through app/supplier.py:10, as in production
+```
+
+Then fix the code until the test passes, or let Claude Code do both: `/logsite:fix-error`
+reproduces first. See [Reproduce a production error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md).
+
 ## Production context for your AI assistant
 
 Before Claude Code (or any MCP client) changes a function, `production_context` tells it
@@ -179,6 +203,7 @@ logsite cost --price-per-gb 0.5    # what each log call costs per month
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
 [Errors, incidents and the CI gate](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md) ·
 [Agent mode](https://github.com/rajpaynaik/logsite/blob/main/docs/agent.md) ·
+[Reproduce a production error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
 [Grafana, alerts and Alloy](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
 [Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·

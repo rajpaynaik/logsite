@@ -17,6 +17,7 @@ All tools are read-only:
 | `investigate` | What's the outage and what caused it? Incidents with their cause, the deploy and suspect commits, and a `diagnosis`: ranked explanations with evidence for and against, and the next check. |
 | `error_summary` | What's failing in production right now (or since release `v1.4.0`), grouped by cause, and where is it raised? |
 | `request_timeline` | What happened to request `4bf92f35…`, service by service, and where did it first go wrong? |
+| `reproduction_case` | Reproduce error `2d27bfe0` as a test: the function to call, the values the request logged, what to fake, and a pytest skeleton. `logsite agent --expect` then checks the test fails the way production did. Works from a log file too. |
 | `compare_deploy` | What spiked or started erroring after release `v1.4.0`, and which commits in it are to blame? |
 | `spikes` | Which log lines jumped vs the previous window, and which commits touched that code since? |
 | `log_history` | Which commits changed the function around `app/checkout.py:42`? |

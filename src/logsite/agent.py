@@ -41,6 +41,8 @@ class Failure:
     test_file: str | None = None
     origin: str | None = None  # the library the failure came out of
     block: list[str] = field(default_factory=list)  # the original lines, for --show
+    # every line of the project the traceback passes through ("path:line"), root cause first
+    locations: list[str] = field(default_factory=list)
 
     def key(self) -> str:
         """What makes two failures the same cause."""
@@ -117,6 +119,10 @@ def _is_test_path(path: str) -> bool:
         or "/tests/" in f"/{path}"
         or "/test/" in f"/{path}"
     )
+
+
+def _locations(frames: Iterable[Frame], app: AppFiles) -> list[str]:
+    return [f"{p}:{f.line}" for p, f in ((app.resolve(f), f) for f in frames) if p]
 
 
 def _place(frames: list[Frame], app: AppFiles) -> tuple[str | None, str | None, str | None]:
@@ -214,6 +220,7 @@ def parse_pytest(lines: list[str], app: AppFiles) -> tuple[list[Failure], dict[s
                 test_file=test_file,
                 origin=origin,
                 block=list(block),
+                locations=_locations(frames, app),
             )
         )
 
@@ -369,7 +376,7 @@ def _junit_failure(test: str, block: list[str], app: AppFiles) -> Failure:
         resolved = (app.resolve(f) for f in frames)
         test_file = next((p for p in resolved if p and _is_test_path(p)), None)
         return Failure(test, "test", head.type.rsplit(".", 1)[-1], head.message, raised, func,
-                       test_file, origin, block)  # fmt: skip
+                       test_file, origin, block, _locations(frames, app))  # fmt: skip
     g = re.match(r"^\s*(?P<type>[\w.$]+) at (?P<file>\S+\.(?:java|kt)):(?P<line>\d+)", text)
     if g:  # Gradle's short form: "org.opentest4j.AssertionFailedError at TaxTest.java:12"
         path = app.resolve(Frame(g["file"], int(g["line"]), "?")) or g["file"]

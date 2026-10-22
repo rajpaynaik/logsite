@@ -458,24 +458,32 @@ def _when(ts) -> str:
 
 def _error_summary(args: argparse.Namespace, cfg: Config):
     """The summary for the window the arguments ask for: ``(summary, label, app)``."""
-    backend = _backend_or_exit(cfg)
+    log_file = getattr(args, "from_file", None)
+    if log_file:
+        if args.since_deploy or args.hours:
+            sys.exit("logsite: --from reads the whole file: no --hours or --since-deploy")
+        backend, window = _file_window(log_file)
+        label = f"in {Path(log_file).name}"
+    else:
+        backend = _backend_or_exit(cfg)
     sites = _sites(cfg, None)
     app = AppFiles.scan(cfg.root, DEFAULT_EXCLUDES | set(cfg.excludes))
     if args.since_deploy and args.hours:
         sys.exit("logsite: --hours and --since-deploy can't be combined")
-    try:
-        window, label = error_window(
-            cfg.root, args.hours or cfg.window_hours, args.since_deploy, args.deployed_at
-        )
-    except ValueError as exc:
-        sys.exit(f"logsite: {exc.args[0].replace('deployed_at', '--deployed-at')}")
+    if not log_file:
+        try:
+            window, label = error_window(
+                cfg.root, args.hours or cfg.window_hours, args.since_deploy, args.deployed_at
+            )
+        except ValueError as exc:
+            sys.exit(f"logsite: {exc.args[0].replace('deployed_at', '--deployed-at')}")
     try:
         summary = summarize_errors(
             backend,
             sites,
             app,
             window,
-            window.previous(),
+            None if log_file else window.previous(),  # a file has no "before"
             cfg.lint,
             leaks=cfg.leaks,
             limit=args.limit,
@@ -483,11 +491,24 @@ def _error_summary(args: argparse.Namespace, cfg: Config):
         )
     except Exception as exc:
         sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
-    if not getattr(args, "no_history", False):
+    if not getattr(args, "no_history", False) and not log_file:
         from . import history
 
         history.apply(cfg, summary.groups, window.start, window.end)
     return summary, label, app
+
+
+def _file_window(log_file: str):
+    """A log file as the backend, and a window holding all of it."""
+    from datetime import datetime
+
+    from .backends.file import FileBackend
+
+    if not Path(log_file).is_file():
+        sys.exit(f"logsite: no such file: {log_file}")
+    now = datetime.now(timezone.utc)
+    start = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    return FileBackend(log_file), TimeRange(start, now + timedelta(days=1))
 
 
 def _gate(args: argparse.Namespace, summary, cfg: Config, label: str) -> int:
@@ -645,9 +666,18 @@ def cmd_agent(args: argparse.Namespace, cfg: Config) -> int:
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         sys.exit("logsite: give the command to run, e.g. logsite agent -- pytest")
+    expected = None
+    if args.expect:
+        from . import repro
+
+        try:
+            expected = repro.load_case(cfg.root, args.expect)
+        except ValueError as exc:
+            sys.exit(f"logsite: {exc}")
     output, code, seconds = agent.run_command(command, root)
     app = AppFiles.scan(root, DEFAULT_EXCLUDES | set(cfg.excludes), tests=True)
     run = agent.analyse(command, output, code, seconds, app)
+    verdict = repro.check(expected, run) if expected is not None else None
     key = agent.state_key(root, command)
     # A failing run with no results (command not found, a crash before any test ran) says
     # nothing about the failures: don't call them fixed, and keep the last real run.
@@ -661,15 +691,79 @@ def cmd_agent(args: argparse.Namespace, cfg: Config) -> int:
     except OSError:
         pass
     if args.format == "json":
-        json.dump(agent.run_json(run, d), sys.stdout, indent=2)
+        out = agent.run_json(run, d)
+        if verdict is not None:
+            out["expect"] = {"case": expected["id"], **repro.verdict_json(verdict)}
+        json.dump(out, sys.stdout, indent=2)
         print()
-        return code
+        return code if verdict is None else int(not verdict.ok)
     pal = palette(args.color, sys.stdout)
     text = "\n".join(agent.render(run, d, previous, root, pal))
     if len(text) >= len(output) and d is None:
         text = output.rstrip("\n")  # never longer than the command's own output
     print(text)
-    return code
+    if verdict is None:
+        return code
+    mark = pal.bold_green("✓") if verdict.ok else pal.bold_red("✗")
+    print(
+        f"\n{mark} {expected['id']} {verdict.text}"
+        + (f"  ({verdict.test})" if verdict.test else "")
+    )
+    for note in verdict.notes:
+        print(f"  note: {note}")
+    return int(not verdict.ok)  # 0 when the test fails the way production did
+
+
+def cmd_repro(args: argparse.Namespace, cfg: Config) -> int:
+    from . import repro
+
+    root = cfg.root
+    source = args.from_file
+    if source == "-":  # a pasted stack trace
+        try:
+            source = str(repro.save_pasted(root, sys.stdin.read()))
+        except OSError as exc:
+            sys.exit(f"logsite: couldn't save the pasted log: {exc}")
+    backend = None if source else _backend_or_exit(cfg)
+    try:
+        case, others = repro.find_case(
+            cfg, args.group, log_file=source, backend=backend, hours=args.hours, limit=args.limit
+        )
+    except ValueError as exc:
+        sys.exit(f"logsite: {exc}")
+    data = repro.case_json(case)
+    repro.save_case(root, data)
+    written = None
+    if args.write_test is not None:
+        if not case.python:
+            sys.exit("logsite: test skeletons are Python-only for now; the case above has "
+                     "what a test needs (--format json)")  # fmt: skip
+        target = Path(args.write_test) if args.write_test else repro.skeleton_path(root, case)
+        if target.exists() and not args.force:
+            sys.exit(f"logsite: {target} exists; --force to overwrite it")
+        try:
+            text = repro.skeleton(case)
+        except ValueError as exc:
+            sys.exit(f"logsite: {exc}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        try:
+            written = str(target.resolve().relative_to(root))
+        except ValueError:
+            written = str(target)
+    if args.format == "json":
+        json.dump({**data, "test_file": written}, sys.stdout, indent=2)
+        print()
+        return 0
+    pal = palette(args.color, sys.stdout)
+    print("\n".join(repro.render(data, pal, written, todo="TODO" in text if written else False)))
+    sys.stdout.flush()
+    if written:
+        print(f"\nwrote {written}", file=sys.stderr)
+    if others > 0 and not args.group:
+        print(f"{others} other error group(s) in these logs: logsite repro <id> for another "
+              "(logsite errors lists them)", file=sys.stderr)  # fmt: skip
+    return 0
 
 
 def _log_shape(cfg: Config, backend, sites, window: TimeRange) -> tuple[str, str, str, str]:
@@ -1233,6 +1327,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("errors", help="production errors grouped by cause, newest problems first")
     p.add_argument("--hours", type=float)
     p.add_argument(
+        "--from",
+        dest="from_file",
+        metavar="FILE",
+        help="read the errors from a log file (a download from Grafana) instead of the backend",
+    )
+    p.add_argument(
         "--since-deploy", metavar="REF", help="errors since a release (git tag/sha), vs before"
     )
     p.add_argument(
@@ -1321,13 +1421,51 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--show", type=int, metavar="N", help="cause N of the last run, in full")
     p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
     p.add_argument("--format", choices=["text", "json"], default="text")
+    p.add_argument(
+        "--expect",
+        metavar="ID",
+        help="check the run fails the way production error ID did (see logsite repro); "
+        "exits 0 only then",
+    )
     p.add_argument("command", nargs=argparse.REMAINDER, help="-- the command to run")
     p.set_defaults(func=cmd_agent)
+
+    p = sub.add_parser(
+        "repro",
+        help="what a test needs to reproduce a production error, and a pytest skeleton",
+    )
+    p.add_argument("group", nargs="?", help="error group id or number (default: the first)")
+    p.add_argument(
+        "--from",
+        dest="from_file",
+        metavar="FILE",
+        help="read the errors from a log file (a download from Grafana, a pasted trace; "
+        "- for stdin) instead of the backend",
+    )
+    p.add_argument(
+        "--write-test",
+        nargs="?",
+        const="",
+        metavar="PATH",
+        help="write a pytest skeleton (default tests/test_repro_<id>.py)",
+    )
+    p.add_argument("--force", action="store_true", help="overwrite the test file")
+    p.add_argument("--hours", type=float)
+    p.add_argument("--limit", type=int, default=5000, help="error records to read (5000)")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_repro)
 
     p = sub.add_parser(
         "investigate", help="error groups linked into incidents, with the deploy and commits"
     )
     p.add_argument("--hours", type=float)
+    p.add_argument(
+        "--from",
+        dest="from_file",
+        metavar="FILE",
+        help="read the errors from a log file (a download from Grafana) instead of the backend",
+    )
     p.add_argument("--since-deploy", metavar="REF", help="since a release (git tag/sha)")
     p.add_argument("--deployed-at", metavar="TIME", help="real deploy time, ISO 8601")
     p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")

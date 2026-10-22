@@ -140,6 +140,21 @@ def extract_template(node: ast.expr) -> str | None:
     return None
 
 
+def extract_args(node: ast.Call, msg_arg: ast.expr | None) -> tuple[str, ...]:
+    """Source text of the values that fill the template's placeholders, in order."""
+    if isinstance(msg_arg, ast.JoinedStr):
+        return tuple(
+            ast.unparse(v.value) for v in msg_arg.values if isinstance(v, ast.FormattedValue)
+        )
+    if isinstance(msg_arg, ast.Call) and isinstance(msg_arg.func, ast.Attribute):
+        return tuple(ast.unparse(a) for a in msg_arg.args)  # "...".format(a, b)
+    if isinstance(msg_arg, ast.Constant) and node.args and msg_arg is node.args[0]:
+        return tuple(ast.unparse(a) for a in node.args[1:] if not isinstance(a, ast.Starred))
+    if isinstance(msg_arg, ast.Constant) and len(node.args) >= 2 and msg_arg is node.args[1]:
+        return tuple(ast.unparse(a) for a in node.args[2:] if not isinstance(a, ast.Starred))
+    return ()
+
+
 _BROAD = {"Exception", "BaseException"}
 
 
@@ -346,6 +361,7 @@ class _Visitor(ast.NodeVisitor):
             library=library,
             bound_fields=tuple(sorted(set(bound) | name_bound)),
             exc_opt=exc_opt,
+            args=extract_args(node, msg_arg) if template is not None else (),
         )
 
 

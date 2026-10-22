@@ -51,6 +51,9 @@ class LogSite:
     # name assigned from logger.bind(...).
     bound_fields: tuple[str, ...] = ()
     exc_opt: bool = False  # loguru: logger.opt(exception=...) attaches the traceback
+    # Source text of the values the template's placeholders are filled with, in order:
+    # ``log.info("shipping %s to %s", shipment.id, carrier)`` -> ("shipment.id", "carrier").
+    args: tuple[str, ...] = ()
 
     @property
     def id(self) -> str:
@@ -78,6 +81,30 @@ class LogSite:
             pos = m.end()
         parts.append(re.escape(self.template[pos:]))
         return re.compile("".join(parts) + r"\s*$")
+
+    def values(self, message: str) -> dict[str, str]:
+        """The values a rendered message was filled with, by the source text of each:
+        ``"shipping S-1042 to ups"`` -> ``{"shipment.id": "S-1042", "carrier": "ups"}``.
+        Empty when the message doesn't match the template or the arguments aren't known."""
+        if not self.template or not self.args or self.literal_len == 0:
+            return {}
+        parts: list[str] = []
+        pos = n = 0
+        for m in _PLACEHOLDER.finditer(self.template):
+            parts.append(re.escape(self.template[pos : m.start()]))
+            if m.group() == "%%":
+                parts.append("%")
+            else:
+                parts.append(f"(?P<v{n}>.*?)")
+                n += 1
+            pos = m.end()
+        parts.append(re.escape(self.template[pos:]))
+        if n != len(self.args):
+            return {}
+        found = re.search("".join(parts) + r"\s*$", message.split("\n", 1)[0])
+        if not found:
+            return {}
+        return {arg: found[f"v{i}"] for i, arg in enumerate(self.args)}
 
 
 @dataclass

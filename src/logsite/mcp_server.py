@@ -7,6 +7,7 @@ Run it with ``logsite mcp`` (stdio). Every tool is read-only.
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
@@ -40,6 +41,11 @@ For "what's failing in production?", start with `investigate`: errors linked int
 each with its cause, effects, the deploy before it and suspect commits; `error_summary` lists
 the groups themselves.
 To follow one failed request across services, use `request_timeline` with its trace id.
+To fix a production error, reproduce it first: `reproduction_case` gives what a failing test
+needs (the function to call, the values the request logged, what to fake) and, for Python, a
+pytest skeleton. Then run the test with `logsite agent --expect <id> -- <test command>`: it
+says "reproduced" only when the test fails with production's exception through production's
+line; fix the test until it does, then fix the code until the test passes.
 After a release, start with `compare_deploy` (a git tag or sha): it reports lines that
 spiked or started erroring since the deploy, with the release's commits that touched them.
 Otherwise start with `spikes` to find lines whose volume jumped, then `log_history` on one
@@ -504,6 +510,43 @@ def build_server(cfg: Config) -> MCPServer:
         out["first_problem"] = brief(tl.first_problem)
         out["first_error"] = brief(tl.first_error)
         return out
+
+    @mcp.tool(annotations=READ_ONLY)
+    def reproduction_case(
+        group: str | None = None, log_file: str | None = None, hours: float | None = None
+    ) -> dict[str, Any]:
+        """What a test needs to reproduce one production error group, from the logs.
+
+        group: the error group id (from `error_summary` / `investigate`) or its number in
+        the list; default the first. log_file: read the errors from this log file (a
+        download, a pasted stack trace saved to a file) instead of the backend.
+
+        Returns the signature the test must fail with (exception and `raised_at`, the
+        project line production's error went through), the entry point to call, the
+        `inputs` the failing request logged (by the code that filled each log call, e.g.
+        `shipment.id`), the dependency call to fake and what to raise, the request's log
+        lines, history, and what's `missing` from the logs. For Python, `skeleton` is a
+        pytest test built from all that (write it to `test_file`; replace its TODOs). The
+        case is saved, so `logsite agent --expect <id> -- <test command>` can check the test
+        fails the way production did.
+        """
+        from . import repro
+
+        b = None
+        if not log_file:
+            b = backend()
+        elif not Path(log_file).is_absolute():
+            log_file = str(cfg.root / log_file)
+        try:
+            case, _ = repro.find_case(cfg, group, log_file=log_file, backend=b, hours=hours)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        data = repro.case_json(case)
+        repro.save_case(cfg.root, data)
+        if case.python and case.entry:
+            data["skeleton"] = repro.skeleton(case)
+            data["test_file"] = str(repro.skeleton_path(cfg.root, case).relative_to(cfg.root))
+        return data
 
     @mcp.tool(annotations=READ_ONLY)
     def log_history(target: str, max_count: int = 10) -> list[dict[str, str]]:
