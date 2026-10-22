@@ -34,12 +34,18 @@ def test_the_scenarios_are_sound(bench, capsys):
         ("supplier-timeout", False),
         ("isbn-spaces", True),
         ("shipping-config", True),
+        # ~30 MB of logs written on the fly: interleaved requests, louder errors, a bug that
+        # starts at 09:00, a rare input, production on an older build
+        ("hard-noisy-day", True),
+        ("hard-rare-value", True),
+        ("hard-drift", False),  # the supplier timeout again: same as supplier-timeout
     ],
 )
 def test_logsite_alone_reproduces_each_bug(bench, tmp_path, monkeypatch, scenario, fail_to_pass):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    bench.ensure_logs([scenario])
     ws = bench.workspace(tmp_path / "ws", scenario)
-    assert bench.run_logsite(ws, None)["ok"]
+    assert bench.run_logsite(ws, None, bench.SCENARIOS[scenario].get("group"))["ok"]
     s = bench.score(ws, scenario, tmp_path / "score")
     assert s["logsite_verdict"] == "reproduced"
     assert s["fails_on_bug"] and s["fail_to_pass"] == fail_to_pass

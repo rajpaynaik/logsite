@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..models import LogRecord
 from ..tracebacks import is_error, join_multiline
 from .base import LogBackend, TimeRange, parse_line
+
+# A log file is read whole, whatever its dates.
+ALL_TIME = TimeRange(
+    datetime(1970, 1, 1, tzinfo=timezone.utc), datetime(9999, 1, 1, tzinfo=timezone.utc)
+)
 
 
 class FileBackend(LogBackend):
@@ -24,6 +29,20 @@ class FileBackend(LogBackend):
 
     def query_errors(self, time_range: TimeRange, limit: int = 5000) -> list[LogRecord]:
         return self._read(time_range, None, limit, errors_only=True)
+
+    def span(self) -> tuple[datetime, datetime] | None:
+        """The times of the file's first and last records (any level), or None."""
+        first = last = None
+        with self.path.open(encoding="utf-8", errors="replace") as fh:
+            for raw in join_multiline(fh):
+                ts = parse_line(raw).timestamp if raw.strip() else None
+                if ts is None:
+                    continue
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                first = ts if first is None or ts < first else first
+                last = ts if last is None or ts > last else last
+        return (first, last) if first is not None and last is not None else None
 
     def count_total(self, time_range: TimeRange) -> int | None:
         n = 0

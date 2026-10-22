@@ -491,6 +491,13 @@ def _error_summary(args: argparse.Namespace, cfg: Config):
         )
     except Exception as exc:
         sys.exit(f"logsite: couldn't query the {backend.name} backend: {exc}")
+    if log_file:
+        from .errors import mark_started, rank
+
+        span = backend.span()
+        if span:
+            mark_started(summary.groups, *span)
+            summary.groups = rank(summary.groups, cfg.lint)
     if not getattr(args, "no_history", False) and not log_file:
         from . import history
 
@@ -500,15 +507,11 @@ def _error_summary(args: argparse.Namespace, cfg: Config):
 
 def _file_window(log_file: str):
     """A log file as the backend, and a window holding all of it."""
-    from datetime import datetime
-
-    from .backends.file import FileBackend
+    from .backends.file import ALL_TIME, FileBackend
 
     if not Path(log_file).is_file():
         sys.exit(f"logsite: no such file: {log_file}")
-    now = datetime.now(timezone.utc)
-    start = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    return FileBackend(log_file), TimeRange(start, now + timedelta(days=1))
+    return FileBackend(log_file), ALL_TIME
 
 
 def _gate(args: argparse.Namespace, summary, cfg: Config, label: str) -> int:

@@ -1,4 +1,4 @@
-# bookstore: a demo service with three planted bugs
+# bookstore: a demo service with four planted bugs
 
 A small Python service (catalog imports, stock reorders, shipping quotes) used by the
 [repro benchmark](../../bench/repro/README.md) and the [repro docs](../../docs/repro.md).
@@ -9,6 +9,7 @@ Each bug is there on purpose; the benchmark's incident logs come from running th
 | Supplier read timeouts are never retried | `bookstore/supplier.py` | `TimeoutError: timed out` |
 | ISBNs with spaces are rejected | `bookstore/catalog.py` | `ValueError: invalid ISBN` |
 | A renamed setting | `bookstore/shipping.py` | `KeyError: 'rate_per_kg'` |
+| A page count of 0 isn't treated as unknown | `bookstore/catalog.py` | `ZeroDivisionError: division by zero` |
 
 Plus a harmless one: cache outages, logged as warnings with a traceback.
 

@@ -445,6 +445,28 @@ def _sample(
     }
 
 
+STARTED_MIN = 5  # errors a group would have had before its first one, to say it started then
+
+
+def mark_started(groups: Iterable[ErrorGroup], start: datetime, end: datetime) -> None:
+    """In one log with no window before it (a downloaded file), mark as new the groups that
+    started during it and haven't stopped: at their own rate they'd have shown up at least
+    ``STARTED_MIN`` times before their first error, and as many after their last. A cache
+    outage at 10:00 that ended at 10:20 came and went; ISBNs rejected from 09:00 until the
+    end of the log is something that started at 09:00."""
+    for g in groups:
+        if g.first_seen is None or g.last_seen is None or g.count < STARTED_MIN:
+            continue
+        active = (g.last_seen - g.first_seen).total_seconds()
+        if active <= 0:
+            continue
+        rate = g.count / active
+        before = (g.first_seen - start).total_seconds() * rate
+        after = (end - g.last_seen).total_seconds() * rate
+        if before >= STARTED_MIN and after < STARTED_MIN:
+            g.previous = 0
+
+
 def rank(groups: Iterable[ErrorGroup], cfg: LintConfig) -> list[ErrorGroup]:
     """New groups first, then spiking ones, then the biggest."""
 

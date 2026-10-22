@@ -334,3 +334,51 @@ def test_code_that_moved_since_production_ran(shop, capsys):
     through = ["tests/test_x.py:3", "app/inventory.py:17", "app/supplier.py:12"]
     v = repro.check(data, _run(_failure("TimeoutError", "app/supplier.py:12", through)))
     assert v.ok and not v.notes
+
+
+def _group(title, first, last, count, levels=("error",), raised_at="app/x.py:1"):
+    from collections import Counter
+    from datetime import datetime, timezone
+
+    from logsite.errors import ErrorGroup
+
+    t = datetime(2026, 10, 21, tzinfo=timezone.utc)
+    g = ErrorGroup(title[:8].ljust(8, "0"), title, title.split(":")[0], [], count=count)
+    g.first_seen, g.last_seen = t.replace(hour=first), t.replace(hour=last)
+    g.levels, g.raised_at = Counter(levels), raised_at
+    return g
+
+
+def test_errors_that_started_during_a_file_are_new():
+    from datetime import datetime, timezone
+
+    from logsite.errors import mark_started
+
+    start = datetime(2026, 10, 21, 8, tzinfo=timezone.utc)
+    end = start.replace(hour=14)
+    started = _group("ValueError: invalid ISBN", 9, 14, 400)  # from 09:00 to the end
+    all_day = _group("ValueError: qty", 8, 14, 700)
+    came_and_went = _group("ConnectionRefusedError: cache", 9, 10, 1500)  # an outage, over
+    rare = _group("TimeoutError: timed out", 12, 14, 3)  # too few to tell
+    groups = [started, all_day, came_and_went, rare]
+    mark_started(groups, start, end)
+    assert [g.is_new for g in groups] == [True, False, False, False]
+
+
+def test_picking_a_group():
+    groups = [
+        _group("upstream failed: 500", 8, 9, 750, raised_at=None),  # another service's line
+        _group("ConnectionRefusedError: cache", 8, 9, 300, levels=("warning",)),
+        _group("TimeoutError: timed out", 8, 9, 250),
+        _group("ZeroDivisionError: division by zero", 8, 9, 45),
+    ]
+    assert repro.pick_group(groups, None).title == "TimeoutError: timed out"
+    assert repro.pick_group(groups, "zerodivision").title.startswith("ZeroDivisionError")
+    assert repro.pick_group(groups, "1").title.startswith("upstream")
+
+
+def test_a_file_is_read_whole_whatever_its_dates(shop):
+    future = incident_log().replace("2026-10-21T", "2099-01-01T")
+    (shop / "future.log").write_text(future)
+    case, _ = repro.find_case(load_config(shop), None, log_file=str(shop / "future.log"))
+    assert case.count == 4

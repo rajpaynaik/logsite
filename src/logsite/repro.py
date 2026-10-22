@@ -90,12 +90,15 @@ class Case:
 
 
 def pick_group(groups: list[ErrorGroup], wanted: str | None) -> ErrorGroup:
-    """The group ``wanted`` names (its id, an id prefix, or its number in the list); the
-    first one when nothing is named. Raises ValueError with a user-facing message."""
+    """The group ``wanted`` names: its id (or a prefix), its number in the list, or text in
+    its title (``ZeroDivisionError``; the first ranked group that has it). With nothing
+    named, the first group that a test of this code can reproduce: raised in the project,
+    at error level (not a warning with a traceback, not another service's line).
+    Raises ValueError with a user-facing message."""
     if not groups:
         raise ValueError("no errors in these logs")
     if not wanted:
-        return groups[0]
+        return next((g for g in groups if g.raised_at and _error_level(g)), groups[0])
     if wanted.isdigit() and 1 <= int(wanted) <= len(groups) and len(wanted) < 4:
         return groups[int(wanted) - 1]
     found = [g for g in groups if g.fingerprint.startswith(wanted.lower())]
@@ -103,8 +106,17 @@ def pick_group(groups: list[ErrorGroup], wanted: str | None) -> ErrorGroup:
         return found[0]
     if found:
         raise ValueError(f"{wanted} matches {len(found)} groups; give more of the id")
+    titled = [g for g in groups if wanted.lower() in " ".join([g.title, *g.causes]).lower()]
+    if titled:
+        return titled[0]
     ids = ", ".join(g.id for g in groups[:10])
     raise ValueError(f"no error group {wanted} in these logs (groups: {ids})")
+
+
+def _error_level(g: ErrorGroup) -> bool:
+    """Logged as an error at least once (or at no level at all), not only as a warning."""
+    levels = {k.lower() for k in g.levels}
+    return not levels or bool(levels - {"warning", "warn", "info", "debug"})
 
 
 def find_case(
@@ -118,18 +130,15 @@ def find_case(
     """Read the errors (from ``log_file``, or ``backend`` over the last ``hours``), pick the
     group ``wanted`` names and build its case. Returns ``(case, other groups)``; raises
     ValueError with a user-facing message."""
-    from datetime import datetime, timedelta, timezone
-
-    from .backends.file import FileBackend
-    from .errors import AppFiles, summarize_errors
+    from .backends.file import ALL_TIME, FileBackend
+    from .errors import AppFiles, mark_started, rank, summarize_errors
     from .index import DEFAULT_EXCLUDES, index_project
 
     if log_file:
         if not Path(log_file).is_file():
             raise ValueError(f"no such file: {log_file}")
         backend = FileBackend(log_file)
-        now = datetime.now(timezone.utc)
-        window = TimeRange(datetime(1970, 1, 1, tzinfo=timezone.utc), now + timedelta(days=1))
+        window = ALL_TIME
     elif backend is None:
         raise ValueError("no [backend] configured: give a log file instead")
     else:
@@ -144,6 +153,11 @@ def find_case(
         )
     except Exception as exc:
         raise ValueError(f"couldn't read the {backend.name} logs: {exc}") from exc
+    if log_file:  # no window before it: what started during it is new
+        span = backend.span()
+        if span:
+            mark_started(summary.groups, *span)
+            summary.groups = rank(summary.groups, cfg.lint)
     if not log_file:  # a downloaded file is not the production window: leave history be
         from . import history
 

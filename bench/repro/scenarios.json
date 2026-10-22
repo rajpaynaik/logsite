@@ -1,20 +1,57 @@
 {
   "supplier-timeout": {
     "oracle": "oracles/test_supplier_timeout.py",
-    "fix": {"file": "bookstore/supplier.py",
-            "old": "except urllib.error.URLError as exc:",
-            "new": "except (urllib.error.URLError, TimeoutError) as exc:"}
+    "fix": {
+      "file": "bookstore/supplier.py",
+      "old": "except urllib.error.URLError as exc:",
+      "new": "except (urllib.error.URLError, TimeoutError) as exc:"
+    }
   },
   "isbn-spaces": {
     "oracle": "oracles/test_isbn_spaces.py",
-    "fix": {"file": "bookstore/catalog.py",
-            "old": "digits = raw.replace(\"-\", \"\")",
-            "new": "digits = raw.replace(\"-\", \"\").replace(\" \", \"\")"}
+    "fix": {
+      "file": "bookstore/catalog.py",
+      "old": "digits = raw.replace(\"-\", \"\")",
+      "new": "digits = raw.replace(\"-\", \"\").replace(\" \", \"\")"
+    }
   },
   "shipping-config": {
     "oracle": "oracles/test_shipping_config.py",
-    "fix": {"file": "bookstore/shipping.py",
-            "old": "rate = shipping[\"rate_per_kg\"][zone]",
-            "new": "rate = shipping[\"rates_per_kg\"][zone]"}
+    "fix": {
+      "file": "bookstore/shipping.py",
+      "old": "rate = shipping[\"rate_per_kg\"][zone]",
+      "new": "rate = shipping[\"rates_per_kg\"][zone]"
+    }
+  },
+  "hard-noisy-day": {
+    "hard": true,
+    "oracle": "oracles/test_isbn_spaces.py",
+    "fix": {
+      "file": "bookstore/catalog.py",
+      "old": "digits = raw.replace(\"-\", \"\")",
+      "new": "digits = raw.replace(\"-\", \"\").replace(\" \", \"\")"
+    },
+    "prompt": "Since about 09:00 UTC, users report failed requests on the bookstore service. incident.log in this directory is the service's production log for the day (it's big: about 18 MB). Find the error behind those failures, write a pytest test in tests/ that reproduces it, then fix the code so the test passes. Run tests with `python -m pytest`. Don't change incident.log or settings.json."
+  },
+  "hard-rare-value": {
+    "hard": true,
+    "oracle": "oracles/test_pages_zero.py",
+    "fix": {
+      "file": "bookstore/catalog.py",
+      "old": "    if pages is None:\n        return None",
+      "new": "    if not pages:\n        return None"
+    },
+    "group": "ZeroDivisionError",
+    "prompt": "Some supplier feed imports on the bookstore service fail with HTTP 500, but most work. incident.log in this directory is the service's production log (about 9 MB). Find the error behind the failing imports, write a pytest test in tests/ that reproduces it, then fix the code so the test passes. Run tests with `python -m pytest`. Don't change incident.log or settings.json."
+  },
+  "hard-drift": {
+    "hard": true,
+    "oracle": "oracles/test_supplier_timeout.py",
+    "fix": {
+      "file": "bookstore/supplier.py",
+      "old": "except urllib.error.URLError as exc:",
+      "new": "except (urllib.error.URLError, TimeoutError) as exc:"
+    },
+    "prompt": "Users report failed reorders on the bookstore service. incident.log in this directory is the production log (about 5 MB, from the gateway and the service; production runs last week's build). Find the error behind the failures, write a pytest test in tests/ that reproduces it, then fix the code so the test passes. Run tests with `python -m pytest`. Don't change incident.log or settings.json."
   }
 }

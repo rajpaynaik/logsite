@@ -67,6 +67,16 @@ def sh(cmd: list[str], cwd: Path, env: dict | None = None, timeout: int = 300):
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
 
 
+def ensure_logs(scenarios) -> None:
+    """The hard scenarios' logs aren't in git (~30 MB): write the missing ones."""
+    missing = [s for s in scenarios if not (HERE / "scenarios" / s / "incident.log").is_file()]
+    if missing:
+        print(f"writing the logs of {', '.join(missing)} ...", file=sys.stderr, flush=True)
+        args = [arg for s in missing for arg in ("--scenario", s)]
+        subprocess.run([python(), str(HERE / "make_incidents.py"), *args], check=True,
+                       stdout=subprocess.DEVNULL)  # fmt: skip
+
+
 def workspace(dest: Path, scenario: str, fixed: bool = False) -> Path:
     """A copy of the service with the scenario's log, as a git repo (to see what changed)."""
     shutil.copytree(APP, dest, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
@@ -110,17 +120,27 @@ def pytest_ok(ws: Path, files: list[str], env: dict | None = None) -> bool:
 # --- the arms ---------------------------------------------------------------------------------
 
 
-def run_logsite(ws: Path, env: dict) -> dict:
+def run_logsite(ws: Path, env: dict, group: str | None = None) -> dict:
+    """``group``: the scenario names one when it isn't the one logsite would pick (a quiet
+    error the report describes), as the person would after reading ``logsite errors``."""
     start = time.monotonic()
-    r = sh([logsite_bin(), "repro", "--from", "incident.log", "--write-test"], ws, env)
+    cmd = [logsite_bin(), "repro", *([group] if group else []), "--from", "incident.log",
+           "--write-test"]  # fmt: skip
+    r = sh(cmd, ws, env)
     return {"ok": r.returncode == 0, "seconds": round(time.monotonic() - start, 1),
             "output": r.stdout[-2000:] + r.stderr[-1000:]}  # fmt: skip
 
 
 def run_claude(
-    ws: Path, env: dict, with_logsite: bool, model: str | None, budget: float, out: Path
+    ws: Path,
+    env: dict,
+    with_logsite: bool,
+    model: str | None,
+    budget: float,
+    out: Path,
+    prompt: str = PROMPT,
 ) -> dict:
-    cmd = ["claude", "-p", PROMPT, "--output-format", "json", "--permission-mode", "acceptEdits",
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "acceptEdits",
            "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence",
            "--max-budget-usd", str(budget), "--allowedTools", *BASE_TOOLS]  # fmt: skip
     if with_logsite:
@@ -186,7 +206,10 @@ def score(ws: Path, scenario: str, tmp: Path) -> dict:
     out["fail_to_pass"] = out["fails_on_bug"] and out["passes_on_fix"]
     # logsite's verdict on the same tests, against the buggy code
     env = {**os.environ, "XDG_CACHE_HOME": str(tmp / "cache")}
-    r = sh([logsite_bin(), "repro", "--from", "incident.log", "--format", "json"], buggy, env)
+    group = SCENARIOS[scenario].get("group")
+    cmd = [logsite_bin(), "repro", *([group] if group else []), "--from", "incident.log",
+           "--format", "json"]  # fmt: skip
+    r = sh(cmd, buggy, env)
     case = json.loads(r.stdout)["id"] if r.returncode == 0 else None
     verdict = None
     if case and tests:
@@ -214,6 +237,7 @@ def check() -> int:
     """The oracles fail on the bugs and pass on the reference fixes; the service's own tests
     pass on both."""
     bad = 0
+    ensure_logs(SCENARIOS)
     with tempfile.TemporaryDirectory() as tmp:
         for scenario, spec in SCENARIOS.items():
             for fixed in (False, True):
@@ -253,6 +277,8 @@ def main() -> int:
     p.add_argument("--run", action="store_true", help="also run the AI arms (costs usage)")
     p.add_argument("--arm", action="append", choices=["logsite", *AI_ARMS])
     p.add_argument("--scenario", action="append", choices=list(SCENARIOS))
+    p.add_argument("--hard", action="store_true", help="the hard scenarios only")
+    p.add_argument("--easy", action="store_true", help="the easy scenarios only")
     p.add_argument("--trials", type=int, default=1)
     p.add_argument("--model", help="for the AI arms, e.g. sonnet or opus (default: claude's)")
     p.add_argument("--budget", type=float, default=2.0, help="max $ per claude run (2.00)")
@@ -263,7 +289,12 @@ def main() -> int:
     arms = args.arm or (["logsite", *AI_ARMS] if args.run else ["logsite"])
     if any(a in AI_ARMS for a in arms) and not args.run:
         sys.exit("the claude arms cost usage: add --run to run them")
-    scenarios = args.scenario or list(SCENARIOS)
+    scenarios = args.scenario or [
+        s for s, spec in SCENARIOS.items()
+        if (args.hard and spec.get("hard")) or (args.easy and not spec.get("hard"))
+        or not (args.hard or args.easy)
+    ]  # fmt: skip
+    ensure_logs(scenarios)
     runs = len([a for a in arms if a in AI_ARMS]) * len(scenarios) * args.trials
     if runs:
         print(f"{runs} claude -p run(s), up to 20 min and ${args.budget:.2f} each", file=sys.stderr)
@@ -283,12 +314,12 @@ def main() -> int:
                 env = shims(out / "bin", with_logsite=arm != "claude")
                 env["XDG_CACHE_HOME"] = str(out / "cache")
                 print(f"{arm} · {scenario} · trial {trial} ...", file=sys.stderr, flush=True)
+                spec = SCENARIOS[scenario]
                 if arm == "logsite":
-                    result = run_logsite(ws, env)
+                    result = run_logsite(ws, env, spec.get("group"))
                 else:
-                    result = run_claude(
-                        ws, env, arm == "claude+logsite", args.model, args.budget, out
-                    )
+                    result = run_claude(ws, env, arm == "claude+logsite", args.model,
+                                        args.budget, out, spec.get("prompt", PROMPT))  # fmt: skip
                 with tempfile.TemporaryDirectory() as tmp:
                     s = score(ws, scenario, Path(tmp))
                 rows.append({"arm": arm, "scenario": scenario, "trial": trial,

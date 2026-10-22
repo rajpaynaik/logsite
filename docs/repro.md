@@ -35,8 +35,16 @@ $ pbpaste | logsite repro --from -        # a stack trace copied from Slack or a
 ```
 
 With a `[backend]` configured, leave out `--from`: `logsite repro <id>` reads the last
-`--hours` from it (the ids are the ones `logsite errors` shows). The first group is the
-default; pick another by id or by its number in the list.
+`--hours` from it (the ids are the ones `logsite errors` shows). Pick a group by its id, its
+number in the list, or text in it (`logsite repro ZeroDivisionError`). With none named, it
+takes the first group a test of your code can reproduce: raised in the project, logged as
+an error (not a warning with a traceback, not another service's line).
+
+A file has no window before it to compare with, so `logsite errors --from` (and `repro`)
+read the trend from the file itself: an error that, at its own rate, should have shown up
+several times before its first occurrence, and is still going at the end, started during
+the file. It's marked `new` and ranked first, above louder errors that were there all
+along. A cache outage that came and went isn't new.
 
 Where each part comes from:
 
