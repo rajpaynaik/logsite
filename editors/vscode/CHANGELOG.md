@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- TypeScript and JavaScript: the extension opens for them, with production counts, errors and lint on their log calls (`console`, pino, winston, bunyan, NestJS).
+
 ## 0.4.0
 
 - No extension changes; released with logsite 0.4.0, which reproduces production errors as failing tests (`logsite repro`) and is now licensed under Apache 2.0.

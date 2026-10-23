@@ -4,7 +4,7 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## Unreleased
+## 0.4.1 (2026-10-22)
 
 - [TypeScript and JavaScript](docs/languages.md#typescript-and-javascript): log calls from
   `console`, pino, winston, bunyan and NestJS, matched, linted and grouped; the editor
