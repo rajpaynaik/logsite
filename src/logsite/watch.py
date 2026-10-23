@@ -10,7 +10,8 @@ history, and sends one message when something needs a person:
 - **regression**: a group that had stopped, with the fix it had, is back;
 - **spike**: a group well above its usual rate.
 
-Each group alerts at most once per ``cooldown_minutes`` for each reason.
+Each group alerts at most once per ``cooldown_minutes`` for each reason. The first check reads
+the last day, so the errors are there to see at once, and sends nothing.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from .errors import AppFiles, ErrorGroup, group_json, summarize_errors
 from .store import Store, event_row
 
 KINDS = ("new", "regression", "spike")
+BACKFILL = timedelta(hours=24)  # the first check reads this far back, and alerts on nothing
 LABELS = {"new": "new", "regression": "back", "spike": "spiking"}
 
 
@@ -58,6 +60,7 @@ class CheckResult:
     alerts: list[tuple[ErrorGroup, str]]  # (group, kind) sent this time
     message: str | None = None
     sent: list[str] = field(default_factory=list)
+    first: bool = False  # the first check: the last day stored, nothing sent
 
 
 def alert_kind(g: ErrorGroup, watch: WatchConfig) -> str | None:
@@ -99,7 +102,9 @@ def check(
     from . import history
     from .cli import _duration
 
-    window = TimeRange(now - _duration(cfg.watch.lookback), now)
+    first = store.get_meta("checked_at") is None
+    window = TimeRange(now - max(_duration(cfg.watch.lookback), BACKFILL if first else timedelta()),
+                       now)  # fmt: skip
     rows: list[dict] = []
 
     def collect(group, record, info, service, level, trace_id):
@@ -114,6 +119,9 @@ def check(
     stored = store.write(summary.groups, rows)
     _line_counts(store, backend, sites, now, limit)
     _prune(store, cfg.store.retention_days, now)
+    store.set_meta("checked_at", now.astimezone(timezone.utc).isoformat())
+    if first:  # what already failed today is stored and shown, not paged about
+        return CheckResult(window, summary.events, stored, summary.groups, [], first=True)
 
     cooldown = timedelta(minutes=cfg.watch.cooldown_minutes)
     alerts = []

@@ -99,6 +99,16 @@ pytest: 1 failed, 6 passed · 1 cause(s) · exit 1
    raised   bookstore/supplier.py:31 in restock()
 ```
 
+## Prefer a browser?
+
+```bash
+logsite app
+```
+
+Connect your log store, Slack and a database in a few forms, each with a test button, then see
+your production errors grouped by cause, with the line of code and a button that writes the
+failing test. [More](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md).
+
 ## Use it on your own service
 
 ```bash
@@ -172,6 +182,7 @@ pip install "logsite[lsp,mcp]"       # + the editor language server and the MCP 
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md) ·
 [Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
+[logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
 [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
 [Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
 [Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·

@@ -1121,6 +1121,35 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
         store.close()
 
 
+def cmd_app(args: argparse.Namespace, cfg: Config) -> int:
+    import webbrowser
+
+    from .webapp import App, make_server
+
+    local = args.host in ("127.0.0.1", "localhost", "::1")
+    if not local and not args.token:
+        sys.exit(f"logsite: listening on {args.host} needs --token (people sign in with it)")
+    app = App(cfg.root, limit=args.limit)
+    try:
+        server = make_server(app, args.host, args.port, args.token)
+    except OSError as exc:
+        sys.exit(f"logsite: can't listen on {args.host}:{args.port}: {exc}")
+    port = server.server_address[1]
+    url = f"http://{'127.0.0.1' if local else args.host}:{port}/"
+    print(f"logsite app for {cfg.root} on {url}  (Ctrl+C to stop)", file=sys.stderr, flush=True)
+    if args.watch and app.status()["configured"]:
+        app.start_watch()
+    if not args.no_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app.stop_watch()
+    return 0
+
+
 def _start_sync_loop(cfg: Config, every: timedelta, limit: int) -> None:
     """Keep the history filled from a long-running process: every ``every``, record the
     errors since the last round (with a few minutes' overlap; counts don't double)."""
@@ -1582,6 +1611,15 @@ def main(argv: list[str] | None = None) -> int:
         "--sync-every", metavar="SPAN", help="also fill the history store, e.g. every 15m"
     )
     p.set_defaults(func=cmd_alert_server)
+
+    p = sub.add_parser("app", help="set up logsite and see production errors in your browser")
+    p.add_argument("--port", type=int, default=8077)
+    p.add_argument("--host", default="127.0.0.1", help="another address needs --token")
+    p.add_argument("--token", help="what people sign in with, when not on 127.0.0.1")
+    p.add_argument("--watch", action="store_true", help="start watching production right away")
+    p.add_argument("--no-browser", action="store_true", help="don't open the browser")
+    p.add_argument("--limit", type=int, default=5000, help="error records per check (5000)")
+    p.set_defaults(func=cmd_app)
 
     p = sub.add_parser(
         "watch", help="check the logs on a schedule, keep every error, post new ones to Slack"

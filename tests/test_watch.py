@@ -99,8 +99,8 @@ def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
     cfg, sites, app = project(tmp_path, monkeypatch)
     t0 = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=2)
     log = tmp_path / "app.log"
-    # failing since before logsite watched (every 5 minutes): stored, but the first check
-    # doesn't page about it
+    # failing since before logsite watched (every 5 minutes): the first check reads the last
+    # day, stores it all, and pages about none of it
     log.write_text("\n".join(
         [line(t0 + timedelta(minutes=m), "charging ORD-1", lineno=7) for m in range(3)]
         + [line(t0 + timedelta(minutes=m), f"charge failed for ORD-{m}", DIV,
@@ -109,7 +109,8 @@ def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
     store = Store(store_url)
     sent: list = []
     first = run(cfg, sites, app, store, t0 + timedelta(minutes=5), sent)
-    assert first.events == 3 and first.stored == 3 and first.alerts == [] and sent == []
+    assert first.first and first.events == 7 and first.stored == 7
+    assert first.alerts == [] and sent == []
     # read again (overlapping windows): nothing is stored twice
     again = run(cfg, sites, app, store, t0 + timedelta(minutes=6), sent)
     assert again.stored == 0
@@ -138,7 +139,7 @@ def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
     assert groups["ZeroDivisionError: division by zero"]["raised_at"] == "app/checkout.py:9"
     (div,) = [g for g in store.groups() if g["exc_type"] == "ZeroDivisionError"]
     events = store.events(div["id"])
-    assert len(events) == 3 and "ZeroDivisionError" in events[0]["traceback"]  # in the windows
+    assert len(events) == 7 and "ZeroDivisionError" in events[0]["traceback"]
     assert events[0]["fields"]["email"] != "ann@example.com"  # masked before it's stored
     alerts = store._query("select group_id, kind, channels from alerts")
     assert [(a["kind"], a["channels"]) for a in alerts] == [("new", "slack")]

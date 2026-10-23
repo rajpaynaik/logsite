@@ -6,6 +6,10 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- [`logsite app`](docs/app.md): set logsite up in the browser (log store, Slack and database
+  forms, each with a test button), see the errors grouped by cause with the line of code, and
+  write or save a failing test with one click. Secrets are kept out of `logsite.toml`.
+- `logsite watch`'s first check reads the last 24 hours, stored and shown but not posted.
 - [`logsite watch`](docs/watch.md): checks the logs on a schedule, stores every error in your own
   database (SQLite, or Postgres with `pip install 'logsite[postgres]'`) for later analysis, and
   posts new errors, regressions and spikes to Slack, each at most once per cooldown.

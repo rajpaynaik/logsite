@@ -57,7 +57,9 @@ logsite watch
 | **regression** | a group that had stopped is back; the message says which release and commit fixed it last time |
 | **spike** | a group at least `spike_ratio` (5) times its usual rate, with at least `spike_min_count` (20) in the window |
 
-Each error alerts at most once per `cooldown_minutes` for each reason. Warnings that carry a
+Each error alerts at most once per `cooldown_minutes` for each reason. The first check reads
+the last 24 hours and stores them without posting, so you start with today's errors in the
+store and no flood in Slack. Warnings that carry a
 stack trace never page. Messages show where each error was raised, the line of code, and a
 link to it on GitHub or GitLab.
 

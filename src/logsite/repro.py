@@ -672,7 +672,7 @@ def skeleton(case: Case) -> str:
         "            raise record.exc_info[1]",
         "",
     ]
-    return "\n".join(lines)
+    return "\n".join(lines).lstrip("\n")  # no blank first line when there's nothing to import
 
 
 def _call_args(
