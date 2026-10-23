@@ -16,7 +16,8 @@ pip install logsite
 
 Point it at your code and the logs you already have (a log file, Loki, OpenSearch /
 Elasticsearch or CloudWatch). It turns thousands of stack traces into a few causes, each
-pointing at *your* line of code. No SDK, nothing to add to your services. Python, Java and Go.
+pointing at *your* line of code. No SDK, nothing to add to your services. Python, Java, Go,
+TypeScript and JavaScript.
 
 ## How is this different from Sentry, Datadog or Grafana?
 
@@ -146,7 +147,7 @@ See [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configu
 
 | | |
 |---|---|
-| **Languages** | Python (`logging`, structlog, loguru), Java (SLF4J, Log4j 2, java.util.logging, Lombok), Go (slog, zap, zerolog, logrus, logr, klog) |
+| **Languages** | Python (`logging`, structlog, loguru), Java (SLF4J, Log4j 2, java.util.logging, Lombok), Go (slog, zap, zerolog, logrus, logr, klog), TypeScript and JavaScript (console, pino, winston, bunyan, NestJS) |
 | **Log stores** | Log files, Loki, OpenSearch / Elasticsearch, CloudWatch Logs, OpenTelemetry (OTLP JSON from the Collector), Sentry |
 | **Tests and builds** | pytest, `go test`, Maven, Gradle, Jest, Vitest, tsc, javac, gcc-style compilers |
 | **Editors** | VS Code; Neovim, JetBrains, Helix, Zed through LSP |

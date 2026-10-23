@@ -200,8 +200,16 @@ def _size(raw: str) -> int:
 
 
 def _parse_ts(value: object) -> datetime | None:
-    if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value, tz=timezone.utc)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # epoch seconds (zap, structlog), or milliseconds (pino, bunyan, Date.now()),
+        # microseconds, nanoseconds: told apart by size
+        seconds = float(value)
+        while abs(seconds) > 1e11:
+            seconds /= 1000
+        try:
+            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
     if isinstance(value, str):
         try:
             return parse_iso(value)

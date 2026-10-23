@@ -467,10 +467,16 @@ def extract_error(record: LogRecord, fields: _Fields | None = None) -> ErrorInfo
     return None
 
 
+# pino's and bunyan's numeric "level" (Python's numbers are in "levelno", read apart)
+_NUMERIC_LEVELS = {10: "trace", 20: "debug", 30: "info", 40: "warn", 50: "error", 60: "fatal"}
+
+
 def level_of(record: LogRecord, fields: _Fields | None = None) -> str | None:
     f = fields or _Fields(record)
     for key in LEVEL_FIELDS:
         value = f.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and key == "level":
+            return _NUMERIC_LEVELS.get(value, str(value))
         if value not in (None, "") and not isinstance(value, dict):
             return str(value)
     return None

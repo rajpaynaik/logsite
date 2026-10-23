@@ -6,6 +6,11 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- [TypeScript and JavaScript](docs/languages.md#typescript-and-javascript): log calls from
+  `console`, pino, winston, bunyan and NestJS, matched, linted and grouped; the editor
+  extension opens for them too.
+- pino and bunyan: `time` in epoch milliseconds (it read as seconds and crashed `logsite
+  errors`), and their numeric levels (`50` is error).
 - [Sentry](docs/sentry.md) backend: a project's error events, with their exception chains and
   lines of code, grouped and reproduced like errors from logs.
 - structlog's `dict_tracebacks`: each frame's line of code is read too.

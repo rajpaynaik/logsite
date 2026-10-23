@@ -1,5 +1,6 @@
 """The lint rules that don't depend on the language (LL001–LL005, LL007), checked from the
-facts the Java and Go indexers collect. Python has its own, richer checks in ``lint.py``."""
+facts the Java, Go and TypeScript indexers collect. Python has its own, richer checks in
+``lint.py``."""
 
 from __future__ import annotations
 
@@ -21,6 +22,19 @@ HINTS = {
         "swallowed": (
             "a broad catch swallows the exception and logs it at {level}, so nothing will "
             "alert on it; log at error with the exception, or catch a narrower one"
+        ),
+    },
+    "typescript": {
+        "eager": 'pass values as an object instead: logger.info({ orderId }, "order failed")',
+        "lost": 'pass the error itself: logger.error({ err }, "payment failed")',
+        "lost_message": (
+            "err.message keeps the text but drops the stack trace; pass the error itself: "
+            'logger.error({ err }, "payment failed")'
+        ),
+        "level": "use logger.warn or logger.error",
+        "swallowed": (
+            "the error is caught here and logged at {level}, so nothing will alert on it; "
+            "log at error with the error, or rethrow it"
         ),
     },
     "go": {

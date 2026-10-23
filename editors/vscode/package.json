@@ -1,7 +1,7 @@
 {
   "name": "logsite",
   "displayName": "logsite",
-  "description": "Production errors grouped by cause and marked on the line that raised them, log volume and cost per log call, and logging lint. Python, Java and Go.",
+  "description": "Production errors grouped by cause and marked on the line that raised them, log volume and cost per log call, and logging lint. Python, Java, Go, TypeScript and JavaScript.",
   "version": "0.4.0",
   "preview": true,
   "publisher": "rajpaynaik",
@@ -34,6 +34,8 @@
     "python",
     "java",
     "go",
+    "typescript",
+    "javascript",
     "slf4j",
     "slog",
     "structlog",
@@ -48,6 +50,10 @@
     "onLanguage:python",
     "onLanguage:java",
     "onLanguage:go",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
     "workspaceContains:logsite.toml"
   ],
   "main": "./out/extension.js",

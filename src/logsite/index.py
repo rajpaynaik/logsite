@@ -391,6 +391,10 @@ def index_source(source: str, path: str = "<string>") -> list[LogSite]:
         return []
 
 
+# Go's foo_test.go; TypeScript / JavaScript's foo.test.ts, foo.spec.js
+_TEST_FILE = re.compile(r"_test\.go$|\.(test|spec)\.[cm]?[jt]sx?$")
+
+
 def iter_python_files(root: Path, excludes: Iterable[str] = DEFAULT_EXCLUDES) -> Iterator[Path]:
     return iter_source_files(root, excludes, (".py",))
 
@@ -402,7 +406,7 @@ def iter_source_files(
     tests: bool = False,
 ) -> Iterator[Path]:
     """Source files under ``root`` in the languages logsite reads (or only ``suffixes``);
-    Go's ``_test.go`` files only with ``tests``."""
+    test files (Go's ``_test.go``, ``*.test.ts`` / ``*.spec.js``) only with ``tests``."""
     from .lang import EXTENSIONS
 
     wanted = tuple(suffixes or EXTENSIONS)
@@ -410,12 +414,12 @@ def iter_source_files(
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in excludes and not d.startswith(".")]
         for name in filenames:
-            if name.endswith(wanted) and (tests or not name.endswith("_test.go")):
+            if name.endswith(wanted) and (tests or not _TEST_FILE.search(name)):
                 yield Path(dirpath) / name
 
 
 def index_project(root: str | Path, excludes: Iterable[str] = DEFAULT_EXCLUDES) -> list[LogSite]:
-    """Index every Python, Java and Go file under ``root``."""
+    """Index every Python, Java, Go and TypeScript / JavaScript file under ``root``."""
     root = Path(root).resolve()
     sites: list[LogSite] = []
     for file in iter_source_files(root, excludes):

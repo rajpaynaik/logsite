@@ -1,5 +1,5 @@
-"""What the tree-sitter based indexers (Java, Go) share: parsing, and the facts about each
-log call that the language-neutral lint rules check."""
+"""What the tree-sitter based indexers (Java, Go, TypeScript) share: parsing, and the facts
+about each log call that the language-neutral lint rules check."""
 
 from __future__ import annotations
 
@@ -25,12 +25,18 @@ def parser_for(language: str) -> Any:
             import tree_sitter_java as grammar
         elif language == "go":
             import tree_sitter_go as grammar
+        elif language in ("typescript", "tsx"):
+            import tree_sitter_typescript as ts
+
+            build = ts.language_tsx if language == "tsx" else ts.language_typescript
+            return Parser(Language(build()))
         else:
             raise MissingParser(f"no parser for {language}")
     except ImportError as exc:
+        package = "typescript" if language == "tsx" else language
         raise MissingParser(
             f"logsite needs tree-sitter to read {language} code: "
-            f"pip install tree-sitter tree-sitter-{language}"
+            f"pip install tree-sitter tree-sitter-{package}"
         ) from exc
     return Parser(Language(grammar.language()))
 

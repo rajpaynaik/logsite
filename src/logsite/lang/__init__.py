@@ -1,7 +1,7 @@
 """Languages logsite reads. Python uses the standard library's ``ast`` (``index.py``,
-``lint.py``); Java and Go use tree-sitter grammars and share the language-neutral lint rules
-(``rules.py``). Everything downstream (matching, counts, cost, errors) works on ``file:line``
-and doesn't care which language a log call is in."""
+``lint.py``); Java, Go and TypeScript / JavaScript use tree-sitter grammars and share the
+language-neutral lint rules (``rules.py``). Everything downstream (matching, counts, cost,
+errors) works on ``file:line`` and doesn't care which language a log call is in."""
 
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ from pathlib import PurePath
 from ..models import LogSite
 from .base import CallFacts, MissingParser
 
-EXTENSIONS = {".py": "python", ".java": "java", ".go": "go"}
+EXTENSIONS = {
+    ".py": "python", ".java": "java", ".go": "go",
+    ".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript",
+    ".js": "typescript", ".jsx": "typescript", ".mjs": "typescript", ".cjs": "typescript",
+}  # fmt: skip
 
 
 def language_of(path: str) -> str:
@@ -19,8 +23,9 @@ def language_of(path: str) -> str:
 
 
 def index_calls(language: str, source: str, path: str) -> list[tuple[LogSite, CallFacts]]:
-    """Log calls in a Java or Go source, with the facts the lint rules check. A file that
-    doesn't parse yields what tree-sitter could recover, as an editor does."""
+    """Log calls in a Java, Go or TypeScript / JavaScript source, with the facts the lint
+    rules check. A file that doesn't parse yields what tree-sitter could recover, as an
+    editor does."""
     if language == "java":
         from . import java
 
@@ -29,6 +34,10 @@ def index_calls(language: str, source: str, path: str) -> list[tuple[LogSite, Ca
         from . import go
 
         return go.index(source, path)
+    if language == "typescript":  # and JavaScript: the TypeScript grammar reads both
+        from . import typescript
+
+        return typescript.index(source, path)
     raise ValueError(f"not a tree-sitter language: {language}")
 
 
