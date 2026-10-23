@@ -1,0 +1,80 @@
+name: logsite repro
+description: Open a draft pull request with a failing test for each new production error in your logs
+author: rajpaynaik
+branding:
+  icon: alert-triangle
+  color: red
+
+inputs:
+  version:
+    description: The logsite version to install (default: the latest)
+    default: ""
+  extras:
+    description: logsite extras to install, e.g. "cloudwatch"
+    default: ""
+  log-file:
+    description: Read the errors from this log file instead of the [backend] in logsite.toml
+    default: ""
+  hours:
+    description: The window to read from the backend (default: the config's, 24h)
+    default: ""
+  max-prs:
+    description: At most this many pull requests per run
+    default: "3"
+  all:
+    description: "true: every error group raised in the code, not only new ones"
+    default: "false"
+  test-command:
+    description: >-
+      Run each test with this (e.g. "python -m pytest") and put the logsite agent --expect
+      verdict in the pull request. Install the project's dependencies in an earlier step.
+    default: ""
+  base:
+    description: The branch to open pull requests against (default: the checked-out one)
+    default: ""
+  dry-run:
+    description: "true: write the tests and report, open nothing"
+    default: "false"
+  python-version:
+    description: The Python to install logsite with
+    default: "3.13"
+  github-token:
+    description: Token for pushing branches and opening pull requests
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install logsite
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        EXTRAS: ${{ inputs.extras }}
+      run: |
+        spec="logsite"
+        [ -n "$EXTRAS" ] && spec="logsite[$EXTRAS]"
+        [ -n "$VERSION" ] && spec="$spec==$VERSION"
+        python -m pip install --quiet "$spec"
+    - name: Reproduce new errors
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        LOG_FILE: ${{ inputs.log-file }}
+        HOURS: ${{ inputs.hours }}
+        MAX_PRS: ${{ inputs.max-prs }}
+        ALL: ${{ inputs.all }}
+        TEST_COMMAND: ${{ inputs.test-command }}
+        BASE: ${{ inputs.base }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        args=(--max-prs "$MAX_PRS")
+        [ -n "$LOG_FILE" ] && args+=(--from "$LOG_FILE")
+        [ -n "$HOURS" ] && args+=(--hours "$HOURS")
+        [ "$ALL" = "true" ] && args+=(--all)
+        [ -n "$TEST_COMMAND" ] && args+=(--test-command "$TEST_COMMAND")
+        [ -n "$BASE" ] && args+=(--base "$BASE")
+        [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+        python "$GITHUB_ACTION_PATH/integrations/github-action/repro_prs.py" "${args[@]}"

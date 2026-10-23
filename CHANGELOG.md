@@ -6,6 +6,8 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- [GitHub Action](docs/github-action.md): reads your logs on a schedule and opens a draft pull
+  request with a reproduction test for each new error, checked with `logsite agent --expect`.
 - [Data flow and security](docs/security.md): what logsite reads, keeps on disk, sends, and masks.
 - `SECURITY.md`, a code of conduct, and issue templates.
 - Releases come with signed build provenance and an SBOM.
