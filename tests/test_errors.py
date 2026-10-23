@@ -221,6 +221,30 @@ def test_parse_traceback_of_older_ipython_takes_the_line_from_the_arrow():
     ]
 
 
+def test_parse_traceback_of_colab_pasted_into_an_issue():
+    text = """\
+IndexError                                Traceback (most recent call last)
+
+[<ipython-input-18-d4c8f5222560>](https://localhost:8080/#) in <module>
+---> 21 seq.fit(X, y)
+
+4 frames
+
+[/usr/local/lib/python3.9/dist-packages/sklearn/model_selection/_validation.py](https://localhost:8080/#) in _aggregate_score_dicts(scores)
+   1929         else [score[key] for score in scores]
+-> 1930         for key in scores[0]
+   1931     }
+
+IndexError: list index out of range
+"""  # noqa: E501
+    (exc,) = parse_traceback(text)
+    assert exc.title == "IndexError: list index out of range"
+    assert [(f.file.rsplit("/", 1)[-1], f.line, f.function) for f in exc.frames] == [
+        ("<ipython-input-18-d4c8f5222560>", 21, "<module>"),
+        ("_validation.py", 1930, "_aggregate_score_dicts"),
+    ]
+
+
 def test_parse_traceback_of_a_django_debug_page():
     (exc,) = parse_traceback(DJANGO)
     assert exc.type == "PricingError" and exc.message == "can't price order 9001"
@@ -276,6 +300,11 @@ def test_join_multiline_keeps_ipython_django_and_wrapped_tracebacks_whole():
     assert len(events) == 3 and events[1].startswith("-" * 20)
     assert events[1].endswith("KeyError: 'EUR'")
     assert parse_traceback(events[1])[0].title == "KeyError: 'EUR'"
+
+
+def test_join_multiline_keeps_a_traceback_with_frames_left_out_whole():
+    lines = ["Traceback (most recent call last):", "...", *CHAINED.splitlines()[1:5]]
+    assert list(join_multiline(lines)) == ["\n".join(lines)]
 
 
 def test_join_multiline_ends_a_traceback_only_at_an_unindented_exception_line():

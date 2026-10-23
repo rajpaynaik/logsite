@@ -59,6 +59,8 @@ _IPY_CELL = re.compile(
 # older IPython: "/srv/app/x.py in wrapper(registry)", "<ipython-input-3-ab12> in <module>()"
 _IPY_OLD = re.compile(r"^(?P<file>(?:[/~<]|[A-Za-z]:\\)\S*) in (?P<func>[^(\s]+)")
 # the line it ran: "---> 52 return x", "-> 1701         other = Unit(other)"
+# Colab pasted into an issue: "[/usr/.../_validation.py](https://localhost:8080/#) in f(x)"
+_MD_LINK = re.compile(r"^\[(?P<text>[^\]]+)\]\([^)]*\)")
 _IPY_ARROW = re.compile(r"^-*> ?(?P<line>\d+)\s?(?P<code>.*)$")
 # Django's debug page ends "Exception Type: ValueError at /sitemap.xml", "Exception Value: ..."
 _DJANGO_TYPE = re.compile(r"^Exception Type: (?P<type>[\w.]+)(?: at \S*)?$")
@@ -212,6 +214,7 @@ def _ipython_line(exc: Exc, line: str, stripped: str) -> bool:
     """Read one line of an IPython traceback into ``exc``; True once it's the exception."""
     if not stripped or line[:1].isspace():  # the code around each frame's line
         return False
+    stripped = _MD_LINK.sub(r"\g<text>", stripped)
     for rx in (_IPY_FILE, _IPY_CELL, _IPY_OLD):
         m = rx.match(stripped)
         if m:
@@ -548,6 +551,8 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
             continuation = True
         elif in_frames and (not stripped or line[:1].isspace()):
             continuation = True
+        elif in_frames and stripped in ("...", "…"):
+            continuation = True  # frames left out by whoever pasted it
         elif not stripped:
             continue  # blank lines separate chained tracebacks; never an event of their own
         else:

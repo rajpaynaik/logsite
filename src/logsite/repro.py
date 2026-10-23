@@ -76,6 +76,9 @@ class Case:
     # where raised_at's statement is in the code here, when it moved since production ran
     # (found by the source text the traceback shows for it)
     local_at: str | None = None
+    # the line outside the project that called into it, as the traceback shows it (a
+    # script, a notebook cell, another library): {"at", "code"}
+    caller: dict | None = None
     request: dict = field(default_factory=dict)  # {"field", "value", "lines"}
     inputs: list[Input] = field(default_factory=list)
     history: dict | None = None
@@ -216,9 +219,32 @@ def build_case(
             if case.local_at == case.raised_at:
                 case.local_at = None
         case.entry = _entry(root, here, case.inputs)
+        case.caller = _caller(info.chain if info else [], case.frames)
         case.fake = _fake(root, case)
     case.missing = _missing(case, group)
     return case
+
+
+def _caller(chain: list, frames: list[str]) -> dict | None:
+    """The frame just outside the project's outermost one, when it isn't a library's and
+    the traceback shows its code: how the project was called (``est.fit_transform(X)``)."""
+    if not frames:
+        return None
+    path, _, line = frames[0].rpartition(":")
+    for exc in reversed(chain):  # the final exception has the whole stack
+        for n, f in enumerate(exc.frames):
+            file = f.file.replace("\\", "/")
+            if str(f.line) == line and (file == path or file.endswith("/" + path)):
+                before = exc.frames[n - 1] if n else None
+                # a notebook cell or a console ("<ipython-input-3-ab12>") is a caller too
+                if (
+                    before is None
+                    or not before.code
+                    or (before.is_library and not before.file.startswith("<"))
+                ):
+                    return None
+                return {"at": f"{before.file}:{before.line}", "code": before.code}
+    return None
 
 
 def _request(
@@ -632,6 +658,9 @@ def skeleton(case: Case) -> str:
         lines.append(f"{body}obj = {e['class']}(" + (f"\n{args}\n{body})" if args else ")"))
         call = f"obj.{e['function']}"
     args = _call_args(e["params"], case.inputs, body + "    ", e.get("args"))
+    if case.caller:
+        lines.append(f"{body}# production called it from {case.caller['at']}:")
+        lines.append(f"{body}#   {case.caller['code']}")
     awaited = "await " if e["is_async"] else ""
     lines.append(f"{body}{awaited}{call}(" + (f"\n{args}\n{body})" if args else ")"))
     lines += [
@@ -677,6 +706,7 @@ def case_json(case: Case) -> dict:
             "raised_in": case.raised_in,
             "local_at": case.local_at,
         },
+        "caller": case.caller,
         "root_cause": {
             "type": case.root_type,
             "message": case.root_message,
@@ -844,6 +874,9 @@ def render(data: dict, pal, test_file: str | None = None, todo: bool = False) ->
     if e:
         call = f"{e['class']}(…).{e['function']}" if e["class"] else e["function"]
         row("Call", f"{call}({', '.join(e['params'])})  from {e['module']}  {e['at']}")
+    c = data.get("caller")
+    if c:
+        row("Called by", f"{c['code'][:100]}  {pal.dim(c['at'])}")
     f = data.get("fake")
     if f:
         what = f"patch {f['target']}" if f.get("target") else "make it"

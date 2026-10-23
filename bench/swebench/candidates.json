@@ -1,0 +1,961 @@
+[
+ {
+  "instance_id": "astropy__astropy-14096",
+  "repo": "astropy/astropy",
+  "created_at": "2022-12-04T17:06:07Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'custom_coord' object has no attribute 'prop'",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 1,
+  "deepest_own": "astropy/coordinates/sky_coordinate.py:600 __getattr__",
+  "patched": [
+   "astropy/coordinates/sky_coordinate.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "astropy__astropy-14182",
+  "repo": "astropy/astropy",
+  "created_at": "2022-12-16T11:13:37Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: RST.__init__() got an unexpected keyword argument 'header_rows'",
+  "chain": 1,
+  "frames": 7,
+  "own_frames": 6,
+  "deepest_own": "astropy/io/ascii/core.py:1719 _get_writer",
+  "patched": [
+   "astropy/io/ascii/rst.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "astropy__astropy-14309",
+  "repo": "astropy/astropy",
+  "created_at": "2023-01-23T22:34:01Z",
+  "difficulty": "<15 min fix",
+  "error": "IndexError: tuple index out of range",
+  "chain": 1,
+  "frames": 4,
+  "own_frames": 3,
+  "deepest_own": "astropy/io/fits/connect.py:72 is_fits",
+  "patched": [
+   "astropy/io/fits/connect.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "astropy__astropy-7336",
+  "repo": "astropy/astropy",
+  "created_at": "2018-03-28T15:31:32Z",
+  "difficulty": "<15 min fix",
+  "error": "AttributeError: 'NoneType' object has no attribute 'to'",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "astropy/units/decorators.py:225 wrapper",
+  "patched": [
+   "astropy/units/decorators.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "astropy__astropy-7606",
+  "repo": "astropy/astropy",
+  "created_at": "2018-06-29T16:27:46Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: None is not a valid Unit",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "astropy/units/core.py:1810 __call__",
+  "patched": [
+   "astropy/units/core.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "astropy__astropy-7671",
+  "repo": "astropy/astropy",
+  "created_at": "2018-07-20T19:37:49Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: '<' not supported between instances of 'int' and 'str'",
+  "chain": 1,
+  "frames": 4,
+  "own_frames": 1,
+  "deepest_own": "astropy/utils/introspection.py:146 minversion",
+  "patched": [
+   "astropy/utils/introspection.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-10554",
+  "repo": "django/django",
+  "created_at": "2018-10-24T14:24:45Z",
+  "difficulty": "1-4 hours",
+  "error": "django.db.utils.ProgrammingError: ORDER BY position 4 is not in select list",
+  "chain": 1,
+  "frames": 12,
+  "own_frames": 11,
+  "deepest_own": "django/db/backends/utils.py:85 _execute",
+  "patched": [
+   "django/db/models/sql/compiler.py",
+   "django/db/models/sql/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-11087",
+  "repo": "django/django",
+  "created_at": "2019-03-16T22:59:57Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xed in position 78: invalid continuation byte",
+  "chain": 1,
+  "frames": 28,
+  "own_frames": 15,
+  "deepest_own": "django/db/backends/mysql/base.py:101 execute",
+  "patched": [
+   "django/db/models/deletion.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-11265",
+  "repo": "django/django",
+  "created_at": "2019-04-21T12:57:28Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "django.core.exceptions.FieldError: Cannot resolve keyword 'book_alice' into field. Choices are: book, content_object, co",
+  "chain": 1,
+  "frames": 16,
+  "own_frames": 14,
+  "deepest_own": "django/db/models/sql/query.py:1389 names_to_path",
+  "patched": [
+   "django/db/models/sql/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-11532",
+  "repo": "django/django",
+  "created_at": "2019-07-02T10:29:28Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "UnicodeEncodeError: 'latin-1' codec can't encode characters in position 39-40: ordinal not in range(256)",
+  "chain": 2,
+  "frames": 7,
+  "own_frames": 4,
+  "deepest_own": "django/core/mail/message.py:67 forbid_multi_line_headers",
+  "patched": [
+   "django/core/mail/message.py",
+   "django/core/mail/utils.py",
+   "django/core/validators.py",
+   "django/utils/encoding.py",
+   "django/utils/html.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-12663",
+  "repo": "django/django",
+  "created_at": "2020-04-04T18:58:49Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: int() argument must be a string, a bytes-like object or a number, not 'SimpleLazyObject'",
+  "chain": 1,
+  "frames": 10,
+  "own_frames": 9,
+  "deepest_own": "django/db/models/fields/__init__.py:968 get_prep_value",
+  "patched": [
+   "django/db/models/sql/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-12774",
+  "repo": "django/django",
+  "created_at": "2020-04-22T11:02:30Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: in_bulk()'s field_name must be a unique field but 'slug' isn't.",
+  "chain": 1,
+  "frames": 4,
+  "own_frames": 2,
+  "deepest_own": "django/db/models/query.py:680 in_bulk",
+  "patched": [
+   "django/db/models/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-13028",
+  "repo": "django/django",
+  "created_at": "2020-06-05T19:49:04Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "django.db.utils.NotSupportedError: ProductMetaDataType is disallowed in the filter clause.",
+  "chain": 1,
+  "frames": 8,
+  "own_frames": 7,
+  "deepest_own": "django/db/models/sql/query.py:1131 check_filterable",
+  "patched": [
+   "django/db/models/sql/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-13121",
+  "repo": "django/django",
+  "created_at": "2020-06-29T09:04:15Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "decimal.InvalidOperation: [<class 'decimal.ConversionSyntax'>]",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 6,
+  "deepest_own": "django/db/backends/base/operations.py:571 convert_durationfield_value",
+  "patched": [
+   "django/db/backends/base/operations.py",
+   "django/db/backends/mysql/operations.py",
+   "django/db/backends/sqlite3/operations.py",
+   "django/db/models/expressions.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-13406",
+  "repo": "django/django",
+  "created_at": "2020-09-10T12:38:11Z",
+  "difficulty": "<15 min fix",
+  "error": "AttributeError: 'NoneType' object has no attribute 'attname'",
+  "chain": 1,
+  "frames": 7,
+  "own_frames": 6,
+  "deepest_own": "django/db/models/query_utils.py:150 _check_parent_chain",
+  "patched": [
+   "django/db/models/query.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-13449",
+  "repo": "django/django",
+  "created_at": "2020-09-22T13:04:03Z",
+  "difficulty": "1-4 hours",
+  "error": "OperationalError: near \"OVER\": syntax error",
+  "chain": 2,
+  "frames": 13,
+  "own_frames": 12,
+  "deepest_own": "django/db/backends/sqlite3/base.py:396 execute",
+  "patched": [
+   "django/db/models/expressions.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-13807",
+  "repo": "django/django",
+  "created_at": "2020-12-23T21:09:32Z",
+  "difficulty": "<15 min fix",
+  "error": "sqlite3.OperationalError: near \"order\": syntax error",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 2,
+  "deepest_own": "django/db/backends/sqlite3/base.py:411 execute",
+  "patched": [
+   "django/db/backends/sqlite3/base.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-14017",
+  "repo": "django/django",
+  "created_at": "2021-02-18T13:05:27Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: <django.db.models.expressions.Exists object at 0x7fc18dd21400>",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "django/db/models/query_utils.py:73 _combine",
+  "patched": [
+   "django/db/models/query_utils.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-14238",
+  "repo": "django/django",
+  "created_at": "2021-04-08T10:41:31Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: Primary key 'example.core.models.MyBigAutoField' referred by DEFAULT_AUTO_FIELD must subclass AutoField.",
+  "chain": 1,
+  "frames": 19,
+  "own_frames": 9,
+  "deepest_own": "django/db/models/options.py:246 _get_default_pk_class",
+  "patched": [
+   "django/db/models/fields/__init__.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-15104",
+  "repo": "django/django",
+  "created_at": "2021-11-19T20:46:58Z",
+  "difficulty": "<15 min fix",
+  "error": "KeyError: 'to'",
+  "chain": 1,
+  "frames": 19,
+  "own_frames": 18,
+  "deepest_own": "django/db/migrations/autodetector.py:99 only_relation_agnostic_fields",
+  "patched": [
+   "django/db/migrations/autodetector.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-15380",
+  "repo": "django/django",
+  "created_at": "2022-01-31T19:44:44Z",
+  "difficulty": "<15 min fix",
+  "error": "KeyError: ('test_one', 'mymodel')",
+  "chain": 1,
+  "frames": 11,
+  "own_frames": 9,
+  "deepest_own": "django/db/migrations/autodetector.py:823 generate_renamed_fields",
+  "patched": [
+   "django/db/migrations/autodetector.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-15525",
+  "repo": "django/django",
+  "created_at": "2022-03-18T10:39:26Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "testbug.models.DoesNotExist: Author matching query does not exist.",
+  "chain": 2,
+  "frames": 7,
+  "own_frames": 6,
+  "deepest_own": "django/db/models/query.py:496 get",
+  "patched": [
+   "django/core/serializers/base.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-15814",
+  "repo": "django/django",
+  "created_at": "2022-07-03T19:10:56Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: 'id' is not in list",
+  "chain": 1,
+  "frames": 12,
+  "own_frames": 9,
+  "deepest_own": "django/db/models/query.py:2243 __init__",
+  "patched": [
+   "django/db/models/sql/query.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-15973",
+  "repo": "django/django",
+  "created_at": "2022-08-19T18:10:02Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'str' object has no attribute '_meta'",
+  "chain": 1,
+  "frames": 14,
+  "own_frames": 12,
+  "deepest_own": "django/db/backends/base/schema.py:453 create_model",
+  "patched": [
+   "django/db/migrations/autodetector.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-16136",
+  "repo": "django/django",
+  "created_at": "2022-09-29T11:47:50Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: object HttpResponseNotAllowed can't be used in 'await' expression",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 2,
+  "deepest_own": "django/core/handlers/base.py:197 _get_response",
+  "patched": [
+   "django/views/generic/base.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "django__django-16255",
+  "repo": "django/django",
+  "created_at": "2022-11-04T13:49:40Z",
+  "difficulty": "<15 min fix",
+  "error": "ValueError: max() arg is an empty sequence",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 6,
+  "deepest_own": "django/contrib/sitemaps/__init__.py:170 get_latest_lastmod",
+  "patched": [
+   "django/contrib/sitemaps/__init__.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "django__django-16454",
+  "repo": "django/django",
+  "created_at": "2023-01-15T09:23:24Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "django.core.management.base.CommandError: Error: the following arguments are required: name",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 1,
+  "deepest_own": "django/core/management/base.py:72 error",
+  "patched": [
+   "django/core/management/base.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-20859",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2021-08-19T09:03:04Z",
+  "difficulty": "<15 min fix",
+  "error": "TypeError: Legend needs either Axes or Figure as parent",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "matplotlib/legend.py:441 __init__",
+  "patched": [
+   "lib/matplotlib/legend.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-22719",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2022-03-28T14:42:28Z",
+  "difficulty": "<15 min fix",
+  "error": "ConversionError: Failed to convert value(s) to axis units: []",
+  "chain": 4,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "matplotlib/axis.py:1508 convert_units",
+  "patched": [
+   "lib/matplotlib/category.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-23476",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2022-07-22T18:58:22Z",
+  "difficulty": "<15 min fix",
+  "error": "OverflowError: signed integer is greater than maximum",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 6,
+  "deepest_own": "matplotlib/backends/backend_macosx.py:32 __init__",
+  "patched": [
+   "lib/matplotlib/figure.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-24026",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2022-09-28T02:45:01Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: Cannot put cycle reference ('C2') in prop_cycler",
+  "chain": 1,
+  "frames": 8,
+  "own_frames": 7,
+  "deepest_own": "matplotlib/rcsetup.py:285 validate_color_for_prop_cycle",
+  "patched": [
+   "lib/matplotlib/stackplot.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-24149",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2022-10-12T22:00:54Z",
+  "difficulty": "<15 min fix",
+  "error": "StopIteration",
+  "chain": 1,
+  "frames": 5,
+  "own_frames": 4,
+  "deepest_own": "matplotlib/cbook/__init__.py:1749 _safe_first_finite",
+  "patched": [
+   "lib/matplotlib/axes/_axes.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-25479",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2023-03-16T17:59:41Z",
+  "difficulty": "<15 min fix",
+  "error": "ValueError: Colormap some_cmap_name is not recognized. Possible values are: Set1_r, gnuplot_r, Set3_r, gist_rainbow, gis",
+  "chain": 1,
+  "frames": 7,
+  "own_frames": 6,
+  "deepest_own": "matplotlib/cm.py:163 get_cmap",
+  "patched": [
+   "lib/matplotlib/cm.py",
+   "lib/matplotlib/colors.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "matplotlib__matplotlib-26291",
+  "repo": "matplotlib/matplotlib",
+  "created_at": "2023-07-12T04:29:07Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'NoneType' object has no attribute '_get_renderer'",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 3,
+  "deepest_own": "matplotlib/offsetbox.py:399 OffsetBox.get_window_extent",
+  "patched": [
+   "lib/mpl_toolkits/axes_grid1/inset_locator.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "psf__requests-1724",
+  "repo": "psf/requests",
+  "created_at": "2013-11-04T09:37:00Z",
+  "difficulty": "<15 min fix",
+  "error": "UnicodeDecodeError: 'ascii' codec can't decode byte 0xcf in position 140: ordinal not in range(128)",
+  "chain": 3,
+  "frames": 11,
+  "own_frames": 6,
+  "deepest_own": "requests/packages/urllib3/connectionpool.py:280 _make_request",
+  "patched": [
+   "requests/sessions.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "pydata__xarray-3677",
+  "repo": "pydata/xarray",
+  "created_at": "2020-01-09T16:07:14Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'DataArray' object has no attribute 'items'",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 5,
+  "deepest_own": "xarray/core/common.py:233 __getattr__",
+  "patched": [
+   "xarray/core/dataset.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "pylint-dev__pylint-8898",
+  "repo": "pylint-dev/pylint",
+  "created_at": "2023-07-29T21:53:59Z",
+  "difficulty": "1-4 hours",
+  "error": "re.error: missing ), unterminated subpattern at position 0",
+  "chain": 1,
+  "frames": 18,
+  "own_frames": 5,
+  "deepest_own": "pylint/config/argument.py:106 _regexp_csv_transfomer",
+  "patched": [
+   "pylint/config/argument.py",
+   "pylint/utils/__init__.py",
+   "pylint/utils/utils.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-12585",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2018-11-14T13:20:30Z",
+  "difficulty": "<15 min fix",
+  "error": "TypeError: get_params() missing 1 required positional argument: 'self'",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 2,
+  "deepest_own": "sklearn/base.py:60 clone",
+  "patched": [
+   "sklearn/base.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-13135",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2019-02-11T21:34:25Z",
+  "difficulty": "<15 min fix",
+  "error": "ValueError: bins must be monotonically increasing or decreasing",
+  "chain": 2,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sklearn/preprocessing/_discretization.py:255 transform",
+  "patched": [
+   "sklearn/preprocessing/_discretization.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-13328",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2019-02-28T12:47:52Z",
+  "difficulty": "<15 min fix",
+  "error": "TypeError: The numpy boolean negative, the `-` operator, is not supported, use the `~` operator or the logical_not funct",
+  "chain": 1,
+  "frames": 8,
+  "own_frames": 2,
+  "deepest_own": "sklearn/linear_model/huber.py:93 _huber_loss_and_gradient",
+  "patched": [
+   "sklearn/linear_model/huber.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-14087",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2019-06-13T20:09:22Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "IndexError: too many indices for array",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sklearn/linear_model/logistic.py:2194 <listcomp>",
+  "patched": [
+   "sklearn/linear_model/logistic.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-14710",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2019-08-21T16:29:47Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: '<' not supported between instances of 'str' and 'float'",
+  "chain": 1,
+  "frames": 10,
+  "own_frames": 6,
+  "deepest_own": "sklearn/metrics/classification.py:94 _check_targets",
+  "patched": [
+   "sklearn/ensemble/_hist_gradient_boosting/gradient_boosting.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-14894",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2019-09-05T17:41:11Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ZeroDivisionError: float division by zero",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sklearn/svm/base.py:302 _sparse_fit",
+  "patched": [
+   "sklearn/svm/base.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-25747",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2023-03-02T20:38:47Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: Length mismatch: Expected axis has 4 elements, new values have 96 elements",
+  "chain": 1,
+  "frames": 9,
+  "own_frames": 3,
+  "deepest_own": "sklearn/utils/_set_output.py:59 _wrap_in_pandas_container",
+  "patched": [
+   "sklearn/utils/_set_output.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "scikit-learn__scikit-learn-25973",
+  "repo": "scikit-learn/scikit-learn",
+  "created_at": "2023-03-25T13:27:07Z",
+  "difficulty": "<15 min fix",
+  "error": "IndexError: list index out of range",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 1,
+  "deepest_own": "sklearn/model_selection/_validation.py:1930 _aggregate_score_dicts",
+  "patched": [
+   "sklearn/feature_selection/_sequential.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-13372",
+  "repo": "sympy/sympy",
+  "created_at": "2017-09-30T16:05:48Z",
+  "difficulty": "<15 min fix",
+  "error": "UnboundLocalError: local variable 'reprec' referenced before assignment",
+  "chain": 2,
+  "frames": 5,
+  "own_frames": 4,
+  "deepest_own": "sympy/core/evalf.py:1308 evalf",
+  "patched": [
+   "sympy/core/evalf.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-13877",
+  "repo": "sympy/sympy",
+  "created_at": "2018-01-10T01:55:34Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "TypeError: Invalid NaN comparison",
+  "chain": 1,
+  "frames": 21,
+  "own_frames": 19,
+  "deepest_own": "sympy/core/expr.py:323 __lt__",
+  "patched": [
+   "sympy/matrices/matrices.py",
+   "sympy/utilities/randtest.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-14711",
+  "repo": "sympy/sympy",
+  "created_at": "2018-05-12T17:00:20Z",
+  "difficulty": "<15 min fix",
+  "error": "TypeError: A Vector must be supplied",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sympy/physics/vector/vector.py:710 _check_vector",
+  "patched": [
+   "sympy/physics/vector/vector.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-17139",
+  "repo": "sympy/sympy",
+  "created_at": "2019-07-01T19:17:18Z",
+  "difficulty": "<15 min fix",
+  "error": "TypeError: Invalid comparison of complex I",
+  "chain": 1,
+  "frames": 16,
+  "own_frames": 15,
+  "deepest_own": "sympy/core/expr.py:406 __lt__",
+  "patched": [
+   "sympy/simplify/fu.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-17318",
+  "repo": "sympy/sympy",
+  "created_at": "2019-08-01T11:55:36Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "IndexError: tuple index out of range",
+  "chain": 2,
+  "frames": 9,
+  "own_frames": 8,
+  "deepest_own": "sympy/simplify/radsimp.py:1068 _split_gcd",
+  "patched": [
+   "sympy/simplify/radsimp.py",
+   "sympy/simplify/sqrtdenest.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-17630",
+  "repo": "sympy/sympy",
+  "created_at": "2019-09-18T22:56:31Z",
+  "difficulty": "1-4 hours",
+  "error": "AttributeError: 'Zero' object has no attribute 'cols'",
+  "chain": 2,
+  "frames": 4,
+  "own_frames": 3,
+  "deepest_own": "sympy/matrices/expressions/blockmatrix.py:80 <listcomp>",
+  "patched": [
+   "sympy/matrices/expressions/matexpr.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-17655",
+  "repo": "sympy/sympy",
+  "created_at": "2019-09-25T17:04:26Z",
+  "difficulty": "<15 min fix",
+  "error": "GeometryError: Don't know how to add 2.0*Point2D(1, 1) and a Point object",
+  "chain": 2,
+  "frames": 2,
+  "own_frames": 1,
+  "deepest_own": "sympy/geometry/point.py:222 __add__",
+  "patched": [
+   "sympy/geometry/point.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-19954",
+  "repo": "sympy/sympy",
+  "created_at": "2020-08-12T06:07:32Z",
+  "difficulty": "<15 min fix",
+  "error": "IndexError: list assignment index out of range",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sympy/combinatorics/perm_groups.py:2207 minimal_blocks",
+  "patched": [
+   "sympy/combinatorics/perm_groups.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-20428",
+  "repo": "sympy/sympy",
+  "created_at": "2020-11-14T05:56:31Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "IndexError: tuple index out of range",
+  "chain": 1,
+  "frames": 5,
+  "own_frames": 4,
+  "deepest_own": "sympy/polys/monomials.py:359 monomial_min",
+  "patched": [
+   "sympy/polys/domains/expressiondomain.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-20438",
+  "repo": "sympy/sympy",
+  "created_at": "2020-11-17T08:24:33Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'Complement' object has no attribute 'equals'",
+  "chain": 1,
+  "frames": 6,
+  "own_frames": 4,
+  "deepest_own": "sympy/core/relational.py:308 _eval_simplify",
+  "patched": [
+   "sympy/core/relational.py",
+   "sympy/sets/handlers/comparison.py",
+   "sympy/sets/handlers/issubset.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-22714",
+  "repo": "sympy/sympy",
+  "created_at": "2021-12-19T18:54:36Z",
+  "difficulty": "<15 min fix",
+  "error": "ValueError: Imaginary coordinates are not permitted.",
+  "chain": 1,
+  "frames": 8,
+  "own_frames": 6,
+  "deepest_own": "sympy/geometry/point.py:153 __new__",
+  "patched": [
+   "sympy/geometry/point.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ },
+ {
+  "instance_id": "sympy__sympy-23824",
+  "repo": "sympy/sympy",
+  "created_at": "2022-07-23T22:13:36Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AssertionError",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 1,
+  "deepest_own": "sympy/sympy-dev/test_kahane_leading_gamma_matrix_bug.py:17 test_kahane_leading_gamma_matrix_bug",
+  "patched": [
+   "sympy/physics/hep/gamma_matrices.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-23950",
+  "repo": "sympy/sympy",
+  "created_at": "2022-08-20T18:21:10Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "AttributeError: 'Contains' object has no attribute 'as_relational'",
+  "chain": 1,
+  "frames": 3,
+  "own_frames": 2,
+  "deepest_own": "sympy/functions/elementary/piecewise.py:185 eval",
+  "patched": [
+   "sympy/sets/contains.py"
+  ],
+  "fix_in_trace": false,
+  "fix_in_deepest": false
+ },
+ {
+  "instance_id": "sympy__sympy-24213",
+  "repo": "sympy/sympy",
+  "created_at": "2022-11-03T14:00:09Z",
+  "difficulty": "15 min - 1 hour",
+  "error": "ValueError: Dimension of \"v1\" is Dimension(velocity), but it should be Dimension(acceleration*time)",
+  "chain": 1,
+  "frames": 2,
+  "own_frames": 1,
+  "deepest_own": "sympy/physics/units/unitsystem.py:179 _collect_factor_and_dimension",
+  "patched": [
+   "sympy/physics/units/unitsystem.py"
+  ],
+  "fix_in_trace": true,
+  "fix_in_deepest": true
+ }
+]

@@ -207,6 +207,25 @@ def test_a_pasted_trace_is_the_same_group_as_the_log(shop):
     assert any("no trace or request id" in m for m in case.missing)
 
 
+def test_a_pasted_trace_says_how_the_project_was_called(shop):
+    trace = KEY_TRACE.replace(
+        "Traceback (most recent call last):\n",
+        "Traceback (most recent call last):\n...\n"  # frames left out by whoever pasted it
+        '  File "<ipython-input-3-ab12>", line 1, in <module>\n'
+        '    handle({"sku": "BK-1", "qty": 5, "warehouse": "overflow"})\n',
+    )
+    path = repro.save_pasted(shop, trace + "\n")
+    case, _ = repro.find_case(load_config(shop), None, log_file=str(path))
+    assert case.id == case_of(shop, "2").id
+    assert case.caller == {
+        "at": "<ipython-input-3-ab12>:1",
+        "code": 'handle({"sku": "BK-1", "qty": 5, "warehouse": "overflow"})',
+    }
+    assert "#   handle({" in repro.skeleton(case)
+    # a library's frame says nothing about how the project was called
+    assert case_of(shop, "2").caller is None
+
+
 def test_an_error_logged_without_a_stack_trace_says_so(shop):
     (shop / "plain.log").write_text(
         _line("40:00", "ERROR", "restock failed for BK-1", 19, "") + "\n"
