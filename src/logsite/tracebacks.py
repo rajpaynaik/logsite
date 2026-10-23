@@ -414,10 +414,11 @@ def _structlog_chain(value: list) -> list[Exc]:
         if not isinstance(item, dict) or "exc_type" not in item:
             return []
         frames = [
-            Frame(str(f.get("filename", "?")), int(f.get("lineno") or 0), str(f.get("name", "?")))
+            Frame(str(f.get("filename", "?")), int(f.get("lineno") or 0), str(f.get("name", "?")),
+                  str(f["line"]).strip() or None if f.get("line") else None)  # its code
             for f in item.get("frames") or []
             if isinstance(f, dict)
-        ]
+        ]  # fmt: skip
         chain.append(Exc(str(item["exc_type"]), str(item.get("exc_value") or ""), frames))
     return chain[::-1]
 

@@ -81,6 +81,15 @@ region = "us-east-1"
 ```
 
 ```toml
+[backend]
+type = "sentry"                      # see docs/sentry.md
+org = "acme"
+project = "checkout"
+token_env = "SENTRY_AUTH_TOKEN"
+# url = "https://sentry.example.com" # self-hosted
+```
+
+```toml
 [history]                           # the history store: see docs/history.md
 enabled = true
 # path = "/var/lib/logsite/history.db"   # default: ~/.local/share/logsite/history/

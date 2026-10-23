@@ -6,6 +6,9 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- [Sentry](docs/sentry.md) backend: a project's error events, with their exception chains and
+  lines of code, grouped and reproduced like errors from logs.
+- structlog's `dict_tracebacks`: each frame's line of code is read too.
 - [OpenTelemetry](docs/opentelemetry.md): reads OTLP JSON from the Collector's file exporter, both
   log records and the `exception` events on trace spans.
 - [GitHub Action](docs/github-action.md): reads your logs on a schedule and opens a draft pull
