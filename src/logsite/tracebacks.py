@@ -31,6 +31,7 @@ TYPE_FIELDS = ("exc_type", "exception.type", "error.type", "error.kind")
 MESSAGE_FIELDS = ("exc_message", "exception.message", "error.message")
 
 TRACEBACK_START = "Traceback (most recent call last):"
+TRACEBACK_HEAD = "Traceback (most recent call last)"  # IPython and Jupyter leave out the colon
 CHAIN_MARKERS = (
     "During handling of the above exception, another exception occurred:",
     "The above exception was the direct cause of the following exception:",
@@ -50,6 +51,20 @@ _JAVA_EXC = re.compile(
 # "panic: ..." and the runtime's "fatal error: concurrent map writes" (not recoverable)
 _GO_PANIC = re.compile(r"^(?P<kind>panic|fatal error): (?P<msg>.*?)(?: \[recovered[^\]]*\])?$")
 _GO_FILE = re.compile(r"^\t(?P<file>\S+\.go):(?P<line>\d+)(?: \+0x[0-9a-f]+)?$")
+# IPython 8+: "File ~/app/x.py:52, in wrapper(registry, *args)", "Cell In[4], line 1"
+_IPY_FILE = re.compile(r"^File (?P<file>.+?):(?P<line>\d+), in (?P<func>[^(]+)")
+_IPY_CELL = re.compile(
+    r"^(?:Cell|Input) In ?\[\d*\](?:, line (?P<line>\d+))?(?:, in (?P<func>[^(]+))?"
+)
+# older IPython: "/srv/app/x.py in wrapper(registry)", "<ipython-input-3-ab12> in <module>()"
+_IPY_OLD = re.compile(r"^(?P<file>(?:[/~<]|[A-Za-z]:\\)\S*) in (?P<func>[^(\s]+)")
+# the line it ran: "---> 52 return x", "-> 1701         other = Unit(other)"
+_IPY_ARROW = re.compile(r"^-*> ?(?P<line>\d+)\s?(?P<code>.*)$")
+# Django's debug page ends "Exception Type: ValueError at /sitemap.xml", "Exception Value: ..."
+_DJANGO_TYPE = re.compile(r"^Exception Type: (?P<type>[\w.]+)(?: at \S*)?$")
+_DJANGO_VALUE = "Exception Value:"
+_ANSI = re.compile(r"\x1b\[[\d;]*m")
+_WRAP_WIDTH = 70  # a frame line at least this long may have been hard-wrapped by a terminal
 _TEXT_LEVEL = re.compile(r"\b(ERROR|CRITICAL|FATAL|EXCEPTION)\b")
 _LIBRARY_PARTS = ("site-packages", "dist-packages", "node_modules")
 
@@ -135,22 +150,38 @@ class ErrorInfo:
 
 
 def parse_traceback(text: str) -> list[Exc]:
-    """Every exception in a traceback text, root cause first. Empty if there's none."""
+    """Every exception in a traceback text, root cause first. Empty if there's none.
+
+    Python's own format, IPython's and Jupyter's, and Django's debug page; also tracebacks
+    indented as a whole (quoted in an issue or an email) or hard-wrapped by a terminal."""
     chain: list[Exc] = []
     current: Exc | None = None
     done = True  # the current exception's type line has been read
-    for raw in text.splitlines():
+    ipython = False
+    indent = ""  # the indent of the whole traceback, when it was quoted
+    header = ""  # the last frame's "File ..." line, to put a wrapped one back together
+    for raw in _ANSI.sub("", text).splitlines():
         line = raw.rstrip()
         stripped = line.strip()
-        if stripped.endswith(TRACEBACK_START):
+        if stripped.endswith((TRACEBACK_START, TRACEBACK_HEAD)):
             current, done = Exc(type=""), False
+            ipython = not stripped.endswith(":")
+            indent = line[: len(line) - len(line.lstrip())]
             chain.append(current)
             continue
         if current is None or done:
+            if current and stripped.startswith(_DJANGO_VALUE) and not current.message:
+                current.message = stripped.removeprefix(_DJANGO_VALUE).strip()
+            continue
+        if indent and line.startswith(indent):
+            line = line[len(indent) :]
+        if ipython:
+            done = _ipython_line(current, line, stripped)
             continue
         m = _FRAME.match(line)
         if m:
             current.frames.append(Frame(m["file"], int(m["line"]), (m["func"] or "?").strip()))
+            header = line
             continue
         if not stripped:
             continue
@@ -159,10 +190,48 @@ def parse_traceback(text: str) -> list[Exc]:
             if last and last.code is None and not set(stripped) <= set("^~ "):
                 current.frames[-1] = Frame(last.file, last.line, last.function, stripped)
             continue
+        last = current.frames[-1] if current.frames else None
+        if last and last.code is None and len(header) >= _WRAP_WIDTH and ": " not in stripped:
+            # "..., line 446, in e" + "xecute_from_command_line"
+            m = _FRAME.match(header + stripped)
+            if m:
+                header += stripped
+                current.frames[-1] = Frame(m["file"], int(m["line"]), (m["func"] or "?").strip())
+                continue
+        m = _DJANGO_TYPE.match(stripped)
+        if m:
+            current.type, done = m["type"], True
+            continue
         m = _EXC_LINE.match(line)
         if m:
             current.type, current.message, done = m["type"], (m["msg"] or "").strip(), True
     return [e for e in chain if e.type]
+
+
+def _ipython_line(exc: Exc, line: str, stripped: str) -> bool:
+    """Read one line of an IPython traceback into ``exc``; True once it's the exception."""
+    if not stripped or line[:1].isspace():  # the code around each frame's line
+        return False
+    for rx in (_IPY_FILE, _IPY_CELL, _IPY_OLD):
+        m = rx.match(stripped)
+        if m:
+            d = m.groupdict()
+            file = d.get("file") or "<cell>"  # a notebook cell: never the project's code
+            func = (d.get("func") or "<module>").strip()
+            exc.frames.append(Frame(file, int(d.get("line") or 0), func))
+            return False
+    m = _IPY_ARROW.match(stripped)
+    if m:
+        if exc.frames:
+            last = exc.frames[-1]
+            line_no = last.line or int(m["line"])  # the older format has it only here
+            exc.frames[-1] = Frame(last.file, line_no, last.function, m["code"].strip() or None)
+        return False
+    m = _EXC_LINE.match(stripped)
+    if m:
+        exc.type, exc.message = m["type"], (m["msg"] or "").strip()
+        return True
+    return False
 
 
 def parse_java_trace(text: str) -> list[Exc]:
@@ -311,10 +380,10 @@ def parse_js_trace(text: str) -> list[Exc]:
 
 def _parse_any(value: str, f: _Fields) -> tuple[list[Exc], str] | None:
     """The chain in a stack-trace text of any language, and the text from its start."""
-    if TRACEBACK_START in value:
+    if TRACEBACK_HEAD in value:
         chain = parse_traceback(value)
         if chain:
-            return chain, value[value.index(TRACEBACK_START) :]
+            return chain, value[value.index(TRACEBACK_HEAD) :]
     if "\tat " in value or "\n    at " in value or value.lstrip().startswith("at "):
         chain = parse_java_trace(value)
         if chain:
@@ -443,11 +512,26 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
     in_frames = False  # between "Traceback ..." and the exception line
     in_panic = False  # after a Go "panic: ..."
     in_java = False  # inside a Java stack trace
+    ipython = False  # the frames are IPython's: unindented, up to the exception line
+    django_value = False  # Django's "Exception Value:" line comes next
+    previous = ""
     for raw in lines:
         line = raw.rstrip("\n")
         stripped = line.strip()
+        wrapped = len(previous) >= _WRAP_WIDTH and ": " not in stripped  # see parse_traceback
+        previous = line
         if not event or stripped.startswith("{"):
             continuation = False
+        elif django_value and stripped.startswith(_DJANGO_VALUE):
+            continuation, django_value = True, False
+        elif in_frames and _DJANGO_TYPE.match(stripped):
+            continuation, in_frames, django_value = True, False, True
+        elif in_frames and not ipython and wrapped and _FRAME.match(event[-1] + stripped):
+            continuation = True  # the rest of a frame line a terminal wrapped
+        elif in_frames and not line[:1].isspace() and _EXC_LINE.match(line):
+            continuation, in_frames = True, False
+        elif in_frames and ipython:
+            continuation = True  # "File ~/x.py:52, in f()", "---> 52 code": not indented
         elif in_panic and stripped and not _LOG_LINE_START.match(line):
             continuation = True
         elif _JAVA_CONTINUATION.match(line) or (
@@ -457,14 +541,13 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
             continuation = in_java = True
         elif in_java and stripped and line[:1].isspace():
             continuation = True  # "  Detail: ...", "  SQLState: 57014" under a cause
-        elif stripped.startswith(TRACEBACK_START):
+        elif stripped.startswith(TRACEBACK_START) or stripped.endswith(TRACEBACK_HEAD):
             continuation, in_frames = True, True
+            ipython = not stripped.endswith(":")
         elif stripped in CHAIN_MARKERS:
             continuation = True
         elif in_frames and (not stripped or line[:1].isspace()):
             continuation = True
-        elif in_frames and _EXC_LINE.match(line):
-            continuation, in_frames = True, False
         elif not stripped:
             continue  # blank lines separate chained tracebacks; never an event of their own
         else:
@@ -477,7 +560,8 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
             yield "\n".join(event)
         event = [line] if stripped else []
         in_java = False
-        in_frames = stripped.endswith(TRACEBACK_START)
+        in_frames = stripped.endswith((TRACEBACK_START, TRACEBACK_HEAD))
+        ipython = in_frames and not stripped.endswith(":")
         in_panic = bool(_GO_PANIC.search(stripped)) or (in_panic and not stripped)
     if event:
         yield "\n".join(event)

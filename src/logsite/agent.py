@@ -140,11 +140,7 @@ def _place(frames: list[Frame], app: AppFiles) -> tuple[str | None, str | None, 
     code = [(p, f) for p, f in own if not _is_test_path(p)] or own
     path, frame = code[-1]
     origin = None
-    if (
-        frames
-        and frames[-1] is not frame
-        and (frames[-1].is_library or not app.resolve(frames[-1]))
-    ):
+    if frames and frames[-1] is not frame and not app.resolve(frames[-1]):
         origin = frames[-1].library
     return f"{path}:{frame.line}", frame.function, origin
 

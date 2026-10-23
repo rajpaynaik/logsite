@@ -166,6 +166,130 @@ def test_join_multiline_puts_a_plain_text_traceback_back_together():
     assert len(parse_traceback(events[1])) == 2
 
 
+IPYTHON = """\
+---------------------------------------------------------------------------
+KeyError                                  Traceback (most recent call last)
+Cell In[4], line 1
+----> 1 convert({"amount": 3, "currency": "EUR"})
+
+File /srv/app/pricing.py:2, in convert(order)
+      1 def convert(order):
+----> 2     return order["amount"] * RATES[order["currency"]]
+
+KeyError: 'EUR'
+"""
+
+IPYTHON_OLD = """\
+KeyError                                  Traceback (most recent call last)
+<ipython-input-3-ab12cd> in <module>()
+----> 1 convert({"amount": 3, "currency": "EUR"})
+
+/srv/app/pricing.py in convert(order)
+      1 def convert(order):
+----> 2     return order["amount"] * RATES[order["currency"]]
+
+KeyError: 'EUR'
+"""
+
+DJANGO = """\
+Traceback (most recent call last):
+  File "/srv/app/checkout.py", line 19, in price
+    raise PricingError(f"can't price order {order['id']}") from e
+
+Exception Type: PricingError at /checkout/9001
+Exception Value: can't price order 9001
+"""
+
+
+def test_parse_traceback_of_ipython():
+    for text in (IPYTHON, "\x1b[0;31m" + IPYTHON.replace("KeyError: ", "\x1b[0mKeyError: ")):
+        (exc,) = parse_traceback(text)
+        assert exc.title == "KeyError: 'EUR'"
+        assert [(f.file, f.line, f.function) for f in exc.frames] == [
+            ("<cell>", 1, "<module>"),
+            ("/srv/app/pricing.py", 2, "convert"),
+        ]
+        assert exc.frames[-1].code == 'return order["amount"] * RATES[order["currency"]]'
+
+
+def test_parse_traceback_of_older_ipython_takes_the_line_from_the_arrow():
+    (exc,) = parse_traceback(IPYTHON_OLD)
+    assert exc.title == "KeyError: 'EUR'"
+    assert [(f.file, f.line, f.function) for f in exc.frames] == [
+        ("<ipython-input-3-ab12cd>", 1, "<module>"),
+        ("/srv/app/pricing.py", 2, "convert"),
+    ]
+
+
+def test_parse_traceback_of_a_django_debug_page():
+    (exc,) = parse_traceback(DJANGO)
+    assert exc.type == "PricingError" and exc.message == "can't price order 9001"
+    assert exc.frames[-1] == Frame("/srv/app/checkout.py", 19, "price", exc.frames[-1].code)
+
+
+def test_parse_traceback_quoted_as_a_whole():
+    quoted = "".join("    " + line + "\n" for line in CHAINED.splitlines())
+    root, final = parse_traceback(quoted)
+    assert root.title == "KeyError: 'EUR'" and root.frames[0].function == "convert"
+    assert final.type == "app.checkout.PricingError"
+
+
+WRAPPED = """\
+Traceback (most recent call last):
+  File "/srv/venv/lib/python3.12/site-packages/django/core/management/__init__.py", line 446, in e
+xecute_from_command_line
+    utility.execute()
+ValueError: bad
+"""
+
+
+def test_parse_traceback_puts_a_wrapped_frame_line_back_together():
+    (exc,) = parse_traceback(WRAPPED)
+    assert exc.title == "ValueError: bad"
+    (frame,) = exc.frames
+    assert frame.function == "execute_from_command_line" and frame.line == 446
+    assert frame.code == "utility.execute()"
+
+
+def test_join_multiline_keeps_ipython_django_and_wrapped_tracebacks_whole():
+    for text, last in (
+        (IPYTHON_OLD, "KeyError: 'EUR'"),
+        (DJANGO, "Exception Value: can't price order 9001"),
+        (WRAPPED, "ValueError: bad"),
+    ):
+        lines = [
+            "2026-10-17 12:00:01 ERROR failed",
+            *text.splitlines(),
+            "2026-10-17 12:00:02 INFO next",
+        ]
+        events = list(join_multiline(lines))
+        assert len(events) == 2, text
+        assert events[0].endswith(last) and events[1] == "2026-10-17 12:00:02 INFO next"
+        assert parse_traceback(events[0])
+    # IPython's rule line opens its own event: the traceback is one, rule and all
+    lines = [
+        "2026-10-17 12:00:01 INFO start",
+        *IPYTHON.splitlines(),
+        "2026-10-17 12:00:02 INFO next",
+    ]
+    events = list(join_multiline(lines))
+    assert len(events) == 3 and events[1].startswith("-" * 20)
+    assert events[1].endswith("KeyError: 'EUR'")
+    assert parse_traceback(events[1])[0].title == "KeyError: 'EUR'"
+
+
+def test_join_multiline_ends_a_traceback_only_at_an_unindented_exception_line():
+    lines = [
+        "Traceback (most recent call last):",
+        '  File "/srv/app/checkout.py", line 19, in price',
+        "    msg = 'Note: price missing'",
+        "ValueError: bad",
+        "2026-10-17 12:00:02 INFO next",
+    ]
+    events = list(join_multiline(lines))
+    assert events == ["\n".join(lines[:4]), lines[4]]
+
+
 # --- grouping ---------------------------------------------------------------------------
 
 
@@ -177,7 +301,13 @@ def test_normalize():
 def test_app_files_resolve_deployed_paths():
     assert APP.resolve(Frame("/srv/app/checkout.py", 1, "f")) == "app/checkout.py"
     assert APP.resolve(Frame("C:\\srv\\app\\checkout.py", 1, "f")) == "app/checkout.py"
-    assert APP.resolve(Frame("/usr/lib/python3.12/site-packages/app/checkout.py", 1, "f")) is None
+    # the project installed as a package in its image
+    assert (
+        APP.resolve(Frame("/usr/lib/python3.12/site-packages/app/checkout.py", 1, "f"))
+        == "app/checkout.py"
+    )
+    assert APP.resolve(Frame("/usr/lib/python3.12/site-packages/checkout.py", 1, "f")) is None
+    assert APP.resolve(Frame("/usr/lib/python3.12/site-packages/lib/checkout.py", 1, "f")) is None
     assert APP.resolve(Frame("/srv/other.py", 1, "f")) is None
 
 

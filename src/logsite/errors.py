@@ -73,6 +73,9 @@ TRACE_SUFFIXES = (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".kt", ".scala",
                   ".cs", ".rs", ".php")  # fmt: skip
 
 
+_SITE_DIRS = ("site-packages", "dist-packages")
+
+
 class AppFiles:
     """The project's Python files, to tell its own frames from library ones and to turn a
     deployed path (``/srv/app/checkout.py``) into a project path (``app/checkout.py``)."""
@@ -96,10 +99,10 @@ class AppFiles:
 
     def resolve(self, frame: Frame) -> str | None:
         """The project path of a frame, or None if it's not the project's code."""
-        if frame.is_library:
-            return None
         path = frame.file.replace("\\", "/")
         candidates = self._by_name.get(path.rsplit("/", 1)[-1], [])
+        if frame.is_library:
+            return self._installed(path, candidates)
         best, best_len = None, 0
         for c in candidates:
             if path == c or path.endswith("/" + c):
@@ -108,6 +111,20 @@ class AppFiles:
         if best is None and len(candidates) == 1:
             best = candidates[0]  # same file name, deployed under another layout
         return best
+
+    @staticmethod
+    def _installed(path: str, candidates: list[str]) -> str | None:
+        """The project's own package installed as one (``pip install .`` in its image, or a
+        library's users running it): ``site-packages/app/checkout.py`` is ``app/checkout.py``
+        when the project has that file, package directory and all."""
+        for part in _SITE_DIRS:
+            if f"/{part}/" in path:
+                rest = path.split(f"/{part}/", 1)[1]
+                if "/" in rest:
+                    for c in candidates:
+                        if c == rest or c.endswith("/" + rest):
+                            return c
+        return None
 
 
 @dataclass
@@ -299,7 +316,7 @@ def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
     if own and not root.logged_only:
         p, f = own[-1]
         group.raised_at, group.raised_in = f"{p}:{f.line}", f.function
-    if root.frames and (root.frames[-1].is_library or app.resolve(root.frames[-1]) is None):
+    if root.frames and app.resolve(root.frames[-1]) is None:
         group.origin = root.frames[-1].library  # the driver / client that threw it
         if group.origin and group.origin.startswith(_JDK_INTERNALS) and "." in root.type:
             group.origin = root.type.rsplit(".", 1)[0]  # sun.nio -> java.net: what it means
