@@ -21,6 +21,29 @@ jobs:
       - run: ruff format --check src tests
       - run: pytest -q
 
+  postgres:
+    # the error store against a real Postgres (the python job tests SQLite)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: logsite
+          POSTGRES_PASSWORD: logsite
+          POSTGRES_DB: logsite_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LOGSITE_TEST_POSTGRES: postgresql://logsite:logsite@localhost:5432/logsite_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,postgres]"
+      - run: pytest -q tests/test_watch.py
+
   package:
     runs-on: ubuntu-latest
     steps:

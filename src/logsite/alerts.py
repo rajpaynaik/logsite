@@ -188,37 +188,47 @@ def render(
     if not groups:
         out.append("No error logs in this window: the alert isn't about logged errors.")
     for i, g in enumerate(groups, 1):
-        h = g.get("history") or {}
-        trend = "back" if h.get("regression") else ("new" if g["new"] else (g["trend"] or ""))
-        out += [
-            "",
-            f"{i}. {bold(g['title'][:150])}  ·  {g['count']:,}"
-            + (f"  ·  {bold(trend)}" if trend else ""),
-        ]
-        causes = g["causes"]
-        if causes:
-            origin = f" ({g['origin']})" if g.get("origin") else ""
-            out.append(f"    root cause: {causes[0][:150]}{origin}")
-        if g["raised_at"]:
-            code = code_line(g["raised_at"]) if code_line else None
-            url = code_url(g["raised_at"]) if code_url else None
-            text = f"    raised: {_link(g['raised_at'], url, slack)}"
-            if code:
-                text += f"  `{code[:100]}`" if slack else f"   {code[:100]}"
-            out.append(text)
-        if g["logged_at"]:
-            url = code_url(g["logged_at"]) if code_url else None
-            out.append(f"    logged: {_link(g['logged_at'], url, slack)}")
-        trace = (g["sample"].get("ids") or {}).get(trace_field) or (
-            g["sample"].get("ids") or {}
-        ).get("trace_id")
-        if trace:
-            out.append(f"    example: `logsite trace {trace}`")
-        out += _history_lines(h)
+        out += group_lines(i, g, slack=slack, code_line=code_line, code_url=code_url,
+                           trace_field=trace_field)  # fmt: skip
     rest = summary["groups_total"] - len(groups)
     if rest > 0:
         out += ["", f"+ {rest} more group(s): `logsite errors`"]
     return "\n".join(out)
+
+
+def group_lines(i: int, g: dict, *, slack: bool, code_line=None, code_url=None,
+                trace_field: str = "trace_id", label: str | None = None) -> list[str]:  # fmt: skip
+    """One error group (``errors.group_json``) as a numbered block: the error, its count and
+    trend (or ``label``), the root cause, where it was raised and logged, an example."""
+    bold = (lambda s: f"*{s}*") if slack else (lambda s: s)
+    h = g.get("history") or {}
+    trend = label or (
+        "back" if h.get("regression") else ("new" if g["new"] else (g["trend"] or ""))
+    )
+    out = [
+        "",
+        f"{i}. {bold(g['title'][:150])}  ·  {g['count']:,}"
+        + (f"  ·  {bold(trend)}" if trend else ""),
+    ]
+    causes = g["causes"]
+    if causes:
+        origin = f" ({g['origin']})" if g.get("origin") else ""
+        out.append(f"    root cause: {causes[0][:150]}{origin}")
+    if g["raised_at"]:
+        code = code_line(g["raised_at"]) if code_line else None
+        url = code_url(g["raised_at"]) if code_url else None
+        text = f"    raised: {_link(g['raised_at'], url, slack)}"
+        if code:
+            text += f"  `{code[:100]}`" if slack else f"   {code[:100]}"
+        out.append(text)
+    if g["logged_at"]:
+        url = code_url(g["logged_at"]) if code_url else None
+        out.append(f"    logged: {_link(g['logged_at'], url, slack)}")
+    ids = g["sample"].get("ids") or {}
+    trace = ids.get(trace_field) or ids.get("trace_id")
+    if trace:
+        out.append(f"    example: `logsite trace {trace}`")
+    return out + _history_lines(h)
 
 
 MAX_INCIDENTS = 2

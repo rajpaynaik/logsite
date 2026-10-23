@@ -333,8 +333,12 @@ def group_errors(
     app: AppFiles,
     leaks: LeakConfig | None = None,
     sample_fields: Iterable[str] = ID_FIELDS,
+    on_event=None,
 ) -> dict[str, ErrorGroup]:
-    """Group error records by cause. Returns ``{fingerprint: group}``, unordered."""
+    """Group error records by cause. Returns ``{fingerprint: group}``, unordered.
+
+    ``on_event(group, record, info, service, level, trace_id)``, if given, is called for
+    every record once it's grouped: how ``logsite watch`` stores each occurrence."""
     matcher = Matcher(sites)
     groups: dict[str, ErrorGroup] = {}
     for record in records:
@@ -380,10 +384,9 @@ def group_errors(
         if site is not None:
             group._logged[site.id] += 1
             group._sites[site.id] = site
-        if len(group.trace_ids) < MAX_TRACE_IDS:
-            trace = _trace_id(record)
-            if trace:
-                group.trace_ids.add(trace)
+        trace = _trace_id(record)
+        if trace and len(group.trace_ids) < MAX_TRACE_IDS:
+            group.trace_ids.add(trace)
         service = _service(record)
         if service:
             group.services[service] += 1
@@ -394,6 +397,8 @@ def group_errors(
             level = text_head(record)[0]
         if level:
             group.levels[level.lower()] += 1
+        if on_event is not None:
+            on_event(group, record, info, service, level.lower() if level else None, trace)
         tenant = tenant_of(record)
         if tenant and (tenant in group.tenants or len(group.tenants) < MAX_TENANTS):
             group.tenants[tenant] += 1
@@ -530,11 +535,13 @@ def summarize_errors(
     leaks: LeakConfig | None = None,
     limit: int = 5000,
     sample_fields: Iterable[str] = ID_FIELDS,
+    on_event=None,
 ) -> ErrorSummary:
-    """Fetch the errors in ``window`` (and ``previous``, for trends) and group them."""
+    """Fetch the errors in ``window`` (and ``previous``, for trends) and group them.
+    ``on_event`` sees each error in ``window`` (see :func:`group_errors`)."""
     sites = list(sites)
     records = backend.query_errors(window, limit=limit)
-    groups = group_errors(records, sites, app, leaks, sample_fields)
+    groups = group_errors(records, sites, app, leaks, sample_fields, on_event)
     previous_events = None
     resolved = 0
     truncated = len(records) >= limit

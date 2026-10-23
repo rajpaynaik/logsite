@@ -4,6 +4,12 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- [`logsite watch`](docs/watch.md): checks the logs on a schedule, stores every error in your own
+  database (SQLite, or Postgres with `pip install 'logsite[postgres]'`) for later analysis, and
+  posts new errors, regressions and spikes to Slack, each at most once per cooldown.
+
 ## 0.4.1 (2026-10-22)
 
 - [TypeScript and JavaScript](docs/languages.md#typescript-and-javascript): log calls from

@@ -46,6 +46,14 @@ Example ``logsite.toml``::
     lookback_minutes = 30
     selector_labels = ["service_name"]
 
+    [watch]                          # logsite watch: errors to Slack, as they happen
+    every = "5m"
+    alert_on = ["new", "regression", "spike"]
+
+    [store]                          # where logsite watch keeps every error
+    url_env = "LOGSITE_DATABASE_URL"   # postgresql://...; default: a SQLite file
+    retention_days = 90
+
     [cost]                           # logsite cost, $/mo in the editor
     price_per_gb = 0.50              # what your log store charges per GB ingested
     price_per_million_events = 0     # per-event indexing charges, if any
@@ -71,6 +79,8 @@ from .history import HistoryConfig
 from .leaks import LeakConfig
 from .lint import LintConfig
 from .pipeline import PipelineConfig
+from .store import StoreConfig
+from .watch import WatchConfig
 
 
 @dataclass
@@ -91,6 +101,8 @@ class Config:
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
+    store: StoreConfig = field(default_factory=StoreConfig)
+    watch: WatchConfig = field(default_factory=WatchConfig)
     window_hours: float = 24.0
     excludes: list[str] = field(default_factory=list)
 
@@ -178,6 +190,8 @@ def load_config(start: str | Path | None = None) -> Config:
         pipeline=PipelineConfig.from_dict(data.get("pipeline", {})),
         alerts=AlertsConfig.from_dict(data.get("alerts", {})),
         history=HistoryConfig.from_dict(data.get("history", {})),
+        store=StoreConfig.from_dict(data.get("store", {})),
+        watch=WatchConfig.from_dict(data.get("watch", {})),
         window_hours=float(data.get("window_hours", 24)),
         excludes=list(data.get("exclude", [])),
     )

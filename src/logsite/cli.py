@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, replace
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import __version__, report
@@ -975,21 +975,7 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         history.apply(cfg, summary.groups, start, end, record=narrowed == cfg.backend)
         return _with_incidents(summary, cfg, backend)
 
-    url_template = source_url(cfg.root)
-    ref = resolve_ref(cfg.root, "HEAD") or "HEAD"
-
-    def split(location):
-        path, _, line = location.rpartition(":")
-        return path, int(line) if line.isdigit() else 0
-
-    def code_line(location):
-        return source_line(cfg.root, *split(location))
-
-    def code_url(location):
-        if not url_template:
-            return None
-        path, line = split(location)
-        return url_template.format(ref=ref, path=path, line=line)
+    code_line, code_url = _code_links(cfg)
 
     def dry_run(url, body):
         print(f"--- would POST to {url.split('?')[0]}:\n{body.get('text', '')}\n", flush=True)
@@ -1034,6 +1020,105 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
     except KeyboardInterrupt:
         pass
     return 0
+
+
+def _code_links(cfg: Config):
+    """``(code_line, code_url)``: a ``path:line``'s source text, and its URL on the forge."""
+    url_template = source_url(cfg.root)
+    ref = resolve_ref(cfg.root, "HEAD") or "HEAD"
+
+    def split(location):
+        path, _, line = location.rpartition(":")
+        return path, int(line) if line.isdigit() else 0
+
+    def code_line(location):
+        return source_line(cfg.root, *split(location))
+
+    def code_url(location):
+        if not url_template:
+            return None
+        path, line = split(location)
+        return url_template.format(ref=ref, path=path, line=line)
+
+    return code_line, code_url
+
+
+def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
+    import time
+
+    from .alerts import post_json
+    from .store import open_store
+    from .watch import check
+
+    if args.slack_webhook:
+        cfg.alerts.slack_webhook = args.slack_webhook
+    if args.every:
+        cfg.watch.every = args.every
+    if args.lookback:
+        cfg.watch.lookback = args.lookback
+    backend = _backend_or_exit(cfg)
+    every = _duration(cfg.watch.every).total_seconds()
+    _duration(cfg.watch.lookback)  # a bad value fails now, not at the first check
+    try:
+        store = open_store(cfg)
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+    excludes = DEFAULT_EXCLUDES | set(cfg.excludes)
+    code_line, code_url = _code_links(cfg)
+
+    def dry_run(url, body):
+        print(f"--- would POST to {url.split('?')[0]}:\n{body.get('text', '')}\n", flush=True)
+
+    acfg = cfg.alerts
+    targets = [n for n, v in (("Slack", acfg.slack_webhook), ("webhook", acfg.webhook)) if v]
+    to = ", ".join(targets) or "nobody (set [alerts] slack_webhook_env)"
+    dry = " (dry run: printed, not sent)" if args.dry_run else ""
+    print(
+        f"logsite watch: {backend.name} every {cfg.watch.every}, "
+        f"errors stored in {store.location}\n"
+        f"  alerts ({', '.join(cfg.watch.alert_on)}) to: {to}{dry}",
+        file=sys.stderr,
+        flush=True,
+    )
+    indexed_at = None
+    sites: list = []
+    app = None
+    try:
+        while True:
+            started = time.monotonic()
+            if indexed_at is None or started - indexed_at > 300:  # follow deploys
+                sites, app = _sites(cfg, None), AppFiles.scan(cfg.root, excludes)
+                indexed_at = started
+            now = datetime.now(timezone.utc)
+            try:
+                result = check(
+                    cfg, backend, sites, app, store, now,
+                    send=dry_run if args.dry_run else post_json,
+                    code_line=code_line, code_url=code_url, limit=args.limit,
+                )  # fmt: skip
+            except Exception as exc:  # a failed round (log store down) mustn't stop watching
+                print(f"{now:%H:%M:%S} check failed: {exc}", file=sys.stderr, flush=True)
+                if args.once:
+                    return 1
+            else:
+                if result.sent:
+                    sent = f"; alerted {len(result.alerts)} group(s) to {', '.join(result.sent)}"
+                elif result.alerts:
+                    sent = f"; {len(result.alerts)} to alert, nowhere to send"
+                else:
+                    sent = ""
+                line = (f"{now:%H:%M:%S} {result.events} error(s) in {len(result.groups)}"
+                        f" group(s), {result.stored} new stored{sent}")  # fmt: skip
+                print(line, file=sys.stderr, flush=True)
+                if args.once and result.message and not result.sent and not args.dry_run:
+                    print(result.message)
+            if args.once:
+                return 0
+            time.sleep(max(1.0, every - (time.monotonic() - started)))
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        store.close()
 
 
 def _start_sync_loop(cfg: Config, every: timedelta, limit: int) -> None:
@@ -1497,6 +1582,17 @@ def main(argv: list[str] | None = None) -> int:
         "--sync-every", metavar="SPAN", help="also fill the history store, e.g. every 15m"
     )
     p.set_defaults(func=cmd_alert_server)
+
+    p = sub.add_parser(
+        "watch", help="check the logs on a schedule, keep every error, post new ones to Slack"
+    )
+    p.add_argument("--every", help="how often to check, e.g. 5m (default: [watch] every)")
+    p.add_argument("--lookback", help="how far back each check reads (default: [watch], 15m)")
+    p.add_argument("--slack-webhook", help="Slack incoming webhook URL (default: [alerts])")
+    p.add_argument("--once", action="store_true", help="check once and exit (cron, CI)")
+    p.add_argument("--dry-run", action="store_true", help="print messages instead of sending")
+    p.add_argument("--limit", type=int, default=5000, help="error records per check (5000)")
+    p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("cost", help="bytes and estimated monthly spend per log call")
     p.add_argument("--hours", type=float)

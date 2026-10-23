@@ -37,6 +37,7 @@ All under your user's directories; delete any of them at any time.
 | Path | What |
 |---|---|
 | `$XDG_DATA_HOME/logsite/history/` (`~/.local/share/...`) | the history store, one SQLite file per project: error group summaries (masked titles, counts per hour, code locations, releases). Never log lines. Turn it off with `[history] enabled = false`. |
+| `$XDG_DATA_HOME/logsite/store/`, or your `[store] url` | `logsite watch`'s error store: every error it read (masked), hourly counts per log call, alerts sent. See [Watch production](watch.md) |
 | `$XDG_CACHE_HOME/logsite/repro/` (`~/.cache/...`) | `repro` cases (with masked inputs) and stack traces you pasted |
 | `$XDG_CACHE_HOME/logsite/agent/` | the full output of commands run through agent mode, to compare with the next run |
 | files you name | `--write-test`, `-o dashboard.json`, `-o logsite.alloy` |

@@ -130,6 +130,9 @@ See [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configu
   commits just before the errors started. → [Errors and incidents](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md)
 - **Remembers past fixes**: when an old error comes back, it shows the commit that fixed it
   last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
+- **Watches production and posts to Slack**: [`logsite watch`](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md)
+  checks your logs every few minutes, stores every error in your own Postgres (or SQLite) for
+  later analysis, and posts new errors, regressions and spikes to Slack.
 - **Opens a pull request per new error**: a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md)
   reads your logs on a schedule and opens a draft pull request with the reproduction test.
 - **Blocks bad releases in CI**: `logsite errors --since-deploy $TAG --fail-on-new` fails the build if the release brought a new error.
@@ -168,6 +171,7 @@ pip install "logsite[lsp,mcp]"       # + the editor language server and the MCP 
 [Agent mode](https://github.com/rajpaynaik/logsite/blob/main/docs/agent.md) ·
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md) ·
+[Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
 [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
 [Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
 [Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·
