@@ -1,0 +1,37 @@
+name: Bug
+description: logsite did something wrong, crashed, or missed an error
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The command you ran, and a few log lines or a stack trace that show it. Mask anything private first.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: logsite version
+      description: "`logsite --version`"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where the logs come from
+      multiple: true
+      options: [Log file, Loki, OpenSearch / Elasticsearch, CloudWatch, Other]
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language of the code
+      multiple: true
+      options: [Python, Java, Go, Other]

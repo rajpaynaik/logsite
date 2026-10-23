@@ -173,11 +173,14 @@ pip install "logsite[lsp,mcp]"       # + the editor language server and the MCP 
 [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) ·
 [Claude Code plugin](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md) ·
 [How it works](https://github.com/rajpaynaik/logsite/blob/main/docs/how-it-works.md) ·
+[Data flow and security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
 [Roadmap](https://github.com/rajpaynaik/logsite/blob/main/docs/roadmap.md)
 
 ## Status
 
-Early (0.x): feedback and contributors welcome. Formerly **loglens**: `loglens.toml` and
+Early (0.x): feedback and contributors welcome. Questions and ideas go in
+[Discussions](https://github.com/rajpaynaik/logsite/discussions); see the
+[changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md) for what's new. Formerly **loglens**: `loglens.toml` and
 `[tool.loglens]` configs keep working. See [CONTRIBUTING.md](https://github.com/rajpaynaik/logsite/blob/main/CONTRIBUTING.md);
 a new log backend is a good first PR.
 
