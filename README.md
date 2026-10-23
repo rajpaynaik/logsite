@@ -8,9 +8,33 @@
 
 **Your logs say something broke. logsite tells you which line of your code, and writes a test that proves it.**
 
+```bash
+pip install logsite
+```
+
+![64,580 log lines in, 4 causes out with the file and line of each, then a failing test that reproduces the new one](https://raw.githubusercontent.com/rajpaynaik/logsite/main/docs/demo/demo.gif)
+
 Point it at your code and the logs you already have (a log file, Loki, OpenSearch /
 Elasticsearch or CloudWatch). It turns thousands of stack traces into a few causes, each
 pointing at *your* line of code. No SDK, nothing to add to your services. Python, Java and Go.
+
+## How is this different from Sentry, Datadog or Grafana?
+
+**It needs no SDK and works on the logs you already have.** Sentry and Datadog see errors
+from services you've instrumented, inside their platform. Grafana and Loki store and search
+your logs, but don't know your code. logsite reads both your logs and your code, on your
+machine:
+
+| | logsite | Sentry, Datadog |
+|---|---|---|
+| Setup | point it at a log file or your log store | an SDK or agent in every service |
+| Where it runs | your machine or CI; no logs leave it | their cloud |
+| Knows your code | yes: maps each error to the line at your commit, even after the code moved | through the stack trace and a source integration |
+| Output | causes, the line, and a failing test checked to fail the way production did | an issue page |
+| Price | free, Apache 2.0 | per event or GB |
+
+It doesn't replace them: there's no hosted UI or real-time alerting of its own. It works
+alongside them, and plugs into Grafana as a data source and into Grafana alerts.
 
 ## Try it in 2 minutes
 
