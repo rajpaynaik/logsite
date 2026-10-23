@@ -147,7 +147,7 @@ See [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configu
 | | |
 |---|---|
 | **Languages** | Python (`logging`, structlog, loguru), Java (SLF4J, Log4j 2, java.util.logging, Lombok), Go (slog, zap, zerolog, logrus, logr, klog) |
-| **Log stores** | Log files, Loki, OpenSearch / Elasticsearch, CloudWatch Logs |
+| **Log stores** | Log files, Loki, OpenSearch / Elasticsearch, CloudWatch Logs, OpenTelemetry (OTLP JSON from the Collector) |
 | **Tests and builds** | pytest, `go test`, Maven, Gradle, Jest, Vitest, tsc, javac, gcc-style compilers |
 | **Editors** | VS Code; Neovim, JetBrains, Helix, Zed through LSP |
 | **AI assistants** | Claude Code plugin; any MCP client (Claude Desktop, Cursor, …) |
@@ -170,6 +170,7 @@ pip install "logsite[lsp,mcp]"       # + the editor language server and the MCP 
 [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
 [Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
 [Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·
+[OpenTelemetry](https://github.com/rajpaynaik/logsite/blob/main/docs/opentelemetry.md) ·
 [Lint rules](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md) ·
 [Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md) ·
 [Request timeline](https://github.com/rajpaynaik/logsite/blob/main/docs/timeline.md) ·

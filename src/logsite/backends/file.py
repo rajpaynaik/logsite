@@ -1,7 +1,9 @@
-"""Read logs from a local file (plain text or JSON lines). Handy for demos, tests and CI."""
+"""Read logs from a local file (plain text, JSON lines, or OpenTelemetry's OTLP JSON as the
+Collector's ``file`` exporter writes it). Handy for demos, tests and CI."""
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +11,20 @@ from pathlib import Path
 from ..models import LogRecord
 from ..tracebacks import is_error, join_multiline
 from .base import LogBackend, TimeRange, parse_line
+from .otlp import is_otlp, otlp_records
+
+
+def parse_event(raw: str) -> list[LogRecord]:
+    """The records in one event of a file: one, or a whole OTLP export request."""
+    if raw.lstrip().startswith('{"resource'):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = None
+        if is_otlp(data):
+            return otlp_records(data, len(raw.encode("utf-8", errors="replace")))
+    return [parse_line(raw)]
+
 
 # A log file is read whole, whatever its dates.
 ALL_TIME = TimeRange(
@@ -35,26 +51,26 @@ class FileBackend(LogBackend):
         first = last = None
         with self.path.open(encoding="utf-8", errors="replace") as fh:
             for raw in join_multiline(fh):
-                ts = parse_line(raw).timestamp if raw.strip() else None
-                if ts is None:
-                    continue
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-                first = ts if first is None or ts < first else first
-                last = ts if last is None or ts > last else last
+                for record in parse_event(raw) if raw.strip() else []:
+                    ts = record.timestamp
+                    if ts is None:
+                        continue
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    first = ts if first is None or ts < first else first
+                    last = ts if last is None or ts > last else last
         return (first, last) if first is not None and last is not None else None
 
     def count_total(self, time_range: TimeRange) -> int | None:
         n = 0
         with self.path.open(encoding="utf-8", errors="replace") as fh:
             for raw in join_multiline(fh):
-                if not raw.strip():
-                    continue
-                ts = parse_line(raw).timestamp
-                if ts is not None and ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-                if ts is not None and time_range.start <= ts <= time_range.end:
-                    n += 1  # lines without a time would count in every window
+                for record in parse_event(raw) if raw.strip() else []:
+                    ts = record.timestamp
+                    if ts is not None and ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts is not None and time_range.start <= ts <= time_range.end:
+                        n += 1  # lines without a time would count in every window
         return n
 
     def _read(
@@ -72,22 +88,22 @@ class FileBackend(LogBackend):
             for raw in join_multiline(fh):  # a multi-line traceback is one event
                 if not raw.strip():
                     continue
-                record = parse_line(raw)
-                if record.timestamp is None:
-                    # a line without a time (a Go runtime crash on stderr) happened right
-                    # after the last line that had one, not in every window
-                    record.timestamp = last_ts
-                else:
-                    last_ts = record.timestamp
-                if contains and contains not in raw:
-                    continue
-                if errors_only and not is_error(record):
-                    continue
-                ts = record.timestamp
-                if ts is not None:
-                    if ts.tzinfo is None:
-                        ts = ts.replace(tzinfo=timezone.utc)
-                    if not (time_range.start <= ts <= time_range.end):
+                for record in parse_event(raw):
+                    if record.timestamp is None:
+                        # a line without a time (a Go runtime crash on stderr) happened right
+                        # after the last line that had one, not in every window
+                        record.timestamp = last_ts
+                    else:
+                        last_ts = record.timestamp
+                    if contains and contains not in raw:
                         continue
-                out.append(record)
+                    if errors_only and not is_error(record):
+                        continue
+                    ts = record.timestamp
+                    if ts is not None:
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=timezone.utc)
+                        if not (time_range.start <= ts <= time_range.end):
+                            continue
+                    out.append(record)
         return list(out)

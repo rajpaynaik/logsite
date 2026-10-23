@@ -6,6 +6,8 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- [OpenTelemetry](docs/opentelemetry.md): reads OTLP JSON from the Collector's file exporter, both
+  log records and the `exception` events on trace spans.
 - [GitHub Action](docs/github-action.md): reads your logs on a schedule and opens a draft pull
   request with a reproduction test for each new error, checked with `logsite agent --expect`.
 - [Data flow and security](docs/security.md): what logsite reads, keeps on disk, sends, and masks.
