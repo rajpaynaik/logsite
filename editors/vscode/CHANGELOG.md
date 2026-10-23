@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- No extension changes; released with logsite 0.4.0, which reproduces production errors as failing tests (`logsite repro`) and is now licensed under Apache 2.0.
+
 ## 0.3.5
 
 - No extension changes; released with logsite 0.3.5, which joins stack traces split into separate Loki entries (`logsite pipeline --multiline`, and when reading them).
