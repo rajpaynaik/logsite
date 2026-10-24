@@ -869,6 +869,17 @@ def _write(text: str, output: str | None) -> None:
 
 
 def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
+    if args.store:
+        from .grafana_store import build_store_dashboard
+
+        try:
+            dashboard = build_store_dashboard(args.store, args.title, args.uid)
+        except ValueError as exc:
+            sys.exit(f"logsite: {exc}")
+        _write(json.dumps(dashboard, indent=2) + "\n", args.output)
+        where = f" written to {args.output}" if args.output else ""
+        print(f"error store dashboard for a {args.store} data source{where}", file=sys.stderr)
+        return 0
     if args.generic:
         dashboard = build_dashboard(
             [],
@@ -1129,6 +1140,8 @@ def cmd_db(args: argparse.Namespace, cfg: Config) -> int:
     from .store import SCHEMA_VERSION, connect, default_path, dialect_for, schema_sql
 
     url = args.url or cfg.store.url or str(default_path(cfg.root))
+    if args.action == "backfill":
+        return _db_backfill(args, cfg, url)
     if args.action == "sql":
         if url.lower().startswith(("clickhouse://", "clickhouses://")):
             from .store_clickhouse import SCHEMA
@@ -1152,6 +1165,56 @@ def cmd_db(args: argparse.Namespace, cfg: Config) -> int:
             print(f"  last check     {checked or 'never'}")
     finally:
         store.close()
+    return 0
+
+
+def _db_backfill(args: argparse.Namespace, cfg: Config, url: str) -> int:
+    from .models import parse_iso
+    from .store import connect
+    from .watch import backfill
+
+    backend = _backend_or_exit(cfg)
+    now = datetime.now(timezone.utc)
+    try:
+        end = parse_iso(args.to) if args.to else now
+        start = parse_iso(args.from_) if args.from_ else end - _duration(args.since or "7d")
+    except ValueError as exc:
+        sys.exit(f"logsite: {exc}")
+    start, end = (t if t.tzinfo else t.replace(tzinfo=timezone.utc) for t in (start, end))
+    if start >= end:
+        sys.exit("logsite: --from must be before --to")
+    chunk = _duration(args.chunk)
+    try:
+        store = connect(url)
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+    excludes = DEFAULT_EXCLUDES | set(cfg.excludes)
+    sites, app = _sites(cfg, None), AppFiles.scan(cfg.root, excludes)
+    print(f"backfilling {store.location} from {backend.name}: "
+          f"{start:%Y-%m-%d %H:%M} to {end:%Y-%m-%d %H:%M} UTC, {args.chunk} at a time",
+          file=sys.stderr, flush=True)  # fmt: skip
+    total = stored = capped = 0
+    try:
+        for c in backfill(cfg, backend, sites, app, store, start, end, chunk, limit=args.limit):
+            total, stored = total + c.events, stored + c.stored
+            capped += c.truncated
+            note = "  (hit --limit: use a smaller --chunk)" if c.truncated else ""
+            if c.events or c.truncated:
+                print(f"  {c.window.start:%Y-%m-%d %H:%M}  {c.events:>6,} error(s) in"
+                      f" {c.groups} group(s), {c.stored:,} new{note}",
+                      file=sys.stderr, flush=True)  # fmt: skip
+    except KeyboardInterrupt:
+        print("stopped: run it again to go on (nothing is stored twice)", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        sys.exit(f"logsite: backfill stopped: {exc} (run it again to go on)")
+    finally:
+        store.close()
+    print(
+        f"done: {total:,} error(s) read, {stored:,} new in the store"
+        + (f"; {capped} chunk(s) hit the limit" if capped else ""),
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -1545,6 +1608,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-o", "--output", metavar="FILE")
     p.add_argument("--title")
     p.add_argument("--uid", help="dashboard uid (keeps the same URL when you re-import)")
+    p.add_argument(
+        "--store", choices=["postgres", "mysql", "mssql"],
+        help="a dashboard on logsite's error store, through this SQL data source",
+    )  # fmt: skip
     p.add_argument("--hours", type=float, help="how far back to sample records for the setup")
     p.add_argument("--level-field", help="field holding the level (default: detected)")
     p.add_argument(
@@ -1648,10 +1715,16 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("db", help="the error store: create its tables, see them, print the SQL")
     p.add_argument(
-        "action", choices=["init", "status", "sql"],
-        help="init: create or upgrade the tables; status: their rows; sql: print the DDL",
+        "action", choices=["init", "status", "sql", "backfill"],
+        help="init: create or upgrade the tables; status: their rows; sql: print the DDL; "
+        "backfill: read the log store's history into it",
     )  # fmt: skip
     p.add_argument("--url", help="the database (default: [store] url, else the SQLite file)")
+    p.add_argument("--since", help="backfill: how far back, e.g. 30d (default 7d)")
+    p.add_argument("--from", dest="from_", help="backfill: start, ISO 8601 (instead of --since)")
+    p.add_argument("--to", help="backfill: end, ISO 8601 (default: now)")
+    p.add_argument("--chunk", default="1h", help="backfill: read this much at a time (1h)")
+    p.add_argument("--limit", type=int, default=5000, help="backfill: errors per chunk (5000)")
     p.set_defaults(func=cmd_db)
 
     p = sub.add_parser("app", help="set up logsite and see production errors in your browser")

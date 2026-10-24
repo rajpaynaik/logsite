@@ -169,3 +169,34 @@ def test_dump_toml_round_trips():
             "timeline": {"field": "trace_id", "backend": {"type": "file", "path": "a b.log"}},
             "pipeline": {"sample": {"app/api.py:88": 0.01}}}  # fmt: skip
     assert tomllib.loads(dump_toml(data)) == data
+
+
+def test_errors_by_date_range_service_and_text(app):
+    application, _, _, root = app
+    api(app, "POST", "/api/settings", {"backend": {"type": "file",
+                                                   "values": {"path": "app.log"}}})  # fmt: skip
+    from logsite.backends import from_config
+    from logsite.errors import AppFiles
+    from logsite.index import index_project
+    from logsite.store import open_store
+    from logsite.watch import backfill
+
+    cfg = application.cfg()
+    store = open_store(cfg)
+    now = datetime.now(timezone.utc)
+    chunks = list(backfill(cfg, from_config(cfg.backend), index_project(root),
+                           AppFiles.scan(root), store, now - timedelta(days=2), now,
+                           timedelta(hours=6)))  # fmt: skip
+    store.close()
+    assert sum(c.stored for c in chunks) == 3 and len(chunks) == 8  # 2 days in 6 h chunks
+    start = (now - timedelta(minutes=1, seconds=30)).isoformat()
+    _, r = api(app, "GET", f"/api/errors?from={start.replace('+', '%2B')}")
+    assert r["total"] == 2  # the errors 0 and 1 minute ago, not the one 2 minutes ago
+    _, r = api(app, "GET", "/api/errors?hours=1&q=division")
+    assert r["total"] == 3 and r["groups"][0]["title"].startswith("ZeroDivisionError")
+    _, r = api(app, "GET", "/api/errors?hours=1&q=nothing-like-this")
+    assert r["groups"] == []
+    _, r = api(app, "GET", "/api/errors?hours=1&service=billing")
+    assert r["groups"] == [] and r["facets"] == {"services": [], "releases": []}
+    status, r = api(app, "GET", "/api/errors?from=2026-01-02T00:00:00&to=2026-01-01T00:00:00")
+    assert status == 400 and "before its end" in r["error"]

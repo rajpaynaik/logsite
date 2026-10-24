@@ -26,7 +26,10 @@ and spikes (see [Watch production](watch.md)).
 
 ## The pages
 
-- **Errors**: causes, newest first, for the last hour, day or week. Click one for where it
+- **Errors**: causes, latest first, for any range (or the last hour, day, week or month),
+  filtered by service or release, or by text in the error, its cause or its file. The
+  answers come from the error store, so they're instant. Backfill history with
+  `logsite db backfill --since 30d`. Click one for where it
   was raised (the line of code, with a link to GitHub or GitLab), the last 7 days, recent
   occurrences with their stack traces, and the alerts sent.
 - **Write a failing test**: [`logsite repro`](repro.md) on that error. **Save** puts the

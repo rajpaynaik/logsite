@@ -211,31 +211,67 @@ async function setup(step) {
 
 // --- errors ---------------------------------------------------------------------------------
 
-let hours = 24;
+const filters = { hours: 24, from: "", to: "", service: "", release: "", q: "" };
+
+function filterQuery() {
+  const p = new URLSearchParams();
+  if (filters.from || filters.to) {
+    if (filters.from) p.set("from", new Date(filters.from).toISOString());
+    if (filters.to) p.set("to", new Date(filters.to).toISOString());
+  } else p.set("hours", filters.hours);
+  for (const k of ["service", "release", "q"]) if (filters[k]) p.set(k, filters[k]);
+  return p.toString();
+}
 
 async function errorsPage() {
   if (!location.hash.startsWith("#/errors") && location.hash) return;
-  const data = await api(`/api/errors?hours=${hours}`);
+  let data;
+  try { data = await api(`/api/errors?${filterQuery()}`); }
+  catch (e) { main().innerHTML = `<div class="result bad">${esc(e.message)}</div>`; return; }
   await refreshStatus();
-  const pick = [1, 24, 168].map((h) => `<button data-h="${h}" ${h === hours ? 'class="primary"' : ""}>${h === 168 ? "7 days" : h + " h"}</button>`).join("");
+  const custom = !!(filters.from || filters.to);
+  const presets = [[1, "1 h"], [24, "24 h"], [168, "7 days"], [720, "30 days"]].map(([h, label]) =>
+    `<button data-h="${h}" ${!custom && h === filters.hours ? 'class="primary"' : ""}>${label}</button>`).join("");
+  const opts = (list, value, all) => `<option value="">${all}</option>` + list.map((f) =>
+    `<option value="${esc(f.value)}" ${f.value === value ? "selected" : ""}>${esc(f.value)} (${f.n.toLocaleString()})</option>`).join("");
   const rows = data.groups.map((g) => `<tr class="click" data-id="${esc(g.id)}">
     <td><strong>${esc(g.title)}</strong>${g.root_cause ? `<div class="muted">root cause: ${esc(g.root_cause)}</div>` : ""}</td>
     <td><code>${esc(g.raised_at || g.logged_at || "–")}</code></td>
     <td class="num">${g.recent.toLocaleString()}</td>
-    <td class="muted">${when(g.last_seen)}</td></tr>`).join("");
-  main().innerHTML = `<h1>Errors</h1><p class="muted">Grouped by cause, from what logsite has stored${status.watch.running ? "" : ". Start watching to collect new ones"}.</p>
-    <div class="row">${pick}</div>
+    <td class="muted">${when(g.last_in)}</td></tr>`).join("");
+  const range = `${new Date(data.from).toLocaleString()} – ${new Date(data.to).toLocaleString()}`;
+  main().innerHTML = `<h1>Errors</h1>
+    <p class="muted">From the error store: no log scanning, so any range is instant.</p>
+    <div class="card filters">
+      <div class="row" style="margin:0">${presets}
+        <span class="muted">or</span>
+        <input type="datetime-local" id="from" value="${esc(filters.from)}" title="From">
+        <input type="datetime-local" id="to" value="${esc(filters.to)}" title="To">
+        <button id="apply">Apply</button></div>
+      <div class="row">
+        <select id="service">${opts(data.facets.services, filters.service, "All services")}</select>
+        <select id="release">${opts(data.facets.releases, filters.release, "All releases")}</select>
+        <input type="text" id="q" value="${esc(filters.q)}" placeholder="Search: error, cause or file">
+      </div></div>
+    <p class="muted">${data.total.toLocaleString()} error(s) in ${data.groups.length} group(s) · ${esc(range)}</p>
     <div class="card">${data.groups.length ? `<table><tr><th>Error</th><th>Where</th><th class="num">Count</th><th>Last seen</th></tr>${rows}</table>`
       : `<div class="empty">${status.watch.running && !status.watch.last_check
           ? "First check running: reading the last 24 hours of logs…"
-          : `No errors stored in this period.${status.watch.running ? " logsite is watching: new ones will show up here." : ` <a href="#/watch">Start watching</a> to collect them.`}`}</div>`}</div>`;
-  again(errorsPage);
-  main().querySelectorAll("[data-h]").forEach((b) => (b.onclick = () => { hours = +b.dataset.h; errorsPage(); }));
+          : `No errors match.${status.watch.running ? "" : ` <a href="#/watch">Start watching</a> to collect new ones, or backfill history: <code>logsite db backfill --since 30d</code>.`}`}</div>`}</div>`;
+  main().querySelectorAll("[data-h]").forEach((b) => (b.onclick = () => {
+    Object.assign(filters, { hours: +b.dataset.h, from: "", to: "" }); errorsPage(); }));
+  $("#apply").onclick = () => { filters.from = $("#from").value; filters.to = $("#to").value; errorsPage(); };
+  $("#service").onchange = () => { filters.service = $("#service").value; errorsPage(); };
+  $("#release").onchange = () => { filters.release = $("#release").value; errorsPage(); };
+  let typing;
+  $("#q").oninput = () => { clearTimeout(typing); typing = setTimeout(() => {
+    filters.q = $("#q").value.trim(); errorsPage().then(() => { const q = $("#q"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }); }, 300); };
   main().querySelectorAll("tr[data-id]").forEach((r) => (r.onclick = () => (location.hash = `#/errors/${r.dataset.id}`)));
+  if (!custom) again(errorsPage, 15000);
 }
 
 async function errorPage(id) {
-  const d = await api(`/api/errors/${id}`);
+  const d = await api(`/api/errors/${id}?${filterQuery()}`);
   const g = d.group;
   const where = (at, code, url) => at ? `<code>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(at)}</a>` : esc(at)}</code>${code ? `<pre>${esc(code)}</pre>` : ""}` : "–";
   const counts = Object.fromEntries(d.hourly.map((h) => [h.hour.replace("T", " "), h.n]));
@@ -260,7 +296,7 @@ async function errorPage(id) {
     <div class="card"><strong>Last 7 days</strong><div class="bars">${bars || '<span style="height:1px"></span>'}</div></div>
     <div class="card"><div class="row" style="margin:0"><strong style="flex:1">Reproduce it</strong>
       <button class="primary" id="repro">Write a failing test</button></div><div id="repro-out"></div></div>
-    <div class="card"><strong>Recent occurrences</strong> <span class="muted">(click one for its stack trace)</span>
+    <div class="card"><strong>Occurrences in the selected range</strong> <span class="muted">(click one for its stack trace)</span>
       <table><tr><th>When</th><th>Message</th><th>Service</th><th>Release</th></tr>${events}</table></div>
     ${d.alerts.length ? `<div class="card"><strong>Alerts sent</strong>${d.alerts.map((a) => `<div>${esc(a.kind)} · ${when(a.sent_at)} · ${esc(a.channels || "nowhere")}</div>`).join("")}</div>` : ""}`;
   main().querySelectorAll("tr[data-i]").forEach((r) => (r.onclick = () => {

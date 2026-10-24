@@ -403,25 +403,37 @@ class App:
 
         return open_store(self.cfg())
 
-    def errors(self, hours: float) -> dict:
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    def errors(self, query: dict) -> dict:
+        """The groups for the page's filters: ``from`` / ``to`` (ISO 8601) or ``hours``,
+        ``service``, ``release``, ``q`` (text in the error, its cause or its file)."""
+        since, until = _window(query)
         store = self._store()
         try:
-            groups = [g for g in store.groups(since=since, limit=200) if g["recent"]]
+            groups = store.groups(since=since, until=until, limit=200,
+                                  service=query.get("service") or None,
+                                  release=query.get("release") or None,
+                                  search=(query.get("q") or "").strip() or None)  # fmt: skip
+            facets = store.facets(since, until)
         finally:
             store.close()
-        return {"hours": hours, "groups": groups}
+        return {"from": since.isoformat(), "to": until.isoformat(), "groups": groups,
+                "total": sum(g["recent"] for g in groups), "facets": facets}  # fmt: skip
 
-    def error(self, group_id: str) -> dict | None:
+    def error(self, group_id: str, query: dict | None = None) -> dict | None:
         from .cli import _code_links
 
+        query = query or {}
         store = self._store()
         try:
             group = store.group(group_id)
             if group is None:
                 return None
             now = datetime.now(timezone.utc)
-            events = store.events(group_id, limit=20)
+            since, until = _window(query) if query.get("from") or query.get("hours") else (
+                None, None)  # fmt: skip
+            events = store.events(group_id, limit=20, since=since, until=until,
+                                  service=query.get("service") or None,
+                                  release=query.get("release") or None)  # fmt: skip
             hourly = store.hourly(group_id, now - timedelta(days=7))
             alerts = store._query(
                 "select kind, sent_at, channels from alerts where group_id = ?"
@@ -530,6 +542,26 @@ class App:
             self.watch_stop.wait(max(5.0, every - (time.monotonic() - started)))
 
 
+def _window(query: dict) -> tuple[datetime, datetime]:
+    """The time range a request asks for: ``from`` / ``to``, else the last ``hours`` (24)."""
+    from .models import parse_iso
+
+    now = datetime.now(timezone.utc)
+
+    def at(name):
+        value = (query.get(name) or "").strip()
+        if not value:
+            return None
+        t = parse_iso(value)
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+    until = at("to") or now
+    since = at("from") or until - timedelta(hours=float(query.get("hours") or 24))
+    if since >= until:
+        raise ValueError("the start of the range must be before its end")
+    return since, until
+
+
 def kind_is_file(form: dict) -> bool:
     return form.get("type") == "file"
 
@@ -591,12 +623,15 @@ def make_server(app: App, host: str, port: int, token: str | None) -> ThreadingH
                     return self._json(200, app.status())
                 if url.path == "/api/settings":
                     return self._json(200, app.settings())
+                one = {k: v[0] for k, v in q.items()}
                 if url.path == "/api/errors":
-                    return self._json(200, app.errors(float(q.get("hours", ["24"])[0])))
+                    return self._json(200, app.errors(one))
                 m = re.fullmatch(r"/api/errors/([0-9a-f]{6,40})", url.path)
                 if m:
-                    found = app.error(m[1])
+                    found = app.error(m[1], one)
                     return self._json(200 if found else 404, found or {"error": "not found"})
+            except ValueError as exc:
+                return self._json(400, {"error": str(exc)})
             except Exception as exc:
                 return self._json(500, {"error": _short(exc)})
             return self._json(404, {"error": "not found"})

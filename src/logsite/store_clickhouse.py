@@ -192,26 +192,61 @@ class ClickHouseStore:
 
     # --- reading ------------------------------------------------------------------------
 
-    def groups(self, since: datetime | None = None, limit: int = 100) -> list[dict]:
-        rows = self._query(
-            "select g.*, coalesce(r.n, 0) as recent from (select * from error_groups final) g"
-            " left join (select group_id, count() as n from error_events final"
-            " where at >= {since:DateTime64(6)} group by group_id) r on r.group_id = g.id"
-            " order by g.last_seen desc limit {n:UInt32}",
-            {"since": _utc(since or EPOCH), "n": int(limit)},
+    def _range(self, since, until, service=None, release=None) -> tuple[str, dict]:
+        far = datetime(2200, 1, 1, tzinfo=timezone.utc)
+        where = "at >= {since:DateTime64(6)} and at <= {until:DateTime64(6)}"
+        params: dict = {"since": _utc(since or EPOCH), "until": _utc(until or far)}
+        if service:
+            where += " and service = {service:String}"
+            params["service"] = service
+        if release:
+            where += " and release = {release:String}"
+            params["release"] = release
+        return where, params
+
+    def groups(self, since: datetime | None = None, limit: int = 100, *,
+               until: datetime | None = None, service: str | None = None,
+               release: str | None = None, search: str | None = None) -> list[dict]:  # fmt: skip
+        where, params = self._range(since, until, service, release)
+        sql = (
+            "select g.*, r.n as recent, r.first_in, r.last_in from"
+            " (select * from error_groups final) g inner join"
+            " (select group_id, count() as n, min(at) as first_in, max(at) as last_in"
+            f" from error_events final where {where} group by group_id) r on r.group_id = g.id"
         )
+        if search:
+            sql += (" where positionCaseInsensitive(concat(coalesce(g.title, ''), ' ',"
+                    " coalesce(g.root_cause, ''), ' ', coalesce(g.raised_at, '')),"
+                    " {q:String}) > 0")  # fmt: skip
+            params["q"] = search
+        params["n"] = int(limit)
+        rows = self._query(sql + " order by r.last_in desc limit {n:UInt32}", params)
         return [_clean({k: v for k, v in r.items() if k != "version"}) for r in rows]
+
+    def facets(self, since: datetime | None = None, until: datetime | None = None) -> dict:
+        where, params = self._range(since, until)
+        out = {}
+        for column, name in (("service", "services"), ("release", "releases")):
+            rows = self._query(
+                f"select {column} as value, count() as n from error_events final"
+                f" where {where} and {column} is not null group by {column}"
+                " order by n desc limit 50", params)  # fmt: skip
+            out[name] = [{"value": r["value"], "n": int(r["n"])} for r in rows]
+        return out
 
     def group(self, group_id: str) -> dict | None:
         rows = self._query("select * from error_groups final where id = {i:String}",
                            {"i": group_id})  # fmt: skip
         return _clean({k: v for k, v in rows[0].items() if k != "version"}) if rows else None
 
-    def events(self, group_id: str, limit: int = 50) -> list[dict]:
+    def events(self, group_id: str, limit: int = 50, *, since: datetime | None = None,
+               until: datetime | None = None, service: str | None = None,
+               release: str | None = None) -> list[dict]:  # fmt: skip
+        where, params = self._range(since, until, service, release)
         rows = self._query(
-            "select * from error_events final where group_id = {g:String}"
+            f"select * from error_events final where group_id = {{g:String}} and {where}"
             " order by at desc limit {n:UInt32}",
-            {"g": group_id, "n": int(limit)},
+            {**params, "g": group_id, "n": int(limit)},
         )
         return [_clean(r) for r in rows]
 

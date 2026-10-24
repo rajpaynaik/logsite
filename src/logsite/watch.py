@@ -161,6 +161,42 @@ def check(
     return result
 
 
+@dataclass
+class Chunk:
+    window: TimeRange
+    events: int
+    stored: int
+    groups: int
+    truncated: bool  # hit the limit: some errors in this chunk weren't read
+
+
+def backfill(cfg, backend: LogBackend, sites: list, app: AppFiles, store: Store,
+             start: datetime, end: datetime, chunk: timedelta, *, limit: int = 5000):  # fmt: skip
+    """Read the log store's history into the error store, ``chunk`` by ``chunk``, oldest
+    first, recording the history as it goes (so what's new and what came back is known).
+    Yields a :class:`Chunk` per window. Sends nothing: it's the past. Safe to repeat."""
+    from . import history
+    from .errors import group_errors
+
+    fields = list(dict.fromkeys([cfg.timeline.field_name, "trace_id", "request_id"]))
+    rows: list[dict] = []  # the current chunk's events
+
+    def collect(group, record, info, service, level, trace_id):
+        rows.append(event_row(group, record, info, service, level, trace_id, cfg.leaks))
+
+    a = start
+    while a < end:
+        b = min(a + chunk, end)
+        rows.clear()
+        records = backend.query_errors(TimeRange(a, b), limit=limit)
+        groups = list(group_errors(records, sites, app, cfg.leaks, fields, collect).values())
+        if groups:
+            history.apply(cfg, groups, a, b, now=b, record=True)
+        stored = store.write(groups, rows)
+        yield Chunk(TimeRange(a, b), len(records), stored, len(groups), len(records) >= limit)
+        a = b
+
+
 def render(project: str, alerts: list[tuple[ErrorGroup, str]], total: int, window: TimeRange,
            *, slack: bool, code_line=None, code_url=None,
            trace_field: str = "trace_id") -> str:  # fmt: skip

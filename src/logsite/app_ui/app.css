@@ -75,3 +75,7 @@ tr.click:hover td { background: var(--bg); }
   .shell { flex-direction: column; } .side { width: auto; flex-direction: row; flex-wrap: wrap; }
   main { padding: 18px 16px; }
 }
+.filters input[type=datetime-local], .filters select, .filters input[type=text] {
+  width: auto; flex: 1 1 160px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--text); font: inherit; }
+.filters input[type=text] { flex: 2 1 240px; }

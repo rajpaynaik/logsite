@@ -113,3 +113,46 @@ def test_cli_db(tmp_path, monkeypatch, capsys):
     assert "error_events" in capsys.readouterr().out
     assert main(["db", "sql", "--url", "clickhouse://h:8123/db"]) == 0
     assert "ReplacingMergeTree" in capsys.readouterr().out
+
+
+def expand(sql, kind, start, end):
+    """A Grafana panel's SQL with its macros and variables filled in, as Grafana would."""
+    import re
+
+    group = {"postgres": "date_trunc('minute', {c})", "mysql": "date_format({c}, '%Y-%m-%d %H:%i')",
+             "mssql": "dateadd(minute, datediff(minute, 0, {c}), 0)",
+             "sqlite": "substr({c}, 1, 16)"}[kind]  # fmt: skip
+    sql = re.sub(r"\$__timeFilter\((\w+(?:\.\w+)?)\)",
+                 lambda m: f"{m[1]} >= '{start}' and {m[1]} <= '{end}'", sql)  # fmt: skip
+    sql = re.sub(r"\$__timeGroupAlias\((\w+), \$__interval\)",
+                 lambda m: group.format(c=m[1]) + " as time", sql)  # fmt: skip
+    sql = re.sub(r"\$__timeGroup\((\w+), \$__interval\)", lambda m: group.format(c=m[1]), sql)
+    return sql.replace("$service", "__all").replace("$release", "__all")
+
+
+def test_the_grafana_dashboard_queries_run(store_url):
+    from logsite.grafana_store import build_store_dashboard
+
+    kind = next((k for k in ("postgres", "mysql", "mssql") if store_url.startswith(
+        {"postgres": "postgresql", "mysql": "mysql", "mssql": "mssql"}[k])), None)  # fmt: skip
+    if store_url.startswith("clickhouse"):
+        pytest.skip("the dashboard is for SQL data sources")
+    store = connect(store_url)
+    try:
+        g = Group("g1", T0, T0 + timedelta(minutes=5))
+        store.write([g], [event(f"e{i}", "g1", T0 + timedelta(minutes=i)) for i in range(5)])
+        ts = {"mysql": "%Y-%m-%d %H:%M:%S", "mssql": "%Y-%m-%d %H:%M:%S"}.get(
+            kind, "%Y-%m-%d %H:%M:%S+00:00")  # fmt: skip
+        start = (T0 - timedelta(hours=1)).strftime(ts)
+        end = (T0 + timedelta(hours=1)).strftime(ts)
+        dashboard = build_store_dashboard(kind or "postgres")
+        for panel in dashboard["panels"]:
+            sql = expand(panel["targets"][0]["rawSql"], kind or "sqlite", start, end)
+            rows = store._query(sql)
+            assert rows, panel["title"]
+            if panel["title"] == "Errors":
+                assert int(next(iter(rows[0].values()))) == 5
+            if panel["title"] == "Top causes":
+                assert rows[0]["error"] == "KeyError: 'id'" and int(rows[0]["count"]) == 5
+    finally:
+        store.close()

@@ -49,6 +49,7 @@ MAX_FIELDS_CHARS = 4000  # a record's other fields, as JSON, per event
 MAX_TRACEBACK_CHARS = 8000
 RELEASE_FIELDS = ("release", "service.version", "version", "app_version", "git_sha")
 BATCH = 400  # keys per "which of these exist" query
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 @dataclass
@@ -325,7 +326,7 @@ class Store:
                 return self
 
             def execute(self, sql, params=()):
-                self.cur.execute(store.dialect.sql(sql), params)
+                store._execute(self.cur, sql, params)
                 return self.cur
 
             def ddl(self, sql):  # written for the dialect already: no quoting, no parameters
@@ -340,9 +341,16 @@ class Store:
 
         return Tx()
 
+    def _execute(self, cur, sql: str, params=()) -> None:
+        sql = self.dialect.sql(sql)
+        if params:
+            cur.execute(sql, params)
+        else:  # with parameters, a "%" in the SQL is a placeholder to MySQL's and Postgres' drivers
+            cur.execute(sql)
+
     def _query(self, sql: str, params=()) -> list[dict]:
         cur = self.db.cursor()
-        cur.execute(self.dialect.sql(sql), params)
+        self._execute(cur, sql, params)
         names = [d[0] for d in cur.description]
         rows = [dict(zip(names, row, strict=True)) for row in cur.fetchall()]
         self.db.commit()  # end the read transaction
@@ -491,26 +499,62 @@ class Store:
 
     # --- reading (the web page, the API, logsite db status) ---------------------------------
 
-    def groups(self, since: datetime | None = None, limit: int = 100) -> list[dict]:
-        """Groups, most recently seen first, each with ``recent``: its events since ``since``."""
-        cutoff = self.dialect.ts(since or datetime(1970, 1, 1, tzinfo=timezone.utc))
-        sql = self.dialect.limit(
-            "select g.*, coalesce(r.n, 0) as recent from error_groups g left join"
-            " (select group_id, count(*) as n from error_events where at >= ?"
-            " group by group_id) r on r.group_id = g.id order by g.last_seen desc",
-            limit,
+    def _range(self, since, until, service=None, release=None) -> tuple[list[str], list]:
+        """``where`` clauses and parameters for events in a time range, filtered."""
+        far = datetime(9999, 1, 1, tzinfo=timezone.utc)
+        where = ["at >= ?", "at <= ?"]
+        params = [self.dialect.ts(since or EPOCH), self.dialect.ts(until or far)]
+        if service:
+            where.append("service = ?")
+            params.append(service)
+        if release:
+            where.append("release = ?")
+            params.append(release)
+        return where, params
+
+    def groups(self, since: datetime | None = None, limit: int = 100, *,
+               until: datetime | None = None, service: str | None = None,
+               release: str | None = None, search: str | None = None) -> list[dict]:  # fmt: skip
+        """The groups with events between ``since`` and ``until`` (and the service, release
+        and text asked for), the latest first, each with ``recent``: how many there."""
+        where, params = self._range(since, until, service, release)
+        sql = (
+            "select g.*, r.n as recent, r.first_in, r.last_in from error_groups g join"
+            " (select group_id, count(*) as n, min(at) as first_in, max(at) as last_in"
+            f" from error_events where {' and '.join(where)} group by group_id) r"
+            " on r.group_id = g.id"
         )
-        return [_clean(r) for r in self._query(sql, (cutoff,))]
+        if search:
+            sql += (" where (lower(g.title) like ? or lower(coalesce(g.root_cause, '')) like ?"
+                    " or lower(coalesce(g.raised_at, '')) like ?)")  # fmt: skip
+            params += [f"%{search.lower()}%"] * 3
+        sql = self.dialect.limit(sql + " order by r.last_in desc", limit)
+        return [_clean(r) for r in self._query(sql, params)]
+
+    def facets(self, since: datetime | None = None, until: datetime | None = None) -> dict:
+        """The services and releases with errors in a range, the most first: the filters."""
+        where, params = self._range(since, until)
+        out = {}
+        for column, name in (("service", "services"), ("release", "releases")):
+            rows = self._query(self.dialect.limit(
+                f"select {column} as value, count(*) as n from error_events"
+                f" where {' and '.join(where)} and {column} is not null"
+                f" group by {column} order by n desc", 50), params)  # fmt: skip
+            out[name] = [{"value": r["value"], "n": int(r["n"])} for r in rows]
+        return out
 
     def group(self, group_id: str) -> dict | None:
         rows = self._query("select * from error_groups where id = ?", (group_id,))
         return _clean(rows[0]) if rows else None
 
-    def events(self, group_id: str, limit: int = 50) -> list[dict]:
+    def events(self, group_id: str, limit: int = 50, *, since: datetime | None = None,
+               until: datetime | None = None, service: str | None = None,
+               release: str | None = None) -> list[dict]:  # fmt: skip
+        where, params = self._range(since, until, service, release)
         sql = self.dialect.limit(
-            "select * from error_events where group_id = ? order by at desc", limit
-        )
-        return [_clean(r) for r in self._query(sql, (group_id,))]
+            f"select * from error_events where group_id = ? and {' and '.join(where)}"
+            " order by at desc", limit)  # fmt: skip
+        return [_clean(r) for r in self._query(sql, [group_id, *params])]
 
     def hourly(self, group_id: str, since: datetime) -> list[dict]:
         """``[{"hour": "2026-10-22 08", "n": 3}]``, counted here: hours are written differently

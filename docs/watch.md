@@ -99,6 +99,33 @@ in `ReplacingMergeTree` tables: query them with `FINAL` to see the latest versio
 
 Events and line counts older than `retention_days` are deleted once a day; groups are kept.
 
+## Query any time range, instantly
+
+Finding last Tuesday's errors in Loki means scanning every line in that range, for every new
+question. The error store has them already, grouped and indexed, so any range is a lookup:
+
+```bash
+logsite db backfill --since 30d      # read your log store's history in, an hour at a time
+```
+
+On the demo's day of noisy traffic (18.5 MB, 64,580 lines, 2,660 errors), the errors between
+10:00 and 12:00 took **609 ms** to find by scanning the log and grouping, and **3.5 ms** from
+the store, with the same answer (4 causes, 1,171 errors). That was measured on a local file; a
+remote Loki adds the network on top.
+
+- **In the app**: pick any range (or 1 h, 24 h, 7 days, 30 days), a service, a release, or
+  search the error, its cause or its file.
+- **In Grafana**: `logsite grafana --store postgres -o errors.json` (or `mysql`, `mssql`)
+  writes a dashboard on the store, with counts, errors over time, the top causes with their
+  lines, by service and by release, and the latest occurrences. Import it and pick the SQL
+  data source that points at the store. The time picker drives every panel, and nothing
+  scans Loki.
+- **In SQL**: see below.
+
+`logsite db backfill` is safe to repeat (nothing is stored twice) and records the history as it
+goes, so what's new and what came back is right from the start. If a chunk holds more than
+`--limit` errors, it says so; use a smaller `--chunk`.
+
 ## Export to a warehouse: BigQuery, Snowflake
 
 For analytics teams that work in a warehouse, each check can also append its new errors there.

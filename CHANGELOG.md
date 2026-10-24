@@ -6,6 +6,10 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- `logsite db backfill`: read the log store's history into the error store, chunk by chunk.
+- `logsite app`: any date range, service and release filters, and text search over the error
+  store, instant.
+- `logsite grafana --store postgres|mysql|mssql`: a dashboard on the error store, no Loki scan.
 - `[export]` to BigQuery or Snowflake: each check's new errors, and group snapshots, appended
   to the warehouse (tables created when missing; BigQuery through free load jobs).
 - The error store in MySQL / MariaDB, SQL Server and ClickHouse, besides SQLite and Postgres.

@@ -140,6 +140,10 @@ See [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configu
   commits just before the errors started. → [Errors and incidents](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md)
 - **Remembers past fixes**: when an old error comes back, it shows the commit that fixed it
   last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
+- **An error index for your logs**: errors are grouped and stored as they arrive, so "last
+  Tuesday, 2 to 4pm" is an instant query instead of a Loki scan, in the app, in SQL, or in a
+  [Grafana dashboard](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md#query-any-time-range-instantly)
+  on the store. `logsite db backfill` loads your history.
 - **Watches production and posts to Slack**: [`logsite watch`](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md)
   checks your logs every few minutes, stores every error in your own Postgres (or SQLite) for
   later analysis, and posts new errors, regressions and spikes to Slack.
