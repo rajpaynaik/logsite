@@ -99,6 +99,41 @@ in `ReplacingMergeTree` tables: query them with `FINAL` to see the latest versio
 
 Events and line counts older than `retention_days` are deleted once a day; groups are kept.
 
+## Export to a warehouse: BigQuery, Snowflake
+
+For analytics teams that work in a warehouse, each check can also append its new errors there.
+The dataset or schema and two tables are created when missing:
+
+- `logsite_error_events`: every new occurrence (the same columns as `error_events`, plus
+  `project` and `exported_at`);
+- `logsite_error_groups`: a snapshot of each group seen, per check. For a group's latest state,
+  take its row with the latest `exported_at`.
+
+```toml
+[export]
+type = "bigquery"                # credentials: Application Default Credentials
+project = "acme-analytics"
+dataset = "logsite"
+# location = "EU"
+```
+
+```toml
+[export]
+type = "snowflake"
+account = "acme-xy12345"
+user = "LOGSITE"
+password_env = "SNOWFLAKE_PASSWORD"   # or authenticator / private_key_file
+warehouse = "COMPUTE_WH"
+database = "ANALYTICS"
+schema = "LOGSITE"
+# role = "LOGSITE_WRITER"
+```
+
+`pip install "logsite[bigquery]"` or `"logsite[snowflake]"`. BigQuery gets batch load jobs,
+which are free (unlike streaming inserts). An export that fails, say because the warehouse is
+down, is reported by `logsite watch` and on the app's Watching page. The errors are in the
+error store regardless, and watching goes on.
+
 ## Analysing it later
 
 The tables are plain SQL, so Grafana (the Postgres data source), Metabase, a notebook or `psql`

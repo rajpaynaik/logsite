@@ -37,6 +37,9 @@ postgres = ["psycopg[binary]>=3.1"]
 mysql = ["pymysql>=1.1"]
 mssql = ["pyodbc>=5.0"]  # and Microsoft's ODBC Driver 18 for SQL Server on the machine
 clickhouse = ["clickhouse-connect>=0.7"]
+# export each check's new errors to a warehouse ([export])
+bigquery = ["google-cloud-bigquery>=3.0"]
+snowflake = ["snowflake-connector-python>=3.0"]
 dev = ["pygls>=2.0,<3", "mcp>=2.3,<3", "pytest>=8", "ruff>=0.6", "structlog>=24", "loguru>=0.7"]
 
 [project.scripts]

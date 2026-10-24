@@ -75,6 +75,7 @@ else:  # pragma: no cover
 
 from .alerts import AlertsConfig
 from .cost import CostConfig
+from .export import ExportConfig
 from .history import HistoryConfig
 from .leaks import LeakConfig
 from .lint import LintConfig
@@ -103,6 +104,7 @@ class Config:
     history: HistoryConfig = field(default_factory=HistoryConfig)
     store: StoreConfig = field(default_factory=StoreConfig)
     watch: WatchConfig = field(default_factory=WatchConfig)
+    export: ExportConfig = field(default_factory=ExportConfig)
     window_hours: float = 24.0
     excludes: list[str] = field(default_factory=list)
 
@@ -192,6 +194,7 @@ def load_config(start: str | Path | None = None) -> Config:
         history=HistoryConfig.from_dict(data.get("history", {})),
         store=StoreConfig.from_dict(data.get("store", {})),
         watch=WatchConfig.from_dict(data.get("watch", {})),
+        export=ExportConfig.from_dict(data.get("export", {})),
         window_hours=float(data.get("window_hours", 24)),
         excludes=list(data.get("exclude", [])),
     )

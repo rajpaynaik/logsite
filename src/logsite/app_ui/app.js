@@ -298,7 +298,8 @@ async function watchPage() {
       <div class="kv" style="margin-top:14px">
         <div>Last check</div><div>${when(w.last_check)}</div>
         ${last ? `<div>Found</div><div>${last.events} error(s) in ${last.groups} group(s), ${last.stored} new stored</div>
-        <div>Alerts</div><div>${last.alerts ? `${last.alerts} sent to ${esc(last.sent.join(", ") || "nowhere")}` : "none"}</div>` : ""}
+        <div>Alerts</div><div>${last.alerts ? `${last.alerts} sent to ${esc(last.sent.join(", ") || "nowhere")}` : "none"}</div>
+        ${last.export_error ? `<div>Warehouse</div><div class="result bad">${esc(last.export_error)}</div>` : last.exported ? `<div>Warehouse</div><div>${last.exported} exported</div>` : ""}` : ""}
         <div>Slack</div><div>${status.slack ? "connected" : 'not connected: <a href="#/settings">add it</a>'}</div>
         <div>Errors kept in</div><div><code>${esc(status.store)}</code></div>
       </div>${w.error ? `<div class="result bad">Last check failed: ${esc(w.error)}</div>` : ""}</div>`;

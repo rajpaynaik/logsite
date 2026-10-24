@@ -61,6 +61,8 @@ class CheckResult:
     message: str | None = None
     sent: list[str] = field(default_factory=list)
     first: bool = False  # the first check: the last day stored, nothing sent
+    exported: int = 0  # events appended to the warehouse ([export])
+    export_error: str | None = None
 
 
 def alert_kind(g: ErrorGroup, watch: WatchConfig) -> str | None:
@@ -117,11 +119,13 @@ def check(
     )  # fmt: skip
     history.apply(cfg, summary.groups, window.start, window.end, record=True)
     stored = store.write(summary.groups, rows)
+    exported, export_error = _export(cfg, rows, summary.groups, now)
     _line_counts(store, backend, sites, now, limit)
     _prune(store, cfg.store.retention_days, now)
     store.set_meta("checked_at", now.astimezone(timezone.utc).isoformat())
     if first:  # what already failed today is stored and shown, not paged about
-        return CheckResult(window, summary.events, stored, summary.groups, [], first=True)
+        return CheckResult(window, summary.events, stored, summary.groups, [], first=True,
+                           exported=exported, export_error=export_error)  # fmt: skip
 
     cooldown = timedelta(minutes=cfg.watch.cooldown_minutes)
     alerts = []
@@ -133,7 +137,8 @@ def check(
         if last is not None and now - last < cooldown:
             continue
         alerts.append((g, kind))
-    result = CheckResult(window, summary.events, stored, summary.groups, alerts)
+    result = CheckResult(window, summary.events, stored, summary.groups, alerts,
+                         exported=exported, export_error=export_error)  # fmt: skip
     if not alerts:
         return result
     project = cfg.timeline.service or cfg.root.name
@@ -181,6 +186,23 @@ def render(project: str, alerts: list[tuple[ErrorGroup, str]], total: int, windo
     if total > len(alerts):
         out += ["", f"+ {total - len(alerts)} more: `logsite errors`"]
     return "\n".join(out)
+
+
+def _export(cfg, rows: list[dict], groups: list, now: datetime) -> tuple[int, str | None]:
+    """Append this check's new events, and its groups, to the warehouse, if there's one."""
+    export = getattr(cfg, "export", None)
+    if export is None or export.type is None:
+        return 0, None
+    from .export import exporter
+    from .export import rows as export_rows
+
+    new = [r for r in rows if r.get("_new")]
+    try:
+        events, group_rows = export_rows(cfg.timeline.service or cfg.root.name, new, groups, now)
+        exporter(export).append(events, group_rows)
+    except Exception as exc:  # the warehouse down: the errors are in the store all the same
+        return 0, f"{export.type}: {str(exc)[:200]}"
+    return len(new), None
 
 
 def _line_counts(store: Store, backend: LogBackend, sites: list, now: datetime,

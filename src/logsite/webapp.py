@@ -522,7 +522,8 @@ class App:
                 self.watch_state.update(error=None, last={
                     "events": result.events, "stored": result.stored,
                     "groups": len(result.groups), "alerts": len(result.alerts),
-                    "sent": result.sent})  # fmt: skip
+                    "sent": result.sent, "exported": result.exported,
+                    "export_error": result.export_error})  # fmt: skip
             except Exception as exc:  # the log store down: show it, keep watching
                 self.watch_state["error"] = _short(exc)
             self.watch_state["last_check"] = now.isoformat()

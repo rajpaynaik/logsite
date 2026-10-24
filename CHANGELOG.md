@@ -6,6 +6,8 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- `[export]` to BigQuery or Snowflake: each check's new errors, and group snapshots, appended
+  to the warehouse (tables created when missing; BigQuery through free load jobs).
 - The error store in MySQL / MariaDB, SQL Server and ClickHouse, besides SQLite and Postgres.
   Tables are created on first use and upgraded by schema version; `logsite db init`,
   `status` and `sql` (the DDL, for a DBA).

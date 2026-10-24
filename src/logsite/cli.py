@@ -1107,6 +1107,10 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
                     sent = f"; {len(result.alerts)} to alert, nowhere to send"
                 else:
                     sent = ""
+                if result.export_error:
+                    sent += f"; export failed: {result.export_error}"
+                elif result.exported:
+                    sent += f"; {result.exported} exported"
                 line = (f"{now:%H:%M:%S} {result.events} error(s) in {len(result.groups)}"
                         f" group(s), {result.stored} new stored{sent}")  # fmt: skip
                 print(line, file=sys.stderr, flush=True)
