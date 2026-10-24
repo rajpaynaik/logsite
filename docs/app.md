@@ -17,8 +17,8 @@ Your browser opens on `http://127.0.0.1:8077`.
 2. **Your code.** logsite maps errors to lines in the folder you started it from. Give the
    service a name for the Slack messages.
 3. **Slack.** Paste an incoming webhook URL and press **Send test message**, or skip it.
-4. **Where to keep errors.** On this machine (SQLite), or in your Postgres (with a test
-   button). Tick **Start watching** to begin.
+4. **Where to keep errors.** On this machine (SQLite), or in your own Postgres, MySQL /
+   MariaDB, SQL Server or ClickHouse (with a test button; the tables are created for you). Tick **Start watching** to begin.
 
 The first check reads the last 24 hours, so the Errors page fills up at once; it doesn't post
 those to Slack. After that, logsite checks every 5 minutes and posts new errors, regressions

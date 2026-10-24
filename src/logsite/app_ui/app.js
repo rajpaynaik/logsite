@@ -136,6 +136,8 @@ async function testStore(url, out, button) {
 
 // --- setup ----------------------------------------------------------------------------------
 
+const DB_HELP = "<code>postgresql://</code>, <code>mysql://</code>, <code>mssql://…?TrustServerCertificate=yes</code> or <code>clickhouse://user:pass@host:8123/db</code>. The tables are created for you.";
+
 const draft = { slack: "", postgres: false, dbUrl: "", service: "", watch: true };
 
 async function setup(step) {
@@ -178,9 +180,10 @@ async function setup(step) {
     main().innerHTML = head("Where to keep errors", "Every error logsite sees is stored for later analysis.")
       + `<div class="card">
          <label class="check"><input type="radio" name="db" value="local" ${draft.postgres ? "" : "checked"}> On this machine (SQLite, nothing to set up)</label>
-         <label class="check"><input type="radio" name="db" value="pg" ${draft.postgres ? "checked" : ""}> In my Postgres</label>
-         <div id="pg" ${draft.postgres ? "" : "hidden"}><label>Postgres URL
+         <label class="check"><input type="radio" name="db" value="pg" ${draft.postgres ? "checked" : ""}> In my database: Postgres, MySQL / MariaDB, SQL Server or ClickHouse</label>
+         <div id="pg" ${draft.postgres ? "" : "hidden"}><label>Database URL
            <input type="password" id="dburl" value="${esc(draft.dbUrl)}" placeholder="postgresql://user:password@host:5432/logsite"></label>
+           <p class="muted">${DB_HELP}</p>
            <div class="row"><button id="test">Test connection</button></div><div id="out"></div></div>
          <label class="check"><input type="checkbox" id="watch" ${draft.watch ? "checked" : ""}> Start watching production now (checks every 5 minutes)</label>
          <div class="row"><button id="back">Back</button><button class="primary" id="done">Finish</button></div>
@@ -329,8 +332,9 @@ async function settingsPage() {
       <div class="row"><button class="primary" id="sa">Save</button></div><div id="oa"></div></div>
     <div class="card"><strong>Database</strong>
       <label class="check"><input type="radio" name="db" value="local" ${s.store.postgres ? "" : "checked"}> On this machine (SQLite)</label>
-      <label class="check"><input type="radio" name="db" value="pg" ${s.store.postgres ? "checked" : ""}> In my Postgres</label>
-      <label>Postgres URL <input type="password" id="dburl" placeholder="${s.store.postgres ? "saved (leave empty to keep it)" : "postgresql://user:password@host:5432/logsite"}"></label>
+      <label class="check"><input type="radio" name="db" value="pg" ${s.store.postgres ? "checked" : ""}> In my database: Postgres, MySQL / MariaDB, SQL Server or ClickHouse</label>
+      <label>Database URL <input type="password" id="dburl" placeholder="${s.store.postgres ? "saved (leave empty to keep it)" : "postgresql://user:password@host:5432/logsite"}"></label>
+      <p class="muted">${DB_HELP}</p>
       <label>Keep errors for (days) <input type="text" id="ret" value="${esc(s.store.retention_days)}"></label>
       <div class="row"><button id="td">Test connection</button><button class="primary" id="sd">Save</button></div><div id="od"></div></div>`;
   const state = backendForm($("#bf"), s);
