@@ -4,24 +4,22 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## Unreleased
+## 0.5.0 (2026-10-24)
 
-- `logsite db backfill`: read the log store's history into the error store, chunk by chunk.
-- `logsite app`: any date range, service and release filters, and text search over the error
-  store, instant.
-- `logsite grafana --store postgres|mysql|mssql`: a dashboard on the error store, no Loki scan.
-- `[export]` to BigQuery or Snowflake: each check's new errors, and group snapshots, appended
-  to the warehouse (tables created when missing; BigQuery through free load jobs).
-- The error store in MySQL / MariaDB, SQL Server and ClickHouse, besides SQLite and Postgres.
-  Tables are created on first use and upgraded by schema version; `logsite db init`,
-  `status` and `sql` (the DDL, for a DBA).
 - [`logsite app`](docs/app.md): set logsite up in the browser (log store, Slack and database
-  forms, each with a test button), see the errors grouped by cause with the line of code, and
-  write or save a failing test with one click. Secrets are kept out of `logsite.toml`.
-- `logsite watch`'s first check reads the last 24 hours, stored and shown but not posted.
-- [`logsite watch`](docs/watch.md): checks the logs on a schedule, stores every error in your own
-  database (SQLite, or Postgres with `pip install 'logsite[postgres]'`) for later analysis, and
-  posts new errors, regressions and spikes to Slack, each at most once per cooldown.
+  forms, each with a test button), then see the errors grouped by cause with the line of code,
+  for any date range, filtered by service, release or text; write or save a failing test with
+  one click. Secrets are kept out of `logsite.toml`.
+- [`logsite watch`](docs/watch.md): checks the logs on a schedule, stores every error, and posts
+  new errors, regressions and spikes to Slack, each at most once per cooldown. Its first check
+  reads the last 24 hours without posting.
+- **The error store, in your own database**: every occurrence (masked), the groups, hourly
+  volume per log call and the alerts sent, in SQLite (the default), Postgres, MySQL / MariaDB,
+  SQL Server or ClickHouse (beta). Tables are created on first use and upgraded by schema
+  version. `logsite db init`, `status`, `sql` (the DDL, for a DBA), and `backfill` (your log
+  store's history, chunk by chunk). Any time range is a lookup, not a log scan.
+- `logsite grafana --store postgres|mysql|mssql`: a Grafana dashboard on the error store.
+- `[export]` to BigQuery or Snowflake (beta): each check's new errors, and group snapshots.
 
 ## 0.4.1 (2026-10-22)
 

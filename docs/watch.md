@@ -73,7 +73,7 @@ Every check writes to the error store, in the database you choose with `[store] 
 | Postgres | `postgresql://user:pass@host:5432/db` | `pip install "logsite[postgres]"` |
 | MySQL / MariaDB | `mysql://user:pass@host:3306/db` | `pip install "logsite[mysql]"` |
 | SQL Server / Azure SQL | `mssql://user:pass@host:1433/db?TrustServerCertificate=yes` | `pip install "logsite[mssql]"` and Microsoft's ODBC Driver 18 |
-| ClickHouse | `clickhouse://user:pass@host:8123/db` (`clickhouses://` for HTTPS) | `pip install "logsite[clickhouse]"` |
+| ClickHouse (beta) | `clickhouse://user:pass@host:8123/db` (`clickhouses://` for HTTPS) | `pip install "logsite[clickhouse]"` |
 
 Put the URL in an environment variable (`url_env = "LOGSITE_DATABASE_URL"`), not in the file.
 
@@ -126,9 +126,11 @@ remote Loki adds the network on top.
 goes, so what's new and what came back is right from the start. If a chunk holds more than
 `--limit` errors, it says so; use a smaller `--chunk`.
 
-## Export to a warehouse: BigQuery, Snowflake
+## Export to a warehouse: BigQuery, Snowflake (beta)
 
 For analytics teams that work in a warehouse, each check can also append its new errors there.
+Beta: tested against stand-ins for the client libraries, not yet against a real warehouse;
+please [report](https://github.com/rajpaynaik/logsite/issues) what you find.
 The dataset or schema and two tables are created when missing:
 
 - `logsite_error_events`: every new occurrence (the same columns as `error_events`, plus

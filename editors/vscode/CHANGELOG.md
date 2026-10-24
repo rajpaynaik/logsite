@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- No extension changes; released with logsite 0.5.0: `logsite app` (setup and errors in the browser), `logsite watch` (Slack alerts), and every error kept in your own database.
+
 ## 0.4.1
 
 - TypeScript and JavaScript: the extension opens for them, with production counts, errors and lint on their log calls (`console`, pino, winston, bunyan, NestJS).

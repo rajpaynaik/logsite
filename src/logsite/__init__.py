@@ -15,4 +15,4 @@ __all__ = [
     "index_source",
     "lint_source",
 ]
-__version__ = "0.4.1"
+__version__ = "0.5.0"

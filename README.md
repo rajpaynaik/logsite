@@ -14,10 +14,11 @@ pip install logsite
 
 ![64,580 log lines in, 4 causes out with the file and line of each, then a failing test that reproduces the new one](https://raw.githubusercontent.com/rajpaynaik/logsite/main/docs/demo/demo.gif)
 
-Point it at your code and the logs you already have (a log file, Loki, OpenSearch /
-Elasticsearch or CloudWatch). It turns thousands of stack traces into a few causes, each
-pointing at *your* line of code. No SDK, nothing to add to your services. Python, Java, Go,
-TypeScript and JavaScript.
+Point it at your code and the logs you already have (Loki, OpenSearch / Elasticsearch,
+CloudWatch, Sentry, OpenTelemetry or a file). It turns thousands of stack traces into a few
+causes, each pointing at *your* line of code, and keeps every error in **your own database**,
+so "what failed last Tuesday between 2 and 4pm?" is an instant query instead of a log scan.
+No SDK, nothing to add to your services. Python, Java, Go, TypeScript and JavaScript.
 
 ## How is this different from Sentry, Datadog or Grafana?
 
