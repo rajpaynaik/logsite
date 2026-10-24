@@ -65,9 +65,30 @@ link to it on GitHub or GitLab.
 
 ## What it stores
 
-Every check writes to the error store: SQLite under `~/.local/share/logsite/store/` by default,
-or your Postgres with `[store] url`. Each error read twice by overlapping checks is stored
-once, and values are masked (secrets, emails, card numbers) before they're written.
+Every check writes to the error store, in the database you choose with `[store] url`:
+
+| Database | `url` | Install |
+|---|---|---|
+| SQLite (the default) | none: a file under `~/.local/share/logsite/store/` | built in |
+| Postgres | `postgresql://user:pass@host:5432/db` | `pip install "logsite[postgres]"` |
+| MySQL / MariaDB | `mysql://user:pass@host:3306/db` | `pip install "logsite[mysql]"` |
+| SQL Server / Azure SQL | `mssql://user:pass@host:1433/db?TrustServerCertificate=yes` | `pip install "logsite[mssql]"` and Microsoft's ODBC Driver 18 |
+| ClickHouse | `clickhouse://user:pass@host:8123/db` (`clickhouses://` for HTTPS) | `pip install "logsite[clickhouse]"` |
+
+Put the URL in an environment variable (`url_env = "LOGSITE_DATABASE_URL"`), not in the file.
+
+**The tables are created on first use** and upgraded when a new logsite needs more: the
+database records its schema version. To create them up front, or to check on them:
+
+```bash
+logsite db init      # create or upgrade the tables
+logsite db status    # schema version and rows per table
+logsite db sql       # print the SQL, for a DBA who applies schema changes by hand
+```
+
+Each error read twice by overlapping checks is stored once, and values are masked (secrets,
+emails, card numbers) before they're written. On ClickHouse, groups and line counts are kept
+in `ReplacingMergeTree` tables: query them with `FINAL` to see the latest version of each row.
 
 | Table | One row per |
 |---|---|

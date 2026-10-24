@@ -1,10 +1,7 @@
 """logsite watch: every error stored, new ones sent to Slack once."""
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
-
-import pytest
 
 from logsite.backends import from_config
 from logsite.cli import main
@@ -78,23 +75,6 @@ def run(cfg, sites, app, store, now, sent):
                  send=lambda url, body: sent.append((url, body)))  # fmt: skip
 
 
-POSTGRES = os.environ.get("LOGSITE_TEST_POSTGRES")  # postgresql://... of a throwaway database
-
-
-@pytest.fixture(params=["sqlite", "postgres"])
-def store_url(request, tmp_path):
-    if request.param == "sqlite":
-        return str(tmp_path / "store.db")
-    if not POSTGRES:
-        pytest.skip("set LOGSITE_TEST_POSTGRES to a throwaway database to test postgres")
-    import psycopg
-
-    with psycopg.connect(POSTGRES, autocommit=True) as db:  # start empty
-        for table in ("error_groups", "error_events", "line_counts", "alerts", "store_meta"):
-            db.execute(f"drop table if exists {table}")
-    return POSTGRES
-
-
 def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
     cfg, sites, app = project(tmp_path, monkeypatch)
     t0 = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=2)
@@ -106,7 +86,10 @@ def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
         + [line(t0 + timedelta(minutes=m), f"charge failed for ORD-{m}", DIV,
                 email="ann@example.com") for m in range(-30, 5, 5)]
     ) + "\n")  # fmt: skip
-    store = Store(store_url)
+    from logsite.store import connect
+
+    store = connect(store_url)
+    assert store.schema_version() == 1  # created on first use
     sent: list = []
     first = run(cfg, sites, app, store, t0 + timedelta(minutes=5), sent)
     assert first.first and first.events == 7 and first.stored == 7

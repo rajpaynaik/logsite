@@ -21,8 +21,8 @@ jobs:
       - run: ruff format --check src tests
       - run: pytest -q
 
-  postgres:
-    # the error store against a real Postgres (the python job tests SQLite)
+  databases:
+    # the error store against real Postgres, MySQL, SQL Server and ClickHouse (python: SQLite)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -34,15 +34,62 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: logsite_test
+          MYSQL_USER: logsite
+          MYSQL_PASSWORD: logsite
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1" --health-interval 5s --health-timeout 5s
+          --health-retries 20
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Logsite-Test-1
+        ports: ["1433:1433"]
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        env:
+          CLICKHOUSE_USER: logsite
+          CLICKHOUSE_PASSWORD: logsite
+          CLICKHOUSE_DB: logsite_test
+        ports: ["8123:8123"]
     env:
       LOGSITE_TEST_POSTGRES: postgresql://logsite:logsite@localhost:5432/logsite_test
+      LOGSITE_TEST_MYSQL: mysql://logsite:logsite@127.0.0.1:3306/logsite_test
+      LOGSITE_TEST_MSSQL: mssql://sa:Logsite-Test-1@127.0.0.1:1433/logsite_test?TrustServerCertificate=yes
+      LOGSITE_TEST_CLICKHOUSE: clickhouse://logsite:logsite@127.0.0.1:8123/logsite_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: pip install -e ".[dev,postgres]"
-      - run: pytest -q tests/test_watch.py
+      - name: Microsoft's ODBC driver, if the runner hasn't got it
+        run: |
+          odbcinst -q -d | grep -q "ODBC Driver 18 for SQL Server" || {
+            curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+            curl -sSL "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list" | sudo tee /etc/apt/sources.list.d/mssql-release.list
+            sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          }
+      - run: pip install -e ".[dev,postgres,mysql,mssql,clickhouse]"
+      - name: A database in SQL Server (its image has none)
+        run: |
+          python - <<'PY'
+          import time, pyodbc
+          conn = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=127.0.0.1,1433;UID=sa;PWD=Logsite-Test-1;TrustServerCertificate=yes"
+          for _ in range(60):
+              try:
+                  db = pyodbc.connect(conn, autocommit=True)
+                  break
+              except pyodbc.Error:
+                  time.sleep(2)
+          db.execute("if db_id('logsite_test') is null create database logsite_test")
+          PY
+      - run: pytest -q tests/test_watch.py tests/test_store.py
 
   package:
     runs-on: ubuntu-latest

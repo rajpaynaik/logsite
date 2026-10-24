@@ -1121,6 +1121,36 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
         store.close()
 
 
+def cmd_db(args: argparse.Namespace, cfg: Config) -> int:
+    from .store import SCHEMA_VERSION, connect, default_path, dialect_for, schema_sql
+
+    url = args.url or cfg.store.url or str(default_path(cfg.root))
+    if args.action == "sql":
+        if url.lower().startswith(("clickhouse://", "clickhouses://")):
+            from .store_clickhouse import SCHEMA
+
+            statements = SCHEMA
+        else:
+            statements = schema_sql(dialect_for(url))
+        print(";\n\n".join(statements) + ";")
+        return 0
+    try:
+        store = connect(url)  # creates or upgrades the tables
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+    try:
+        version = store.schema_version()
+        print(f"{store.location}: schema version {version} (this logsite: {SCHEMA_VERSION})")
+        if args.action == "status":
+            for table, n in store.counts().items():
+                print(f"  {table:<14} {n:>10,} rows")
+            checked = store.get_meta("checked_at")
+            print(f"  last check     {checked or 'never'}")
+    finally:
+        store.close()
+    return 0
+
+
 def cmd_app(args: argparse.Namespace, cfg: Config) -> int:
     import webbrowser
 
@@ -1611,6 +1641,14 @@ def main(argv: list[str] | None = None) -> int:
         "--sync-every", metavar="SPAN", help="also fill the history store, e.g. every 15m"
     )
     p.set_defaults(func=cmd_alert_server)
+
+    p = sub.add_parser("db", help="the error store: create its tables, see them, print the SQL")
+    p.add_argument(
+        "action", choices=["init", "status", "sql"],
+        help="init: create or upgrade the tables; status: their rows; sql: print the DDL",
+    )  # fmt: skip
+    p.add_argument("--url", help="the database (default: [store] url, else the SQLite file)")
+    p.set_defaults(func=cmd_db)
 
     p = sub.add_parser("app", help="set up logsite and see production errors in your browser")
     p.add_argument("--port", type=int, default=8077)

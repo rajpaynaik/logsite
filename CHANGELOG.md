@@ -6,6 +6,9 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## Unreleased
 
+- The error store in MySQL / MariaDB, SQL Server and ClickHouse, besides SQLite and Postgres.
+  Tables are created on first use and upgraded by schema version; `logsite db init`,
+  `status` and `sql` (the DDL, for a DBA).
 - [`logsite app`](docs/app.md): set logsite up in the browser (log store, Slack and database
   forms, each with a test button), see the errors grouped by cause with the line of code, and
   write or save a failing test with one click. Secrets are kept out of `logsite.toml`.

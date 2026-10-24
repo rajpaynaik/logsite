@@ -57,3 +57,34 @@ def repo(tmp_path):
 def _history_in_tmp(tmp_path_factory, monkeypatch):
     """Keep the history store (under XDG_DATA_HOME) out of the real home directory."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path_factory.mktemp("data")))
+
+
+# Throwaway databases to test the store against, besides SQLite: their URLs, when set
+DATABASES = {
+    "postgres": "LOGSITE_TEST_POSTGRES",  # postgresql://...
+    "mysql": "LOGSITE_TEST_MYSQL",  # mysql://...
+    "mssql": "LOGSITE_TEST_MSSQL",  # mssql://...?TrustServerCertificate=yes
+    "clickhouse": "LOGSITE_TEST_CLICKHOUSE",  # clickhouse://...
+}
+TABLES = ("error_groups", "error_events", "line_counts", "alerts", "store_meta")
+
+
+@pytest.fixture(params=["sqlite", *DATABASES])
+def store_url(request, tmp_path):
+    if request.param == "sqlite":
+        return str(tmp_path / "store.db")
+    url = os.environ.get(DATABASES[request.param])
+    if not url:
+        pytest.skip(f"set {DATABASES[request.param]} to a throwaway database to test it")
+    from logsite.store import connect
+
+    store = connect(url)  # start empty
+    if request.param == "clickhouse":
+        for table in TABLES:
+            store.client.command(f"drop table if exists {table}")
+    else:
+        with store._tx() as tx:
+            for table in TABLES:
+                tx.ddl(f"drop table if exists {table}")
+    store.close()
+    return url

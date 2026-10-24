@@ -318,11 +318,11 @@ class App:
         return {"ok": True}
 
     def test_store(self, form: dict) -> dict:
-        from .store import Store, default_path
+        from .store import connect, default_path
 
         url = (form.get("url") or "").strip()
         try:
-            store = Store(url or default_path(self.root))
+            store = connect(url or default_path(self.root))
             store.close()
         except Exception as exc:
             return {"ok": False, "error": _short(exc)}

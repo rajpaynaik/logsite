@@ -81,6 +81,13 @@ region = "us-east-1"
 ```
 
 ```toml
+[store]                              # where logsite watch and logsite app keep every error
+url_env = "LOGSITE_DATABASE_URL"     # postgresql://, mysql://, mssql://, clickhouse://;
+                                     # default: a SQLite file. See docs/watch.md
+retention_days = 90
+```
+
+```toml
 [backend]
 type = "sentry"                      # see docs/sentry.md
 org = "acme"
