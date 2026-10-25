@@ -13,8 +13,8 @@ import hashlib
 import re
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .backends import LogBackend, TimeRange
@@ -44,7 +44,12 @@ _PLAIN_PREFIX = re.compile(
 )
 # What Logback / Spring Boot put before the message: "[app,trace,span] [thread] 1234 ---
 # com.acme.Logger : " (or " - ").
-_LOGGER_PREFIX = re.compile(r"^(?:\[[^\]]*\]\s*|\d+\s+---\s+)*(?:[\w$]+\.)+[\w$]+\s+[:-]\s+")
+# Spring Boot 3 leaves the PID out ("ERROR --- [thread] logger : "); Python formats often
+# put bracketed fields before " - " ("[opentelemetry.context] [__init__.py:157] [trace_id=…] - ").
+_LOGGER_PREFIX = re.compile(
+    r"^(?:(?:\[[^\]]*\]\s*|(?:\d+\s+)?---\s+)*(?:[\w$]+\.)+[\w$]+\s+[:-]\s+"
+    r"|(?:(?:\d+\s+)?---\s+)?(?:\[[^\]]*\]\s*)+-\s+)"
+)
 # trace / request ids written into plain text: "traceId=8fa23bc1", "request_id: abc"
 _TEXT_ID = re.compile(
     r"\b(trace_?id|span_?id|request_?id|correlation_?id)[=:]\s*([\w-]{6,})", re.IGNORECASE
@@ -53,13 +58,43 @@ _TEXT_ID = re.compile(
 _SLEUTH = re.compile(r"\[[A-Za-z][\w.-]*,(?P<trace>[0-9a-f]{8,32}),(?P<span>[0-9a-f]{1,32})[,\]]")
 TRACEBACK_CHARS = 4000  # of the sample traceback kept for display
 
+# HTTP reason phrases: capitalized words that name the error, not a value
+_HTTP_PHRASES = {
+    "Bad Request", "Payment Required", "Not Found", "Method Not Allowed", "Not Acceptable",
+    "Request Timeout", "Length Required", "Precondition Failed", "Payload Too Large",
+    "Unsupported Media Type", "Too Many Requests", "Internal Server Error", "Not Implemented",
+    "Bad Gateway", "Service Unavailable", "Gateway Timeout", "Unprocessable Entity",
+    "Request Entity Too Large", "Proxy Authentication Required", "Precondition Required",
+}  # fmt: skip
+
+
+def _name(m: re.Match) -> str:
+    return m.group() if m.group() in _HTTP_PHRASES else "<name>"
+
+
+def _number(m: re.Match) -> str:
+    """A number, unless it's inside a word ("o11y", "k8s", "i18n")."""
+    s, (i, j) = m.string, m.span()
+    inside = 0 < i and j < len(s) and s[i - 1].isalpha() and s[j].isalpha()
+    return m.group() if inside else "<n>"
+
+
 _VALUES = [
     (re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "<id>"),
     (re.compile(r"\b0x[0-9a-f]+\b", re.I), "<hex>"),
     (re.compile(r"\b[0-9a-f]{16,}\b", re.I), "<id>"),
     (re.compile(r"'[^']*'|\"[^\"]*\""), "<str>"),
-    (re.compile(r"\d+(?:\.\d+)*"), "<n>"),  # also "3.5" in "3.5s", "1" in "sda1"
+    # codes of capitals and digits: "OLJCESPC7Z", "REQ0534"
+    (re.compile(r"\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,}\b"), "<id>"),
+    # names: two or more capitalized words ("Roof Binoculars", "National Park Foundation")
+    (re.compile(r"\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b"), _name),
+    (re.compile(r"(?<![\d.])\d+(?:\.\d+)*(?!\d)"), _number),  # also "3.5" in "3.5s", "1" in "sda1"
 ]
+
+
+def strip_prefix(line: str) -> str:
+    """A plain-text line without the timestamp, level, thread and logger before its message."""
+    return _LOGGER_PREFIX.sub("", _PLAIN_PREFIX.sub("", line))
 
 
 def normalize(message: str) -> str:
@@ -267,7 +302,7 @@ def _fingerprint(info: ErrorInfo | None, record: LogRecord, site: LogSite | None
     elif site is not None:
         key = f"site:{site.id}"
     else:
-        key = "msg:" + normalize(record.message.split("\n", 1)[0])
+        key = "msg:" + normalize(strip_prefix(record.message.split("\n", 1)[0]))
     err = error_field(record)
     if info is None and err:  # one log call, different errors: "no space" vs "open files"
         key += "|err:" + normalize(err)
@@ -327,6 +362,46 @@ def _describe(group: ErrorGroup, info: ErrorInfo | None, app: AppFiles) -> None:
         group.path.append(group.origin)
 
 
+# A record that's nothing but a stack trace: no log line before it
+_TRACE_ONLY = re.compile(
+    r"^(?:Traceback \(most recent call last\):"
+    r"|(?:[\w$]+\.)*[\w$]*(?:Exception|Error|Throwable)\b[^\n]*\n\s+at\s)"
+)
+JOIN_WITHIN = timedelta(seconds=10)  # shippers batch: on Grafana Play some came 5s late
+
+
+def join_split_tracebacks(records: list[LogRecord]) -> list[LogRecord]:
+    """Put a stack trace that arrived as its own record back onto the error line just before
+    it, from the same service: ``logger.exception()`` writes both, and some shippers split
+    them (even into different Loki streams, labelled with different levels). One error, not
+    two groups of the same size."""
+    if not any(_TRACE_ONLY.match(r.message) for r in records):
+        return records
+    order = sorted(range(len(records)), key=lambda i: records[i].timestamp or _EPOCH)
+    out: dict[int, LogRecord | None] = dict(enumerate(records))
+    # service -> its error lines still without a trace, oldest first: two requests can fail
+    # at once (line, line, trace, trace), and each trace goes with the line logged first
+    waiting: dict[str | None, list[int]] = {}
+    for i in order:
+        r = records[i]
+        service = _service(r)
+        if _TRACE_ONLY.match(r.message):
+            queue = waiting.get(service, [])
+            while queue and r.timestamp and records[queue[0]].timestamp and (
+                    r.timestamp - records[queue[0]].timestamp > JOIN_WITHIN):  # fmt: skip
+                queue.pop(0)  # too long ago to be this trace's line
+            if queue:
+                j = queue.pop(0)
+                out[j] = replace(records[j], message=f"{records[j].message.rstrip()}\n{r.message}")
+                out[i] = None
+        elif extract_error(r) is None:
+            waiting.setdefault(service, []).append(i)
+    return [r for r in out.values() if r is not None]
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def group_errors(
     records: Iterable[LogRecord],
     sites: Iterable[LogSite],
@@ -341,7 +416,7 @@ def group_errors(
     every record once it's grouped: how ``logsite watch`` stores each occurrence."""
     matcher = Matcher(sites)
     groups: dict[str, ErrorGroup] = {}
-    for record in records:
+    for record in join_split_tracebacks(list(records)):
         info = extract_error(record)
         site = matcher.match(record)
         fp = _fingerprint(info, record, site, app)
@@ -355,15 +430,24 @@ def group_errors(
                 while head > 0 and info.chain[head].type.rsplit(".", 1)[-1] in WRAPPERS:
                     wrapped.append(info.chain[head].type.rsplit(".", 1)[-1])
                     head -= 1
+                # raised in a library while handling an error from code that isn't (a tracing
+                # SDK failing during cleanup): the error being handled is the one to fix
+                if head > 0 and _all_library(info.chain[head]):
+                    inner = next((i for i in range(head - 1, -1, -1)
+                                  if not _all_library(info.chain[i])), None)  # fmt: skip
+                    if inner is not None:
+                        wrapped.append(info.chain[head].type.rsplit(".", 1)[-1])
+                        head = inner
                 title = info.chain[head].title
                 causes = [e.title for e in info.chain[:head]]
                 exc_type = info.chain[head].type
             else:
-                title = _LOGGER_PREFIX.sub("", _PLAIN_PREFIX.sub("", first_line))
+                title = strip_prefix(first_line)
                 err = error_field(record)
                 if err and err not in title:
                     title = f"{title}: {err}"
                 causes, exc_type = [], None
+            title = " ".join(title.split())  # one line: an error can carry "\n\t* ..."
             group = groups[fp] = ErrorGroup(fp, redact(title, leaks), exc_type, causes)
             group.causes = [redact(c, leaks) for c in causes]
             group.wrapped_in = wrapped
@@ -411,6 +495,10 @@ def group_errors(
             group.title = _normalize_title(group.title)
             group.causes = [_normalize_title(c) for c in group.causes]
     return groups
+
+
+def _all_library(exc) -> bool:
+    return bool(exc.frames) and all(f.is_library for f in exc.frames)
 
 
 def _normalize_title(title: str) -> str:
@@ -551,7 +639,7 @@ def summarize_errors(
         before = group_errors(before_records, sites, app, leaks, sample_fields)
         for fp, g in groups.items():
             g.previous = before[fp].count if fp in before else 0
-        previous_events = len(before_records)
+        previous_events = sum(g.count for g in before.values())
         resolved = len(before.keys() - groups.keys())
         truncated = truncated or len(before_records) >= limit
         traffic = _activity(backend, window, len(records))
@@ -561,7 +649,7 @@ def summarize_errors(
         previous_window=previous,
         groups=[],
         split_traces=sum(1 for r in records if is_trace_piece(r.message)),
-        events=len(records),
+        events=sum(g.count for g in groups.values()),
         previous_events=previous_events,
         truncated=truncated,
         resolved=resolved,

@@ -497,16 +497,30 @@ def is_error(record: LogRecord) -> bool:
         # "2026-10-17 12:00:01 ERROR app: payment failed"
         if _TEXT_LEVEL.search(record.message.split("\n", 1)[0][:200]):
             return True
+        if is_trace_head(record.message):  # an exception line whose frames were split off
+            return True
     return extract_error(record, fields) is not None
 
 
 # A record that is only one line of a stack trace ("Caused by: …", "\tat com.x.Y(Y.java:3)",
 # '  File "a.py", line 3'): the log shipper sent each line as its own entry.
-_TRACE_PIECE = re.compile(r"\s*(Caused by: |at [\w$.<>/]+\(|File \"[^\"]+\", line \d+)")
+_TRACE_PIECE = re.compile(
+    r"\s*(Caused by: |at [\w$.<>/]+\(|File \"[^\"]+\", line \d+"
+    r"|at (?:async )?(?:[^\s(]+ \()?[^\s()]+:\d+:\d+\))"  # Node.js: at fn (file:line:col)
+)
 
 
 def is_trace_piece(message: str) -> bool:
     return bool(_TRACE_PIECE.match(message))
+
+
+def is_trace_head(message: str) -> bool:
+    """A record that's only the first line of a Java or Node.js stack trace
+    ("TypeError: x is undefined"): its frames were split into the records after it."""
+    if "\n" in message.strip():
+        return False
+    stripped = message.strip()
+    return bool(_JS_ERROR_LINE.match(stripped) or _JAVA_THROWABLE.match(stripped))
 
 
 def join_multiline(lines: Iterable[str]) -> Iterator[str]:
@@ -587,12 +601,15 @@ _JAVA_CONTINUATION = re.compile(
 # Node.js: "Error: connect ECONNREFUSED ...", "TypeError: Cannot read properties of undefined",
 # "Uncaught RangeError [ERR_X]: ...", then "    at fn (file:line:col)" frames
 _JS_ERROR_LINE = re.compile(
-    r"^(?:Uncaught )?(?P<type>(?:[A-Z][\w$]*)?(?:Error|Exception))(?: \[(?P<code>[\w_]+)\])?: "
+    # Next.js marks errors " ⨯ unhandledRejection: Error [AbortError]: ..."
+    r"^(?:⨯\s+)?(?:(?:unhandledRejection|uncaughtException|Unhandled Rejection|"
+    r"Uncaught Exception):\s+)?"
+    r"(?:Uncaught )?(?P<type>(?:[A-Z][\w$]*)?(?:Error|Exception))(?: \[(?P<code>[\w_]+)\])?: "
     r"(?P<msg>.*)$"
 )
 _JS_FRAME = re.compile(
     r"^\s+at (?:async )?(?:(?P<fn>[^\s(]+(?: \[as [^\]]+\])?) \()?(?P<file>[^\s()]+?):"
-    r"(?P<line>\d+):\d+\)?$"
+    r"(?P<line>\d+):\d+\)?(?: \{)?$"  # " {": the error's own fields follow (util.inspect)
 )
 _JAVA_THROWABLE = re.compile(
     r"^(?:[a-z_$][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error|Throwable)(?::|$)"

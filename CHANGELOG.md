@@ -4,6 +4,34 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+Fixes from a test on live logs (Grafana Play's Loki, the OpenTelemetry demo services):
+
+- Errors without a stack trace no longer split by the names and codes in their message:
+  runs of capitalized words ("Roof Binoculars") and codes of capitals and digits
+  ("OLJCESPC7Z", "REQ0534") are values now. On one service, 220 groups became 22. HTTP reason
+  phrases ("Bad Gateway") still tell errors apart. These groups get new ids, so `watch` reports
+  them as new once.
+- A stack trace that arrives as its own log entry (some shippers split `logger.exception()`'s
+  line and traceback, even into different Loki streams, seconds apart) is joined to its error
+  line: one error, not two groups of the same size.
+- When an exception from a library is raised while handling an error from your code (a
+  tracing SDK failing during cleanup), the error is titled by the one being handled.
+- Prefixes stripped from plain-text lines: Spring Boot 3 without a PID
+  (`ERROR --- [thread] logger : `) and bracketed fields before ` - `.
+- Numbers inside words (`o11y`, `k8s`) are no longer masked.
+- Go's logfmt (`level=error msg="..." err="..."`: logrus, go-kit, Grafana's tools, k6) and
+  klog (`E1025 03:04:55.030320 1 reflector.go:227] "..." err="..."`: Kubernetes) lines are
+  parsed: level, message, error, time and, for klog, the file and line. They were missed as
+  errors before.
+- Next.js and Node.js: `⨯ unhandledRejection:` / `uncaughtException:` errors are found, and
+  `at fn (file:line:col)` frames split into their own entries are joined back.
+- Loki: joining split stack traces works on Grafana Cloud and Loki 3. It used to re-read each
+  stream with a selector built from its labels, which matches nothing when they include
+  `detected_level` or structured metadata; it now uses the configured selector.
+- Error titles are one line, even when the error has line breaks in it.
+
 ## 0.7.0 (2026-10-24)
 
 - `logsite init`: set logsite up from the terminal, one question at a time: where the logs are

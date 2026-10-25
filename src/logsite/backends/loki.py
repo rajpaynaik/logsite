@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..matching import Matcher
 from ..models import LogRecord, LogSite, Usage
-from ..tracebacks import is_error, is_trace_piece, join_multiline
+from ..tracebacks import is_error, is_trace_head, is_trace_piece, join_multiline
 from .base import LogBackend, TimeRange, measure, parse_line, tally
 
 ERROR_FILTER = "(?i)(error|exception|traceback|critical|fatal)"
@@ -182,7 +182,7 @@ class LokiBackend(LogBackend):
         )
         payload = self._get("query_range", params)
         records = self.parse_response(payload)
-        if any(is_trace_piece(r.message) for r in records):
+        if any(is_trace_piece(r.message) or is_trace_head(r.message) for r in records):
             stitched = self._stitch(payload, time_range, limit)
             if stitched is not None:
                 records = stitched
@@ -201,12 +201,18 @@ class LokiBackend(LogBackend):
         """Read every line around the errors of each stream, in order, and join each stack
         trace into one record, as the file backend does. None when it would take more than
         ``MAX_STITCH_QUERIES`` queries."""
-        plans = []  # (labels, window)
+        # one stream's lines can be spread over streams that differ only in labels Loki adds
+        # and won't select on (detected_level: "error" for the line, "unknown" for its frames)
+        by_labels: dict[tuple, list[int]] = {}
         for stream in payload.get("data", {}).get("result", []):
-            labels = stream.get("stream", {})
-            times = sorted(int(ts) for ts, _ in stream.get("values", []))
+            labels = _selectable(stream.get("stream", {}))
+            by_labels.setdefault(tuple(sorted(labels.items())), []).extend(
+                int(ts) for ts, _ in stream.get("values", []))  # fmt: skip
+        plans = []  # (labels, window)
+        for key, stamps in by_labels.items():
+            labels = dict(key)
             windows: list[list[int]] = []
-            for t in times:
+            for t in sorted(stamps):
                 start = t - int(STITCH_BEFORE.total_seconds() * 1e9)
                 end = t + int(STITCH_AFTER.total_seconds() * 1e9)
                 if windows and start <= windows[-1][1]:
@@ -218,9 +224,10 @@ class LokiBackend(LogBackend):
             return None
         records: list[LogRecord] = []
         for labels, (start, end) in plans:
-            selector = (
-                "{" + ",".join(f"{k}={json.dumps(v)}" for k, v in sorted(labels.items())) + "}"
-            )
+            # the configured selector, not one built from the stream's labels: Loki returns
+            # structured metadata among them (Grafana Cloud's OTLP attributes), and a selector
+            # on those matches nothing. The stream is picked out of the result below.
+            selector = self.selector
             window = TimeRange(
                 max(time_range.start, datetime.fromtimestamp(start / 1e9, tz=timezone.utc)),
                 min(time_range.end, datetime.fromtimestamp(end / 1e9, tz=timezone.utc)),
@@ -231,7 +238,7 @@ class LokiBackend(LogBackend):
             lines = [
                 (int(ts), line)
                 for s in result.get("data", {}).get("result", [])
-                if s.get("stream", {}) == labels  # not a stream with more labels
+                if _selectable(s.get("stream", {})) == labels  # not a stream with more labels
                 for ts, line in s.get("values", [])
             ]
             lines.sort(key=lambda x: x[0])  # stable: same-time lines keep Loki's order
@@ -249,6 +256,13 @@ class LokiBackend(LogBackend):
                 record.fields = {**labels, **record.fields}
                 records.append(record)
         return records
+
+
+UNSELECTABLE = {"detected_level"}  # labels Loki 3 adds that a selector can't use
+
+
+def _selectable(labels: dict) -> dict:
+    return {k: v for k, v in labels.items() if k not in UNSELECTABLE}
 
 
 def _joined(lines: list[tuple[int, str]], labels: dict) -> list[LogRecord]:

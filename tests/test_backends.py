@@ -374,7 +374,9 @@ def test_loki_joins_stack_traces_split_into_entries(monkeypatch):
     assert "StockRepository.java:54" in r.message
     assert r.timestamp == datetime.fromtimestamp((t0 + 1) / 1e9, tz=timezone.utc)
     assert r.fields["pod"] == "stock-1"
-    assert queries[1] == '{app="stock",pod="stock-1"}'  # the stream itself, unfiltered
+    # unfiltered, with the configured selector (labels Loki returns can be structured
+    # metadata, not selectable); the error's stream is picked from the result, not the sidecar
+    assert queries[1] == '{app="stock"}' and "noise" not in r.message
 
 
 def test_loki_keeps_split_errors_when_joining_takes_too_many_queries(monkeypatch):
@@ -383,6 +385,6 @@ def test_loki_keeps_split_errors_when_joining_takes_too_many_queries(monkeypatch
     b = lk.LokiBackend("http://loki", '{app="stock"}')
     window = TimeRange.last(1)
     records = b.query_errors(TimeRange(window.start.replace(year=2025), window.end))
-    # as before: the ERROR line and a "Caused by:" piece, on their own; `errors` warns
-    assert len(queries) == 1 and len(records) == 2
+    # the ERROR line, the exception line and a "Caused by:" piece, on their own; `errors` warns
+    assert len(queries) == 1 and len(records) == 3
     assert any(r.message.startswith("Caused by:") for r in records)

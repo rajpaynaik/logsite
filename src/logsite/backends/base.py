@@ -143,7 +143,75 @@ def parse_line(raw: str, timestamp: datetime | None = None) -> LogRecord:
             )
             ts = timestamp or _parse_ts(next((data[k] for k in TIME_KEYS if data.get(k)), None))
             return LogRecord(timestamp=ts, message=message, fields=data, size=_size(raw))
+    klog = _KLOG.match(stripped)
+    if klog:
+        return _klog_record(klog, raw, timestamp)
+    data = parse_logfmt(stripped)
+    if data:
+        message = next((str(data[k]) for k in ("msg", "message") if k in data), raw)
+        ts = timestamp or _parse_ts(next((data[k] for k in TIME_KEYS if data.get(k)), None))
+        return LogRecord(timestamp=ts, message=message, fields=data, size=_size(raw))
     return LogRecord(timestamp=timestamp or _leading_ts(raw), message=raw, size=_size(raw))
+
+
+# logfmt (logrus' and go-kit's text format, Grafana's tools, Heroku):
+# time="2026-10-25T03:04:02Z" level=error msg="process ended: signal: killed" err="..."
+_LOGFMT_PAIR = re.compile(r'([\w][\w.\-/]*)=("(?:[^"\\]|\\.)*"|[^\s"]*)(?:\s+|$)')
+_LOGFMT_KEYS = {"level", "lvl", "msg", "message", "severity"}
+
+
+def parse_logfmt(text: str) -> dict | None:
+    """``key=value key="quoted value"`` pairs, or None when the line isn't logfmt: every
+    character must be in a pair, with a level or a message among them."""
+    data: dict = {}
+    pos = 0
+    while pos < len(text):
+        m = _LOGFMT_PAIR.match(text, pos)
+        if not m or m.end() == pos:
+            return None
+        key, value = m.group(1), m.group(2)
+        if value.startswith('"'):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                value = value[1:-1]
+        data[key] = value
+        pos = m.end()
+    return data if len(data) >= 2 and _LOGFMT_KEYS & data.keys() else None
+
+
+# klog, Kubernetes' Go logger: severity letter, MMDD, time, thread, file:line, message
+# E1025 03:04:55.030320       1 reflector.go:227] "Failed to watch" err="..." logger="..."
+_KLOG = re.compile(
+    r"^(?P<sev>[IWEF])(?P<mmdd>\d{4}) (?P<time>\d{2}:\d{2}:\d{2}\.\d+)\s+(?P<thread>\d+) "
+    r"(?P<file>[^\s:\]]+):(?P<line>\d+)\] (?P<rest>.*)$",
+    re.S,
+)
+_KLOG_LEVELS = {"I": "info", "W": "warning", "E": "error", "F": "fatal"}
+
+
+def _klog_record(m: re.Match, raw: str, timestamp: datetime | None) -> LogRecord:
+    rest = m["rest"]
+    fields: dict = {"level": _KLOG_LEVELS[m["sev"]], "caller": f"{m['file']}:{m['line']}",
+                    "thread": m["thread"]}  # fmt: skip
+    message = rest
+    if rest.startswith('"'):  # structured: "message" key=value ...
+        q = re.match(r'"((?:[^"\\]|\\.)*)"\s*', rest)
+        if q:
+            try:
+                message = json.loads(f'"{q.group(1)}"')
+            except json.JSONDecodeError:
+                message = q.group(1)
+            fields.update(parse_logfmt(f"msg=1 {rest[q.end() :]}".strip()) or {})
+            fields.pop("msg", None)
+    fields["msg"] = message
+    if timestamp is None:  # klog leaves the year out: this year's
+        try:
+            stamp = f"{datetime.now(timezone.utc).year}{m['mmdd']} {m['time'][:15]}"
+            timestamp = datetime.strptime(stamp, "%Y%m%d %H:%M:%S.%f").replace(tzinfo=timezone.utc)
+        except ValueError:
+            timestamp = None
+    return LogRecord(timestamp=timestamp, message=message, fields=fields, size=_size(raw))
 
 
 # "2026-10-14 10:00:05,123 ERROR ...": logging's default asctime, or ISO 8601.
