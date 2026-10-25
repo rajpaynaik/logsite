@@ -11,6 +11,9 @@ logsite prompt 346f --copy   # ... straight to the clipboard
 logsite prompt 346f --format json   # the same, as data
 ```
 
+In `logsite errors -i`, the terminal error browser, `p` copies the same case file for the
+error you're on.
+
 The store fills as [`logsite watch`](watch.md) runs; `logsite db backfill --since 7d` loads past
 errors from your log store.
 

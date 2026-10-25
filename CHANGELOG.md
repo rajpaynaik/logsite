@@ -10,6 +10,10 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
   (tested, with a retry that keeps your answers), Slack (a test message) and where to store
   errors (tested, tables created). Settings go to `logsite.toml`, passwords, tokens and
   webhooks to the secrets file. The same steps and code as `logsite app`.
+- `logsite errors -i`: browse the error store in the terminal: the error groups for a time
+  range (`t` changes it, `/` searches, `s` picks a service), Enter for an error's case file
+  with a 7-day chart, `p` to copy it as a prompt for an AI assistant, `r` to write the
+  reproduction test. Built on curses, no new dependency.
 - Testing a log file (in `logsite init` and `logsite app`) reads the whole file, not only its
   last 24 hours.
 

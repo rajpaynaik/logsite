@@ -72,6 +72,7 @@ def gather(cfg, store, ref: str, now: datetime | None = None) -> dict:
         if group.get("logged_at") and group.get("logged_at") != where
         else None,
         "frequency": _frequency(hourly, now),
+        "hourly": hourly,
         "releases": _tally(by, "release"),
         "services": _tally(by, "service"),
         "started": _started(cfg.root, first, where, by),

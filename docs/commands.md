@@ -23,6 +23,7 @@ logsite errors --since-deploy v1.4.0   # what started failing after a release
 logsite investigate        # errors linked into incidents, with the deploy and suspect commits
 logsite sync --backfill 30d   # fill the history store; then `logsite sync` on a schedule
 logsite seen ed64f864      # one error group's history: first seen, fixes, regressions
+logsite errors -i          # browse the stored errors in the terminal: search, time range, p copies a prompt
 logsite prompt ed64f864 --copy   # one stored error as a case file to paste into an AI assistant
 logsite agent -- pytest    # test/build failures grouped by cause + what changed (AI assistants)
 logsite repro --from incident.log --write-test   # a production error as a failing pytest test

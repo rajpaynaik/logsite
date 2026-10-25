@@ -532,6 +532,8 @@ def _gate(args: argparse.Namespace, summary, cfg: Config, label: str) -> int:
 
 
 def cmd_errors(args: argparse.Namespace, cfg: Config) -> int:
+    if args.interactive:
+        return _browse(args, cfg)
     summary, label, app = _error_summary(args, cfg)
     if args.format == "json":
         json.dump(summary_json(summary, args.top), sys.stdout, indent=2)
@@ -1342,6 +1344,29 @@ def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def _browse(args: argparse.Namespace, cfg: Config) -> int:
+    """``logsite errors -i``: the stored errors, browsed in the terminal."""
+    from .store import open_store
+
+    try:
+        from .tui import RANGES, Browser, Source, run
+    except ImportError:  # no curses: Windows without windows-curses
+        sys.exit("logsite: the error browser needs curses (on Windows: pip install windows-curses)")
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        sys.exit("logsite errors -i needs a terminal")
+    try:
+        store = open_store(cfg)
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+    hours = [h for h, _ in RANGES]
+    start = next((i for i, h in enumerate(hours) if h and args.hours and h >= args.hours), 1)
+    try:
+        run(Browser(Source(cfg, store), range_index=start))
+    finally:
+        store.close()
+    return 0
+
+
 def cmd_prompt(args: argparse.Namespace, cfg: Config) -> int:
     """One stored error as a case file to paste into an AI assistant."""
     from . import prompt
@@ -1652,6 +1677,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=5000, help="error records per window (5000)")
     p.add_argument("--traceback", action="store_true", help="show a sample traceback per group")
     p.add_argument("--brief", action="store_true", help="only the overview table")
+    p.add_argument("-i", "--interactive", action="store_true",
+                   help="browse the stored errors in the terminal")  # fmt: skip
     p.add_argument(
         "--fail-on-new", action="store_true", help="exit 1 if there's a new error group (CI)"
     )
