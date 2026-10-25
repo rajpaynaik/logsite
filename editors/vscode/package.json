@@ -2,7 +2,7 @@
   "name": "logsite",
   "displayName": "logsite",
   "description": "Production errors grouped by cause and marked on the line that raised them, log volume and cost per log call, and logging lint. Python, Java, Go, TypeScript and JavaScript.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "preview": true,
   "publisher": "rajpaynaik",
   "license": "Apache-2.0",

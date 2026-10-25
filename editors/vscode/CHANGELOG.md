@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- No extension changes; released with logsite 0.7.1: fixes from a test on live logs (Go logfmt and klog, Next.js errors, Loki 3 stitching).
+
 ## 0.7.0
 
 - No extension changes; released with logsite 0.7.0: `logsite init` (setup in the terminal) and `logsite errors -i` (the error browser).
