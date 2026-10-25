@@ -119,7 +119,8 @@ See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kub
 
 Also: a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md),
 a [VS Code extension](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite),
-and an [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) for AI assistants.
+and a [Claude connector](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) (MCP) so you can
+ask "what failed in checkout yesterday after 3pm?" in plain English.
 
 ## Docs
 

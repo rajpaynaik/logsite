@@ -11,6 +11,11 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
   releases, when it started and the commits just before, whether it was fixed before, what the
   failing requests have in common, and real examples with library frames folded. `--copy` puts
   it on the clipboard, `--format json` gives the data.
+- [Connect Claude to logsite](docs/mcp.md): the MCP server has error-store tools
+  (`stored_errors` for any time range, `error_case`, `error_occurrences`, `error_trend`), so you
+  can ask "what failed in checkout yesterday after 3pm?" in plain English. `logsite mcp --http`
+  serves it over HTTP with a token, for claude.ai's custom connectors and for a whole team;
+  setup steps for Claude Code, Claude Desktop and claude.ai.
 
 ## 0.5.1 (2026-10-24)
 

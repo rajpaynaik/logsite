@@ -1534,11 +1534,23 @@ def cmd_serve(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_mcp(args: argparse.Namespace, cfg: Config) -> int:
+    import os
+
     try:
-        from .mcp_server import serve
+        from .mcp_server import LOCAL_HOSTS, serve
     except ImportError:
         sys.exit("logsite: the MCP server needs extra deps: pip install 'logsite[mcp]'")
-    serve(cfg)
+    if not args.http:
+        serve(cfg)
+        return 0
+    token = args.token or os.environ.get("LOGSITE_MCP_TOKEN")
+    if args.host not in LOCAL_HOSTS and not token:
+        sys.exit("logsite: off localhost, the MCP server needs a token: --token or "
+                 "LOGSITE_MCP_TOKEN (e.g. `openssl rand -hex 24`)")  # fmt: skip
+    url = f"http://{args.host}:{args.port}/mcp"
+    auth = " (send Authorization: Bearer <token>, or use /mcp/<token>)" if token else ""
+    print(f"logsite MCP server on {url}{auth}", file=sys.stderr, flush=True)
+    serve(cfg, http=True, host=args.host, port=args.port, token=token)
     return 0
 
 
@@ -1862,7 +1874,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("rules", help="list lint rules").set_defaults(func=cmd_rules)
     sub.add_parser("serve", help="run the language server on stdio").set_defaults(func=cmd_serve)
-    sub.add_parser("mcp", help="run the MCP server on stdio").set_defaults(func=cmd_mcp)
+    p = sub.add_parser("mcp", help="the MCP server for AI assistants (stdio, or --http)")
+    p.add_argument("--http", action="store_true", help="serve over HTTP instead of stdio")
+    p.add_argument("--host", default="127.0.0.1", help="with --http (default 127.0.0.1)")
+    p.add_argument("--port", type=int, default=8078, help="with --http (default 8078)")
+    p.add_argument("--token", help="with --http: required token (or LOGSITE_MCP_TOKEN)")
+    p.set_defaults(func=cmd_mcp)
 
     args = parser.parse_args(argv)
     if not getattr(args, "needs_config", True):  # the hook: never fail on a bad config

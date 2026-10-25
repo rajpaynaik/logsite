@@ -6,7 +6,9 @@ Run it with ``logsite mcp`` (stdio). Every tool is read-only.
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +58,11 @@ of them to see which commits changed the surrounding code. `lint` finds log-qual
 `find_leaks` finds secrets and personal data that actually reached production logs; sample
 values are masked, so don't try to reconstruct them.
 Tools that need production data fail if no backend is configured.
+The error store keeps every error `logsite watch` has seen, grouped, for as long as its
+retention: `stored_errors` answers "what failed between X and Y?" (any range, by service,
+release or text) without scanning logs, and `error_case` gives everything about one error to
+explain and fix it: the code, when it started and the commits just before, past fixes, what
+the failing requests share. `error_occurrences` and `error_trend` go deeper.
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True)
@@ -583,8 +590,182 @@ def build_server(cfg: Config) -> MCPServer:
             raise ToolError(str(exc)) from exc
         return about_json(about(cfg, span, hours))
 
+    # --- the error store: every error logsite watch (or db backfill) has seen ---------------
+
+    def store():
+        from .store import open_store
+
+        try:
+            return open_store(cfg)
+        except Exception as exc:
+            raise ToolError(f"can't open the error store: {exc}") from exc
+
+    def window(since: str | None, until: str | None, hours: float | None):
+        try:
+            end = parse_iso(until) if until else datetime.now(timezone.utc)
+            start = parse_iso(since) if since else end - timedelta(hours=hours or 24)
+        except ValueError as exc:
+            raise ToolError(f"since/until must be ISO 8601 times: {exc}") from exc
+        start, end = (t if t.tzinfo else t.replace(tzinfo=timezone.utc) for t in (start, end))
+        if start >= end:
+            raise ToolError("since must be before until")
+        return start, end
+
+    @mcp.tool(annotations=READ_ONLY)
+    def stored_errors(
+        since: str | None = None,
+        until: str | None = None,
+        hours: float | None = None,
+        service: str | None = None,
+        release: str | None = None,
+        search: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """The errors in the error store for a time range: an instant lookup, no log scan.
+
+        Use this for "what failed yesterday between 2 and 4pm?", "errors in checkout since
+        v1.4", or anything older than the log store keeps. since/until: ISO 8601 (UTC if no
+        offset); or hours back from now (default 24). service, release: exact names (the
+        `facets` in the result list them). search: text in the error, its cause or its file.
+        Each group has `id` (pass it to `error_case`), `recent` (occurrences in the range),
+        `events` (all stored), first and last seen, and where it's raised.
+        """
+        start, end = window(since, until, hours)
+        s = store()
+        try:
+            groups = s.groups(since=start, until=end, limit=max(1, min(limit, 500)),
+                              service=service, release=release, search=search)  # fmt: skip
+            facets = s.facets(start, end)
+        finally:
+            s.close()
+        return {"from": start.isoformat(), "to": end.isoformat(), "groups": groups,
+                "total": sum(g["recent"] for g in groups), "facets": facets}  # fmt: skip
+
+    @mcp.tool(annotations=READ_ONLY)
+    def error_case(id: str) -> dict[str, Any]:
+        """Everything known about one stored error, to explain and fix it.
+
+        id: from `stored_errors` (its first characters are enough). Returns where it's
+        raised with the code around it; how often, per service and release, last 24 hours vs
+        the day before; when it started, the first release with it and the commits that
+        changed that code in the 3 days before; whether it was fixed before and by which
+        commits; fields most failing requests share (`shared.same`) and ones that vary
+        (`shared.varies`); the latest examples with stack traces; and the reproduction test
+        if `logsite repro` wrote one. Values were masked when stored. Find the cause in the
+        code before proposing a fix; don't just catch the exception.
+        """
+        from .prompt import NotFound, gather
+
+        s = store()
+        try:
+            case = gather(cfg, s, id)
+        except NotFound as exc:
+            hint = "; ".join(f"{g['id']} {g.get('title') or ''}" for g in exc.matches)
+            raise ToolError(f"{exc}" + (f": {hint}" if hint else "")) from exc
+        finally:
+            s.close()
+        return json.loads(json.dumps(case, default=str))
+
+    @mcp.tool(annotations=READ_ONLY)
+    def error_occurrences(
+        id: str,
+        since: str | None = None,
+        until: str | None = None,
+        service: str | None = None,
+        release: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """One stored error's occurrences, newest first: time, service, release, trace id,
+        message, the record's fields (masked) and stack trace. Pass a trace id to
+        `request_timeline` to see the whole request. id: from `stored_errors`.
+        """
+        from .prompt import NotFound, find_group
+
+        s = store()
+        try:
+            gid = find_group(s, id)["id"]
+            start = parse_iso(since) if since else None
+            end = parse_iso(until) if until else None
+            return s.events(gid, limit=max(1, min(limit, 200)), since=start, until=end,
+                            service=service, release=release)  # fmt: skip
+        except (NotFound, ValueError) as exc:
+            raise ToolError(str(exc)) from exc
+        finally:
+            s.close()
+
+    @mcp.tool(annotations=READ_ONLY)
+    def error_trend(id: str, days: float = 7) -> dict[str, Any]:
+        """Occurrences of one stored error per hour (UTC) over the last `days`: when it
+        started, whether it's rising, whether a fix stopped it."""
+        from .prompt import NotFound, find_group
+
+        s = store()
+        try:
+            group = find_group(s, id)
+            since = datetime.now(timezone.utc) - timedelta(days=min(days, 90))
+            hourly = s.hourly(group["id"], since)
+        except NotFound as exc:
+            raise ToolError(str(exc)) from exc
+        finally:
+            s.close()
+        return {"id": group["id"], "title": group.get("title"), "hourly": hourly,
+                "total": sum(h["n"] for h in hourly)}  # fmt: skip
+
     return mcp
 
 
-def serve(cfg: Config) -> None:
-    build_server(cfg).run("stdio")
+LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+class TokenGate:
+    """ASGI wrapper: only requests with the token get through, either as
+    ``Authorization: Bearer <token>`` or as the last part of the URL (``/mcp/<token>``,
+    for clients that take a URL but no headers)."""
+
+    def __init__(self, app, token: str, path: str) -> None:
+        self.app, self.token, self.path = app, token, path.rstrip("/")
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        import hmac
+
+        headers = dict(scope.get("headers") or [])
+        auth = headers.get(b"authorization", b"").decode("latin-1")
+        given = auth[7:] if auth[:7].lower() == "bearer " else ""
+        path = scope.get("path", "")
+        if path.startswith(self.path + "/") and not given:
+            given = path[len(self.path) + 1 :].strip("/")
+            scope = {**scope, "path": self.path, "raw_path": self.path.encode()}
+        if given and hmac.compare_digest(given.encode(), self.token.encode()):
+            return await self.app(scope, receive, send)
+        await send({"type": "http.response.start", "status": 401,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"www-authenticate", b"Bearer")]})  # fmt: skip
+        await send({"type": "http.response.body", "body": b'{"error": "a valid token is needed"}'})
+
+
+def http_app(cfg: Config, host: str, port: int, token: str | None, path: str = "/mcp"):
+    """The MCP server over streamable HTTP, behind the token when there is one."""
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    if host in LOCAL_HOSTS:  # a web page in the browser mustn't reach it (DNS rebinding)
+        names = [f"{h}:{port}" for h in ("127.0.0.1", "localhost", "[::1]")]
+        security = TransportSecuritySettings(enable_dns_rebinding_protection=True,
+                                             allowed_hosts=names)  # fmt: skip
+    else:  # behind a load balancer or tunnel the Host is theirs; the token protects it
+        security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    app = build_server(cfg).streamable_http_app(
+        streamable_http_path=path, transport_security=security, host=host
+    )
+    return TokenGate(app, token, path) if token else app
+
+
+def serve(cfg: Config, http: bool = False, host: str = "127.0.0.1", port: int = 8078,
+          token: str | None = None) -> None:  # fmt: skip
+    if not http:
+        build_server(cfg).run("stdio")
+        return
+    import uvicorn
+
+    uvicorn.run(http_app(cfg, host, port, token), host=host, port=port, log_level="warning")
