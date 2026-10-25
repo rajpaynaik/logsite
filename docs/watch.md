@@ -38,7 +38,7 @@ url_env = "LOGSITE_DATABASE_URL"     # postgresql://user:pass@host/db
 retention_days = 90
 ```
 
-3. Run it where it can reach your log store (a server, a container, a Kubernetes pod):
+3. Run it where it can reach your log store (a server, a container, a Kubernetes pod; see [Run on Kubernetes](kubernetes.md)):
 
 ```bash
 pip install "logsite[postgres]"      # without [postgres] for SQLite

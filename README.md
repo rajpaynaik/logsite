@@ -69,12 +69,49 @@ url = "http://localhost:3100"
 selector = '{service_name="checkout"}'
 ```
 
+## Watch production
+
+`logsite watch` checks your logs every 5 minutes, stores every error in your own database,
+and posts to Slack when an error is **new**, **back after a fix**, or **spiking**. No SDK:
+it reads the log store you already have.
+
+**In the browser:** `logsite app` walks you through the log store, Slack and database, each
+with a test button, then starts watching.
+
+**Or with a config file:**
+
+```toml
+[backend]
+type = "loki"
+url = "http://loki:3100"
+selector = '{service_name="checkout"}'
+
+[alerts]
+slack_webhook_env = "SLACK_WEBHOOK_URL"   # a Slack incoming webhook
+
+[store]                                   # leave out to use SQLite
+url_env = "LOGSITE_DATABASE_URL"          # Postgres, MySQL, SQL Server or ClickHouse
+```
+
+```bash
+pip install "logsite[postgres]"
+logsite watch --dry-run                   # print the Slack messages first
+logsite watch
+```
+
+Tables are created on first use. The first check loads the last 24 hours without posting;
+`logsite db backfill --since 30d` loads more.
+
+**Where to run it:** anywhere that can reach your log store: a server, Docker, or
+Kubernetes. On Kubernetes (EKS included) it's one Deployment with one replica, config in a
+ConfigMap, secrets in a Secret, and an IAM role for CloudWatch.
+See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md).
+
 ## More
 
 | Command | What it does |
 |---|---|
 | `logsite app` | Set everything up and browse errors in your browser, no terminal needed |
-| `logsite watch` | Check production every few minutes and post new errors, regressions and spikes to Slack |
 | `logsite db backfill --since 30d` | Store errors in your own database (SQLite, Postgres, MySQL, SQL Server, ClickHouse) for instant date-range queries |
 | `logsite investigate` | Find the deploy and commit behind an incident |
 | `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
@@ -89,6 +126,7 @@ and an [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
 [logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
 [Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
+[Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md) ·
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [Security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
 [Changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md)
