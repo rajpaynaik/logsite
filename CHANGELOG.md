@@ -4,6 +4,15 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- `logsite init`: set logsite up from the terminal, one question at a time: where the logs are
+  (tested, with a retry that keeps your answers), Slack (a test message) and where to store
+  errors (tested, tables created). Settings go to `logsite.toml`, passwords, tokens and
+  webhooks to the secrets file. The same steps and code as `logsite app`.
+- Testing a log file (in `logsite init` and `logsite app`) reads the whole file, not only its
+  last 24 hours.
+
 ## 0.6.0 (2026-10-24)
 
 - [`logsite prompt <id>`](docs/prompt.md): one stored error as a case file to paste into an AI

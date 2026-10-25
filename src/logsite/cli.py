@@ -1533,6 +1533,25 @@ def cmd_serve(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_init(args: argparse.Namespace, cfg: Config | None) -> int:
+    """Set logsite up from the terminal: log store, Slack, error store."""
+    from .term import palette
+    from .wizard import Wizard
+
+    if not sys.stdin.isatty() and not args.force:
+        sys.exit("logsite init asks questions: run it in a terminal, or use `logsite app` "
+                 "(the browser) or write logsite.toml (docs/configuration.md)")  # fmt: skip
+    from .config import find_root
+
+    root = find_root(Path(args.config_dir or "."))
+    try:
+        Wizard(root, color=palette(args.color, sys.stdout)).run()
+    except (KeyboardInterrupt, EOFError):
+        print("\nlogsite init: stopped, nothing saved", file=sys.stderr)
+        return 130
+    return 0
+
+
 def cmd_mcp(args: argparse.Namespace, cfg: Config) -> int:
     import os
 
@@ -1809,6 +1828,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--chunk", default="1h", help="backfill: read this much at a time (1h)")
     p.add_argument("--limit", type=int, default=5000, help="backfill: errors per chunk (5000)")
     p.set_defaults(func=cmd_db)
+
+    p = sub.add_parser("init", help="set logsite up: log store, Slack and database, tested")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--force", action="store_true", help=argparse.SUPPRESS)  # tests: no terminal
+    p.set_defaults(func=cmd_init, needs_config=False)
 
     p = sub.add_parser("app", help="set up logsite and see production errors in your browser")
     p.add_argument("--port", type=int, default=8077)

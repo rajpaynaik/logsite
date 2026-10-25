@@ -109,9 +109,9 @@ async function testBackend(state, out, button) {
     if (!r.ok) { out.className = "result bad"; out.textContent = r.error; return false; }
     out.className = "result ok";
     const lines = r.lines.map((l) => `${l.time ? l.time.slice(11, 19) : "        "}  ${l.message}`).join("\n");
-    out.innerHTML = `Connected. ${r.lines.length ? "Some recent lines:" : "No lines in the last 24 hours yet."}
+    out.innerHTML = `Connected. ${r.lines.length ? "Some recent lines:" : `No lines in ${esc(r.scope)} yet.`}
       ${lines ? `<pre>${esc(lines)}</pre>` : ""}
-      ${r.errors}${r.errors_capped ? "+" : ""} error(s) in the last 24 hours.`;
+      ${r.errors}${r.errors_capped ? "+" : ""} error(s) in ${esc(r.scope)}.`;
     return true;
   } catch (e) { out.className = "result bad"; out.textContent = e.message; return false; }
   finally { button.disabled = false; }

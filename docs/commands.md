@@ -6,6 +6,7 @@ them work there without a log backend.
 
 ```bash
 cd examples/demo_app
+logsite init               # set up: log store, Slack, database, each tested (asks in the terminal)
 logsite index              # list every log call
 logsite lint               # static log-quality checks (exit 1 on findings, good for CI)
 logsite context            # required context fields, and what's already added automatically

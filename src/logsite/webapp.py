@@ -291,6 +291,8 @@ class App:
             if kind_is_file(form) and not Path(backend.path).is_file():
                 return {"ok": False, "error": f"no file at {backend.path}"}
             window = TimeRange.last(24)
+            if kind_is_file(form):  # a file holds what it holds: read all of it
+                window = TimeRange(datetime(1970, 1, 1, tzinfo=timezone.utc), window.end)
             lines = backend.query_logs(window, limit=5)
             errors = backend.query_errors(window, limit=500)
         except Exception as exc:
@@ -301,6 +303,7 @@ class App:
                        "message": r.message.split("\n", 1)[0][:200]} for r in lines],
             "errors": len(errors),
             "errors_capped": len(errors) >= 500,
+            "scope": "the file" if kind_is_file(form) else "the last 24 hours",
         }  # fmt: skip
 
     def test_slack(self, form: dict) -> dict:

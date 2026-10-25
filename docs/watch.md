@@ -20,6 +20,9 @@ OpenTelemetry, Sentry or a file).
 
 ## Set it up
 
+`logsite init` asks for all of this in the terminal and tests each part (`logsite app` does
+the same in the browser). By hand:
+
 1. Create a Slack **incoming webhook** for the channel (Slack: **Apps → Incoming Webhooks →
    Add to Slack**), and put its URL in an environment variable.
 2. Add to `logsite.toml`, next to your `[backend]`:

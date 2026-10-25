@@ -75,8 +75,8 @@ selector = '{service_name="checkout"}'
 and posts to Slack when an error is **new**, **back after a fix**, or **spiking**. No SDK:
 it reads the log store you already have.
 
-**In the browser:** `logsite app` walks you through the log store, Slack and database, each
-with a test button, then starts watching.
+**Guided setup:** `logsite init` asks for your log store, Slack and database in the terminal,
+testing each one; `logsite app` does the same in your browser.
 
 **Or with a config file:**
 
