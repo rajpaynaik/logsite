@@ -2,53 +2,30 @@
 
 [![PyPI](https://img.shields.io/pypi/v/logsite?label=PyPI&cacheSeconds=3600)](https://pypi.org/project/logsite/)
 [![Python](https://img.shields.io/pypi/pyversions/logsite?cacheSeconds=86400)](https://pypi.org/project/logsite/)
-[![VS Code](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite)
 [![CI](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml/badge.svg)](https://github.com/rajpaynaik/logsite/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/rajpaynaik/logsite/blob/main/LICENSE)
 
 **Your logs say something broke. logsite tells you which line of your code, and writes a test that proves it.**
 
+It reads the logs you already have (a file, Loki, OpenSearch, CloudWatch, Sentry or
+OpenTelemetry), groups thousands of stack traces into a few causes, and points each one at
+your line of code. No SDK, nothing to add to your services. Works with Python, Java, Go,
+TypeScript and JavaScript.
+
 ```bash
 pip install logsite
 ```
 
-![64,580 log lines in, 4 causes out with the file and line of each, then a failing test that reproduces the new one](https://raw.githubusercontent.com/rajpaynaik/logsite/main/docs/demo/demo.gif)
+## Try it
 
-Point it at your code and the logs you already have (Loki, OpenSearch / Elasticsearch,
-CloudWatch, Sentry, OpenTelemetry or a file). It turns thousands of stack traces into a few
-causes, each pointing at *your* line of code, and keeps every error in **your own database**,
-so "what failed last Tuesday between 2 and 4pm?" is an instant query instead of a log scan.
-No SDK, nothing to add to your services. Python, Java, Go, TypeScript and JavaScript.
-
-## How is this different from Sentry, Datadog or Grafana?
-
-**It needs no SDK and works on the logs you already have.** Sentry and Datadog see errors
-from services you've instrumented, inside their platform. Grafana and Loki store and search
-your logs, but don't know your code. logsite reads both your logs and your code, on your
-machine:
-
-| | logsite | Sentry, Datadog |
-|---|---|---|
-| Setup | point it at a log file or your log store | an SDK or agent in every service |
-| Where it runs | your machine or CI; no logs leave it | their cloud |
-| Knows your code | yes: maps each error to the line at your commit, even after the code moved | through the stack trace and a source integration |
-| Output | causes, the line, and a failing test checked to fail the way production did | an issue page |
-| Price | free, Apache 2.0 | per event or GB |
-
-It doesn't replace them: there's no hosted UI or real-time alerting of its own. It works
-alongside them, and plugs into Grafana as a data source and into Grafana alerts.
-
-## Try it in 2 minutes
-
-The repo has a small demo shop, `examples/bookstore`, with a planted bug: calls to a
-supplier time out and are never retried. Its production log is in the repo too.
+The repo has a small demo shop with a planted bug and its production log.
 
 ```bash
 pip install logsite pytest
 git clone https://github.com/rajpaynaik/logsite && cd logsite/examples/bookstore
 ```
 
-**1. What's failing?** Read the log and group the errors by cause:
+**1. What's failing?**
 
 ```
 $ logsite errors --from ../../bench/repro/scenarios/supplier-timeout/incident.log
@@ -57,159 +34,68 @@ $ logsite errors --from ../../bench/repro/scenarios/supplier-timeout/incident.lo
   #  TREND  COUNT  ERROR                                      RAISED AT       LOGGED AT
   1            25  TimeoutError: timed out                    supplier.py:31  api.py:36
   2             3  ConnectionRefusedError: cache unavailable  cache.py:15     api.py:23
-
-━━ 1. TimeoutError: timed out ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25
-   Raised at    bookstore/supplier.py:31  restock()  (in socket)
-                31 │ with urllib.request.urlopen(request, timeout=self.timeout) as resp:
-   Logged at    bookstore/api.py:36
-   Call path    api.handle › api.<lambda> › inventory.reorder › supplier.restock › socket
 ```
 
-28 errors, 2 causes, and the exact line behind each one.
-
-**2. Turn the error into a failing test.** logsite takes the function to call, the values
-the failing request logged and the dependency to fake, and writes a pytest test:
+**2. Write a test that reproduces it.**
 
 ```
 $ logsite repro --from ../../bench/repro/scenarios/supplier-timeout/incident.log --write-test
-Reproduce 346fa937 · TimeoutError: timed out · 25 error(s)
-  Fail with    TimeoutError through bookstore/supplier.py:31 (restock)
-  Call         reorder(sku, qty)  from bookstore.inventory  bookstore/inventory.py:13
-  Fake         bookstore/supplier.py:31 calls urllib.request.urlopen(…): patch urllib.request.urlopen raise TimeoutError
-  Inputs       sku   = BK-1802               logged at bookstore/inventory.py:17
-               qty   = 10                    logged at bookstore/inventory.py:17
-
 wrote tests/test_repro_346fa937.py
 ```
 
-**3. Check it fails the way production did:** the same exception, through the same line.
+**3. Check it fails the way production did.**
 
 ```
 $ logsite agent --expect 346fa937 -- python -m pytest tests/test_repro_346fa937.py
 ✓ 346fa937 reproduced: TimeoutError through bookstore/supplier.py:31, as in production
 ```
 
-Now fix `supplier.py` until the test passes. Run your tests through `logsite agent` to get
-the causes instead of hundreds of lines of output:
+Fix `supplier.py` until the test passes.
 
-```
-$ logsite agent -- python -m pytest
-pytest: 1 failed, 6 passed · 1 cause(s) · exit 1
-
-1. 1 test(s)  TimeoutError: timed out
-   raised   bookstore/supplier.py:31 in restock()
-```
-
-## Prefer a browser?
-
-```bash
-logsite app
-```
-
-Connect your log store, Slack and a database in a few forms, each with a test button, then see
-your production errors grouped by cause, with the line of code and a button that writes the
-failing test. [More](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md).
-
-## Use it on your own service
+## Use it on your service
 
 ```bash
 cd your-service
-logsite lint                         # logging mistakes in your code; no logs needed
-logsite errors --from downloaded.log  # errors grouped by cause, from any log file
+logsite errors --from app.log        # errors grouped by cause
+logsite lint                         # logging mistakes in your code
 ```
 
 To read from your log store, add a `logsite.toml`:
 
 ```toml
 [backend]
-type = "loki"                        # or "opensearch", "cloudwatch", "file"
+type = "loki"                        # or "opensearch", "cloudwatch", "sentry", "file"
 url = "http://localhost:3100"
 selector = '{service_name="checkout"}'
 ```
 
-```bash
-logsite errors                       # production errors from the last 24h, grouped by cause
-logsite investigate                  # linked into incidents, with the deploy and commit behind them
-logsite about app/checkout.py:42     # what production says about this line, before you change it
-```
+## More
 
-See [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) for every backend.
-
-## What else it does
-
-- **Finds the change behind an incident**: `logsite investigate` names the deploy and the
-  commits just before the errors started. → [Errors and incidents](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md)
-- **Remembers past fixes**: when an old error comes back, it shows the commit that fixed it
-  last time. → [History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md)
-- **An error index for your logs**: errors are grouped and stored as they arrive, so "last
-  Tuesday, 2 to 4pm" is an instant query instead of a Loki scan, in the app, in SQL, or in a
-  [Grafana dashboard](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md#query-any-time-range-instantly)
-  on the store. `logsite db backfill` loads your history.
-- **Watches production and posts to Slack**: [`logsite watch`](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md)
-  checks your logs every few minutes, stores every error in your own Postgres (or SQLite) for
-  later analysis, and posts new errors, regressions and spikes to Slack.
-- **Opens a pull request per new error**: a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md)
-  reads your logs on a schedule and opens a draft pull request with the reproduction test.
-- **Blocks bad releases in CI**: `logsite errors --since-deploy $TAG --fail-on-new` fails the build if the release brought a new error.
-- **Helps AI coding assistants**: the [Claude Code plugin](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md)
-  and the [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) tell the assistant what a function
-  does in production before it changes it. `/logsite:fix-error` reproduces an error, then fixes it.
-- **Shows production in your editor**: how often each log call runs and which lines raise
-  errors, right above the code. [VS Code](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite), or any LSP editor.
-- **Cuts log costs**: which `logger.info(...)` calls make up your log bill, and secrets that
-  reached your logs. → [Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md)
-- **Works with Grafana**: a data source, dashboards, alert summaries and Alloy rules to drop
-  noisy lines. → [Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
-
-## Supported
-
-| | |
+| Command | What it does |
 |---|---|
-| **Languages** | Python (`logging`, structlog, loguru), Java (SLF4J, Log4j 2, java.util.logging, Lombok), Go (slog, zap, zerolog, logrus, logr, klog), TypeScript and JavaScript (console, pino, winston, bunyan, NestJS) |
-| **Log stores** | Log files, Loki, OpenSearch / Elasticsearch, CloudWatch Logs, OpenTelemetry (OTLP JSON from the Collector), Sentry |
-| **Tests and builds** | pytest, `go test`, Maven, Gradle, Jest, Vitest, tsc, javac, gcc-style compilers |
-| **Editors** | VS Code; Neovim, JetBrains, Helix, Zed through LSP |
-| **AI assistants** | Claude Code plugin; any MCP client (Claude Desktop, Cursor, …) |
+| `logsite app` | Set everything up and browse errors in your browser, no terminal needed |
+| `logsite watch` | Check production every few minutes and post new errors, regressions and spikes to Slack |
+| `logsite db backfill --since 30d` | Store errors in your own database (SQLite, Postgres, MySQL, SQL Server, ClickHouse) for instant date-range queries |
+| `logsite investigate` | Find the deploy and commit behind an incident |
+| `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
 
-## Install
+Also: a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md),
+a [VS Code extension](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite),
+and an [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) for AI assistants.
 
-```bash
-pip install logsite                  # the command-line tool
-pip install "logsite[lsp,mcp]"       # + the editor language server and the MCP server
-```
-
-## Documentation
+## Docs
 
 [Commands](https://github.com/rajpaynaik/logsite/blob/main/docs/commands.md) ·
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
-[Errors and incidents](https://github.com/rajpaynaik/logsite/blob/main/docs/errors.md) ·
-[Agent mode](https://github.com/rajpaynaik/logsite/blob/main/docs/agent.md) ·
-[Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
-[GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md) ·
-[Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
 [logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
-[History](https://github.com/rajpaynaik/logsite/blob/main/docs/history.md) ·
-[Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) ·
-[Languages](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) ·
-[OpenTelemetry](https://github.com/rajpaynaik/logsite/blob/main/docs/opentelemetry.md) ·
-[Sentry](https://github.com/rajpaynaik/logsite/blob/main/docs/sentry.md) ·
-[Lint rules](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md) ·
-[Cost and leaks](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md) ·
-[Request timeline](https://github.com/rajpaynaik/logsite/blob/main/docs/timeline.md) ·
-[MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) ·
-[Claude Code plugin](https://github.com/rajpaynaik/logsite/blob/main/docs/claude-code.md) ·
-[How it works](https://github.com/rajpaynaik/logsite/blob/main/docs/how-it-works.md) ·
-[Data flow and security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
-[Roadmap](https://github.com/rajpaynaik/logsite/blob/main/docs/roadmap.md)
+[Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
+[Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
+[Security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
+[Changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md)
 
-## Status
-
-Early (0.x): feedback and contributors welcome. Questions and ideas go in
-[Discussions](https://github.com/rajpaynaik/logsite/discussions); see the
-[changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md) for what's new. Formerly **loglens**: `loglens.toml` and
-`[tool.loglens]` configs keep working. See [CONTRIBUTING.md](https://github.com/rajpaynaik/logsite/blob/main/CONTRIBUTING.md);
-a new log backend is a good first PR.
+Questions and ideas: [Discussions](https://github.com/rajpaynaik/logsite/discussions).
+Contributions welcome, see [CONTRIBUTING.md](https://github.com/rajpaynaik/logsite/blob/main/CONTRIBUTING.md).
 
 ## License
 
-Apache License 2.0. See [LICENSE](https://github.com/rajpaynaik/logsite/blob/main/LICENSE).
+Apache 2.0
