@@ -547,6 +547,23 @@ class Store:
         rows = self._query("select * from error_groups where id = ?", (group_id,))
         return _clean(rows[0]) if rows else None
 
+    def find(self, prefix: str, limit: int = 10) -> list[dict]:
+        """The groups whose id starts with ``prefix``, the latest first."""
+        prefix = "".join(c for c in prefix if c not in "%_[\\")  # wildcards in some databases
+        sql = "select * from error_groups where id like ? order by last_seen desc"
+        sql = self.dialect.limit(sql, limit)
+        return [_clean(r) for r in self._query(sql, (prefix + "%",))]
+
+    def breakdown(self, group_id: str) -> list[dict]:
+        """A group's occurrences per release and service, the most first: ``release``,
+        ``service``, ``n``, ``first_at`` and ``last_at``."""
+        rows = self._query(
+            "select release, service, count(*) as n, min(at) as first_at, max(at) as last_at"
+            " from error_events where group_id = ? group by release, service",
+            (group_id,),
+        )
+        return sorted(({**_clean(r), "n": int(r["n"])} for r in rows), key=lambda r: -r["n"])
+
     def events(self, group_id: str, limit: int = 50, *, since: datetime | None = None,
                until: datetime | None = None, service: str | None = None,
                release: str | None = None) -> list[dict]:  # fmt: skip

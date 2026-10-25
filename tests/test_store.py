@@ -59,6 +59,13 @@ def test_the_store_on_this_database(store_url):
         events = store.events("g1", limit=2)
         assert [e["event_key"] for e in events] == ["e9", "e4"]  # newest first
         assert events[0]["fields"] == {"order": 1} and events[0]["trace_id"] == "t-e9"
+        assert [g["id"] for g in store.find("g")] == ["g1"] and store.find("x") == []
+        assert store.find("%") == store.find("")  # a wildcard is just ignored
+        (by_release,) = store.breakdown("g1")
+        assert (by_release["release"], by_release["service"], by_release["n"]) == (
+            "v1", "checkout", 6)  # fmt: skip
+        assert by_release["first_at"].startswith("2026-10-20 08:00")
+        assert by_release["last_at"].startswith("2026-10-20 09:00")
         assert store.hourly("g1", T0 - timedelta(days=1)) == [
             {"hour": "2026-10-20 08", "n": 5}, {"hour": "2026-10-20 09", "n": 1}]  # fmt: skip
 

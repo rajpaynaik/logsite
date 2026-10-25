@@ -239,6 +239,22 @@ class ClickHouseStore:
                            {"i": group_id})  # fmt: skip
         return _clean({k: v for k, v in rows[0].items() if k != "version"}) if rows else None
 
+    def find(self, prefix: str, limit: int = 10) -> list[dict]:
+        rows = self._query(
+            "select * from error_groups final where startsWith(id, {p:String})"
+            " order by last_seen desc limit {n:UInt32}",
+            {"p": "".join(c for c in prefix if c not in "%_[\\"), "n": int(limit)},  # as in SQL
+        )
+        return [_clean({k: v for k, v in r.items() if k != "version"}) for r in rows]
+
+    def breakdown(self, group_id: str) -> list[dict]:
+        rows = self._query(
+            "select release, service, count() as n, min(at) as first_at, max(at) as last_at"
+            " from error_events final where group_id = {g:String} group by release, service",
+            {"g": group_id},
+        )
+        return sorted(({**_clean(r), "n": int(r["n"])} for r in rows), key=lambda r: -r["n"])
+
     def events(self, group_id: str, limit: int = 50, *, since: datetime | None = None,
                until: datetime | None = None, service: str | None = None,
                release: str | None = None) -> list[dict]:  # fmt: skip

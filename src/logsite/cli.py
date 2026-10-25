@@ -1342,6 +1342,69 @@ def cmd_sync(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_prompt(args: argparse.Namespace, cfg: Config) -> int:
+    """One stored error as a case file to paste into an AI assistant."""
+    from . import prompt
+    from .store import open_store
+
+    try:
+        store = open_store(cfg)
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+    try:
+        if not args.id:
+            recent = store.groups(since=datetime.now(timezone.utc) - timedelta(days=7), limit=10)
+            if not recent:
+                sys.exit(
+                    "logsite: no errors stored in the last 7 days. `logsite watch` stores "
+                    "them as they happen; `logsite db backfill --since 7d` loads past ones"
+                )
+            print(
+                "Which error? `logsite prompt <id>`, one of these (last 7 days):\n", file=sys.stderr
+            )
+            for g in recent:
+                print(f"  {g['id']}  {g['recent']:>6}  {g.get('title') or ''}", file=sys.stderr)
+            return 2
+        try:
+            case = prompt.gather(cfg, store, args.id)
+        except prompt.NotFound as exc:
+            lines = [f"  {g['id']}  {g.get('title') or ''}" for g in exc.matches]
+            sys.exit("\n".join([f"logsite: {exc}", *lines]))
+    finally:
+        store.close()
+    text = (json.dumps(case, indent=2, default=str) if args.format == "json"
+            else prompt.render(case))  # fmt: skip
+    if args.copy:
+        if _copy(text):
+            print(
+                f"copied to the clipboard ({len(text.splitlines())} lines): "
+                f"{case['group'].get('title')}",
+                file=sys.stderr,
+            )
+            return 0
+        print(
+            "logsite: no clipboard tool found (pbcopy, wl-copy, xclip); printing instead",
+            file=sys.stderr,
+        )
+    print(text)
+    return 0
+
+
+def _copy(text: str) -> bool:
+    """Put ``text`` on the clipboard with whichever tool the system has."""
+    import shutil
+    import subprocess
+
+    for tool in (["pbcopy"], ["wl-copy"], ["xclip", "-selection", "clipboard"], ["clip.exe"]):
+        if shutil.which(tool[0]):
+            try:
+                subprocess.run(tool, input=text.encode(), check=True, timeout=5)
+                return True
+            except (OSError, subprocess.SubprocessError):
+                continue
+    return False
+
+
 def cmd_seen(args: argparse.Namespace, cfg: Config) -> int:
     """Everything the history store knows about one error group."""
     from datetime import date
@@ -1580,6 +1643,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--step", default="6h", help="query this much at a time (default 6h)")
     p.add_argument("--limit", type=int, default=5000, help="error records per step (5000)")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser(
+        "prompt", help="one stored error as a case file to paste into an AI assistant"
+    )
+    p.add_argument("id", nargs="?", help="the error id (or its start); leave out to list recent")
+    p.add_argument("--copy", action="store_true", help="copy to the clipboard instead of printing")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_prompt)
 
     p = sub.add_parser(
         "seen", help="the history of one error group: first seen, fixes, regressions"

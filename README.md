@@ -113,6 +113,7 @@ See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kub
 |---|---|
 | `logsite app` | Set everything up and browse errors in your browser, no terminal needed |
 | `logsite db backfill --since 30d` | Store errors in your own database (SQLite, Postgres, MySQL, SQL Server, ClickHouse) for instant date-range queries |
+| `logsite prompt <id> --copy` | Everything about one stored error (code, when it started, the commits before, what failing requests share) as a prompt for your AI assistant |
 | `logsite investigate` | Find the deploy and commit behind an incident |
 | `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
 
@@ -128,6 +129,7 @@ and an [MCP server](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
 [Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
 [Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md) ·
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
+[AI prompt](https://github.com/rajpaynaik/logsite/blob/main/docs/prompt.md) ·
 [Security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
 [Changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md)
 

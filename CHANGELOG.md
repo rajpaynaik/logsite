@@ -4,6 +4,14 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- [`logsite prompt <id>`](docs/prompt.md): one stored error as a case file to paste into an AI
+  assistant: where it's raised with the code around it, how often and in which services and
+  releases, when it started and the commits just before, whether it was fixed before, what the
+  failing requests have in common, and real examples with library frames folded. `--copy` puts
+  it on the clipboard, `--format json` gives the data.
+
 ## 0.5.1 (2026-10-24)
 
 - A shorter README.
