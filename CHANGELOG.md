@@ -4,6 +4,11 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## 0.5.1 (2026-10-24)
+
+- A shorter README.
+- Grafana plugin 0.1.1: licensed under Apache 2.0, and test fixtures are no longer bundled.
+
 ## 0.5.0 (2026-10-24)
 
 - [`logsite app`](docs/app.md): set logsite up in the browser (log store, Slack and database

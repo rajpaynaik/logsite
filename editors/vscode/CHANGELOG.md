@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- No extension changes; released with logsite 0.5.1.
+
 ## 0.5.0
 
 - No extension changes; released with logsite 0.5.0: `logsite app` (setup and errors in the browser), `logsite watch` (Slack alerts), and every error kept in your own database.

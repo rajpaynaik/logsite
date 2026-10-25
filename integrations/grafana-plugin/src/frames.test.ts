@@ -1,6 +1,6 @@
 import { DataFrame } from '@grafana/data';
 
-import fixture from './__fixtures__/errors.json';
+import fixture from '../tests/fixtures/errors.json';
 import { explanationsFrame, groupsFrame, historyFrame, incidentsFrame, summaryFrame } from './frames';
 import { ErrorsResponse } from './types';
 
