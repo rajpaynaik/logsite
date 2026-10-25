@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- No extension changes; released with logsite 0.7.0: `logsite init` (setup in the terminal) and `logsite errors -i` (the error browser).
+
 ## 0.6.0
 
 - No extension changes; released with logsite 0.6.0: `logsite prompt` (an error as a case file for an AI assistant) and the Claude connector.

@@ -4,7 +4,7 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## Unreleased
+## 0.7.0 (2026-10-24)
 
 - `logsite init`: set logsite up from the terminal, one question at a time: where the logs are
   (tested, with a retry that keeps your answers), Slack (a test message) and where to store
