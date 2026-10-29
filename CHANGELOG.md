@@ -4,6 +4,13 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- A log call whose template is only placeholders and punctuation (`"%s: %s"`,
+  `` `${a}: ${b}` ``) is no longer matched against messages: it claimed unrelated errors,
+  so "logged at" pointed at the wrong line. Templates need 4 letters of fixed text;
+  constant messages still match.
+
 ## 0.7.1 (2026-10-24)
 
 Fixes from a test on live logs (Grafana Play's Loki, the OpenTelemetry demo services):

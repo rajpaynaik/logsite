@@ -33,6 +33,13 @@ def test_bare_placeholder_template_never_matches():
     assert matcher().match(rec) is None
 
 
+def test_punctuation_only_template_never_matches():
+    # "{}: {}" has fixed text, but no words: it would claim any "x: y" line.
+    m = Matcher(index_source('logger.error("%s: %s", where, err)\nlogger.info("ok")\n', "a.py"))
+    assert m.match(parse_line("ERROR TypeError: fetch failed")) is None
+    assert m.match(parse_line("INFO ok")).line == 2
+
+
 def test_parse_iso_handles_z_and_offsets():
     from datetime import datetime, timedelta, timezone
 

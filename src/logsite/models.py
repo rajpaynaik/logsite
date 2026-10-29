@@ -13,6 +13,10 @@ _PLACEHOLDER = re.compile(r"%(?:\([^)]*\))?[#0\- +]*\d*(?:\.\d+)?[sdifrxXeEgGcoa
 # "Checkout.java:42", "/srv/app/checkout.go:42": a file and line in one value (zap's
 # "caller", logrus's "file").
 _FILE_AND_LINE = re.compile(r"^(?P<file>.+\.[A-Za-z0-9]+):(?P<line>\d+)$")
+# Letters of fixed text a template with placeholders needs before it's matched against
+# messages: "{}: {}" or "[{}] {}" would match almost any line and claim errors it never
+# logged. A constant message ("ok") only matches itself, so it needs none.
+MIN_LETTERS = 4
 
 
 def parse_iso(value: str) -> datetime:
@@ -66,12 +70,22 @@ class LogSite:
             return 0
         return len(_PLACEHOLDER.sub("", self.template))
 
+    @property
+    def matchable(self) -> bool:
+        """Enough fixed words to tell this site's messages from anyone else's."""
+        if not self.template:
+            return False
+        fixed = _PLACEHOLDER.sub("", self.template)
+        if fixed == self.template:
+            return bool(fixed.strip())
+        return sum(c.isalpha() for c in fixed) >= MIN_LETTERS
+
     def template_regex(self) -> re.Pattern[str] | None:
         """Regex that matches a rendered message produced by this site.
 
         Not anchored at the start, because formatters usually prefix a timestamp/level.
         """
-        if not self.template or self.literal_len == 0:
+        if not self.matchable:
             return None
         parts: list[str] = []
         pos = 0
@@ -86,7 +100,7 @@ class LogSite:
         """The values a rendered message was filled with, by the source text of each:
         ``"shipping S-1042 to ups"`` -> ``{"shipment.id": "S-1042", "carrier": "ups"}``.
         Empty when the message doesn't match the template or the arguments aren't known."""
-        if not self.template or not self.args or self.literal_len == 0:
+        if not self.matchable or not self.args:
             return {}
         parts: list[str] = []
         pos = n = 0
