@@ -143,9 +143,18 @@ def parse_line(raw: str, timestamp: datetime | None = None) -> LogRecord:
             )
             ts = timestamp or _parse_ts(next((data[k] for k in TIME_KEYS if data.get(k)), None))
             return LogRecord(timestamp=ts, message=message, fields=data, size=_size(raw))
+    go_test = _GO_TEST_LOG.match(raw)
+    if go_test:  # t.Log's "file_test.go:204: " before a structured line
+        record = parse_line(raw[go_test.end() :], timestamp)
+        if record.fields:
+            record.size = _size(raw)
+            return record
     klog = _KLOG.match(stripped)
     if klog:
         return _klog_record(klog, raw, timestamp)
+    hclog = _HCLOG.match(stripped)
+    if hclog:
+        return _hclog_record(hclog, raw, timestamp)
     pytest = _PYTEST.match(stripped)
     if pytest:
         fields = {"levelname": pytest["level"], "name": pytest["name"],
@@ -169,6 +178,12 @@ _LOGFMT_KEYS = {"level", "lvl", "msg", "message", "severity"}
 def parse_logfmt(text: str) -> dict | None:
     """``key=value key="quoted value"`` pairs, or None when the line isn't logfmt: every
     character must be in a pair, with a level or a message among them."""
+    data = _pairs(text)
+    return data if data and len(data) >= 2 and _LOGFMT_KEYS & data.keys() else None
+
+
+def _pairs(text: str) -> dict | None:
+    """``key=value`` pairs that make up all of ``text``, or None."""
     data: dict = {}
     pos = 0
     while pos < len(text):
@@ -183,7 +198,40 @@ def parse_logfmt(text: str) -> dict | None:
                 value = value[1:-1]
         data[key] = value
         pos = m.end()
-    return data if len(data) >= 2 and _LOGFMT_KEYS & data.keys() else None
+    return data or None
+
+
+# Go's testing.T.Log puts the test's file and line before each line a test logs.
+_GO_TEST_LOG = re.compile(r"^\s+[\w.-]+\.go:\d+: ")
+
+
+# hclog, HashiCorp's Go logger (Consul, Vault, Nomad, Terraform): time, [LEVEL], the
+# logger's name, the message, then its key=value pairs after a ": "
+# 2026-10-27T10:04:38.995Z [ERROR] agent.server: sync failed: error="not ready"
+_HCLOG = re.compile(
+    r"^(?P<time>[\d:.TZ+-]+(?: [\d:.]+)?) \[(?P<level>TRACE|DEBUG|INFO|WARN|ERROR)\]\s+"
+    r"(?:(?P<name>[\w.@/-]+): )?(?P<rest>.*)$",
+    re.S,
+)
+
+
+def _hclog_record(m: re.Match, raw: str, timestamp: datetime | None) -> LogRecord:
+    message, rest = m["rest"], m["rest"]
+    fields: dict = {"level": m["level"].lower()}
+    if m["name"]:
+        fields["logger"] = m["name"]
+    at = rest.find(": ")
+    while at != -1:  # the first ": " after which everything is pairs
+        line, newline, trace = rest[at + 2 :].partition("\n")
+        pairs = _pairs(line)
+        if pairs:  # a stack trace on the lines after stays with the message
+            message = rest[:at] + newline + trace
+            fields = {**pairs, **fields}
+            break
+        at = rest.find(": ", at + 2)
+    fields["msg"] = message.split("\n", 1)[0]
+    return LogRecord(timestamp=timestamp or _leading_ts(raw), message=message, fields=fields,
+                     size=_size(raw))  # fmt: skip
 
 
 # klog, Kubernetes' Go logger: severity letter, MMDD, time, thread, file:line, message

@@ -66,6 +66,8 @@ _IPY_ARROW = re.compile(r"^-*> ?(?P<line>\d+)\s?(?P<code>.*)$")
 _DJANGO_TYPE = re.compile(r"^Exception Type: (?P<type>[\w.]+)(?: at \S*)?$")
 _DJANGO_VALUE = "Exception Value:"
 _ANSI = re.compile(r"\x1b\[[\d;]*m")
+# GitHub Actions' annotations in front of a line of a job's log: "##[error]Exception in ..."
+_ACTIONS_ANNOTATION = re.compile(r"^##\[(?:error|warning|notice)\]")
 _WRAP_WIDTH = 70  # a frame line at least this long may have been hard-wrapped by a terminal
 _TEXT_LEVEL = re.compile(r"\b(ERROR|CRITICAL|FATAL|EXCEPTION)\b")
 _LIBRARY_PARTS = ("site-packages", "dist-packages", "node_modules")
@@ -540,7 +542,7 @@ def join_multiline(lines: Iterable[str]) -> Iterator[str]:
     django_value = False  # Django's "Exception Value:" line comes next
     previous = ""
     for raw in lines:
-        line = raw.rstrip("\n")
+        line = _ACTIONS_ANNOTATION.sub("", raw.rstrip("\n"))
         stripped = line.strip()
         wrapped = len(previous) >= _WRAP_WIDTH and ": " not in stripped  # see parse_traceback
         previous = line

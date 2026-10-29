@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .index import parse_python
 from .models import parse_iso
 
 _SEP = "\x1f"
@@ -41,7 +42,7 @@ def enclosing_block(source: str, line: int) -> tuple[int, int]:
     itself, so the whole function is the useful unit. Falls back to the line alone.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_python(source)
     except SyntaxError:
         return line, line
     best: tuple[int, int] = (line, line)

@@ -155,6 +155,59 @@ def test_logfmt_and_klog_are_parsed():
     assert plain.fields == {} and plain.message == "a plain line with a = sign"
 
 
+def test_hclog_is_parsed():
+    # Consul's CI output (2026-10-27): its test logger's time, then hclog's format
+    from logsite.backends.base import parse_line
+    from logsite.errors import error_field
+    from logsite.tracebacks import is_error
+
+    r = parse_line('04:38.789 [ERROR] TestAgent.server: error performing anti-entropy sync of '
+                   'federation state: error="shutdown waiting for leader"')  # fmt: skip
+    assert is_error(r) and r.message == "error performing anti-entropy sync of federation state"
+    assert r.fields["logger"] == "TestAgent.server"
+    assert error_field(r) == "shutdown waiting for leader"
+    info = parse_line('2026-10-27T10:04:38.995Z [INFO]  runnervmtai0g.leader: started routine: '
+                      'routine="federation state anti-entropy"')  # fmt: skip
+    assert not is_error(info) and info.message == "started routine"
+    assert info.timestamp == datetime(2026, 10, 27, 10, 4, 38, 995000, tzinfo=timezone.utc)
+    # no pairs at the end: the message is all of it
+    r = parse_line("04:38.789 [ERROR] agent: failed: http: server closed")
+    assert r.message == "failed: http: server closed"
+
+
+def test_go_test_output_and_slog_source():
+    # Prometheus' CI output (2026-10-27): slog's text handler, logged through t.Log
+    from logsite.backends.base import parse_line
+
+    r = parse_line(
+        "    reload_test.go:204: time=2026-10-27T20:39:27.865Z level=ERROR "
+        'source=main.go:1477 msg="Failed to generate checksum" err="yaml: line 5"\r'
+    )
+    assert r.message == "Failed to generate checksum" and r.fields["err"] == "yaml: line 5"
+    assert (r.source_file, r.source_line) == ("main.go", 1477)
+    plain = parse_line("    foo_test.go:12: just text")
+    assert plain.fields == {} and plain.message == "    foo_test.go:12: just text"
+
+
+def test_actions_annotations_dont_hide_errors():
+    # Kafka's CI output (2026-10-27)
+    from logsite.tracebacks import join_multiline
+
+    lines = [
+        '##[error]Exception in thread "main" java.io.IOException: Server returned HTTP 500',
+        "\tat org.gradle.wrapper.Download.download(SourceFile:1)",
+    ]
+    (event,) = join_multiline(lines)
+    assert event.startswith('Exception in thread "main" java.io.IOException')
+
+
+def test_python_syntax_warnings_stay_quiet(recwarn):
+    from logsite.index import index_source
+
+    index_source('import logging\nlogging.error("a\\|b %s", x)\n', "old.py")
+    assert not [w for w in recwarn if issubclass(w.category, SyntaxWarning)]
+
+
 def test_pytest_captured_logs_are_parsed():
     from logsite.backends.base import parse_line
     from logsite.tracebacks import is_error, join_multiline

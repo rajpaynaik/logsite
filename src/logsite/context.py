@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .index import DEFAULT_EXCLUDES, iter_python_files
+from .index import DEFAULT_EXCLUDES, iter_python_files, parse_python
 from .models import LogRecord, LogSite
 
 # Names that mean the same field; satisfying one satisfies the others.
@@ -57,7 +57,7 @@ def _call_name(node: ast.Call) -> str:
 def detect_in_source(source: str, path: str = "<string>") -> dict[str, list[str]]:
     """``{field: ["path:line how", ...]}`` for context injected by this file."""
     try:
-        tree = ast.parse(source, filename=path)
+        tree = parse_python(source, path)
     except SyntaxError:
         return {}
     found: dict[str, list[str]] = {}

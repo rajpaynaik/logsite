@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import warnings
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -365,10 +366,18 @@ class _Visitor(ast.NodeVisitor):
         )
 
 
+def parse_python(source: str, path: str = "<unknown>") -> ast.Module:
+    """``ast.parse``, without the SyntaxWarnings old code raises ("invalid escape
+    sequence"): they'd print over the output for code that isn't ours to fix."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        return ast.parse(source, filename=path)
+
+
 def index_calls(source: str, path: str = "<string>") -> list[tuple[LogSite, ast.Call]]:
     """Like :func:`index_source` but also returns the AST node of each call."""
     try:
-        tree = ast.parse(source, filename=path)
+        tree = parse_python(source, path)
     except SyntaxError:
         return []
     visitor = _Visitor(path, library_names(tree))

@@ -24,6 +24,7 @@ from pathlib import Path
 from .backends import LogBackend, TimeRange
 from .context import get_field
 from .errors import ErrorGroup, history_json
+from .index import parse_python
 from .leaks import LeakConfig, redact
 from .matching import Matcher
 from .models import LogRecord, LogSite
@@ -342,7 +343,7 @@ def inputs_from(
 
 def _parse(root: Path, path: str) -> ast.Module | None:
     try:
-        return ast.parse((root / path).read_text(encoding="utf-8"), filename=path)
+        return parse_python((root / path).read_text(encoding="utf-8"), path)
     except (OSError, SyntaxError, UnicodeDecodeError):
         return None
 

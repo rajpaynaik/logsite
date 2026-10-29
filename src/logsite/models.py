@@ -156,7 +156,8 @@ class LogRecord:
             ("lineno", "line", "code.lineno", "log.origin.file.line", "source_line",
              "caller_line_number", "source.line"),
         )  # fmt: skip
-        for combined in (file, f.get("caller")):  # "checkout.go:42" (zap, zerolog, logrus)
+        # "checkout.go:42": zap, zerolog and logrus' caller, slog's source in text
+        for combined in (file, f.get("caller"), f.get("source")):
             if isinstance(combined, str):
                 m = _FILE_AND_LINE.match(combined)
                 if m and (line is None or combined is not file):

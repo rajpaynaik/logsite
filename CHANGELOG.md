@@ -13,6 +13,16 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 - pytest's log format (`ERROR    app.orders:orders.py:42 ...`, in captured-log sections
   and live `log_cli` output) is parsed: the level, logger, and the file and line of the
   log call, so CI output maps to the code without a template match.
+- hclog, HashiCorp's Go logger (Consul, Vault, Nomad, Terraform), is parsed: the level,
+  the logger's name, the message, and the `key=value` pairs after it. The message alone
+  now matches its log call; on Consul's CI output, every group found its "logged at",
+  where before none did.
+- slog's `source=main.go:1477` (its text handler with `AddSource`) gives the file and line,
+  and a structured line a Go test logs through `t.Log` (`reload_test.go:204: time=...
+  level=ERROR ...`) is parsed past that prefix.
+- GitHub Actions' `##[error]` in front of a line no longer hides the error after it.
+- Indexing Python code no longer prints the `SyntaxWarning`s old code raises ("invalid
+  escape sequence") over the output.
 
 ## 0.7.1 (2026-10-24)
 
