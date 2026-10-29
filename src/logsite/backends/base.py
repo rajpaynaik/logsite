@@ -146,6 +146,12 @@ def parse_line(raw: str, timestamp: datetime | None = None) -> LogRecord:
     klog = _KLOG.match(stripped)
     if klog:
         return _klog_record(klog, raw, timestamp)
+    pytest = _PYTEST.match(stripped)
+    if pytest:
+        fields = {"levelname": pytest["level"], "name": pytest["name"],
+                  "filename": pytest["file"], "lineno": int(pytest["line"])}  # fmt: skip
+        return LogRecord(timestamp=timestamp or _leading_ts(raw), message=pytest["msg"],
+                         fields=fields, size=_size(raw))  # fmt: skip
     data = parse_logfmt(stripped)
     if data:
         message = next((str(data[k]) for k in ("msg", "message") if k in data), raw)
@@ -212,6 +218,17 @@ def _klog_record(m: re.Match, raw: str, timestamp: datetime | None) -> LogRecord
         except ValueError:
             timestamp = None
     return LogRecord(timestamp=timestamp, message=message, fields=fields, size=_size(raw))
+
+
+# pytest's captured and live logs ("%(levelname)-8s %(name)s:%(filename)s:%(lineno)d
+# %(message)s"), with the timestamp a log_cli_format may put first:
+# ERROR    app.orders:orders.py:42 payment failed for order 7
+_PYTEST = re.compile(
+    r"^(?:\S+ \d{2}:\d{2}:\d{2}(?:[.,]\d+)?\s+)?"
+    r"(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+(?P<name>[\w.<>-]+):"
+    r"(?P<file>[\w.-]+\.py):(?P<line>\d+) (?P<msg>.*)$",
+    re.S,
+)
 
 
 # "2026-10-14 10:00:05,123 ERROR ...": logging's default asctime, or ISO 8601.

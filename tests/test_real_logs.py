@@ -155,6 +155,29 @@ def test_logfmt_and_klog_are_parsed():
     assert plain.fields == {} and plain.message == "a plain line with a = sign"
 
 
+def test_pytest_captured_logs_are_parsed():
+    from logsite.backends.base import parse_line
+    from logsite.tracebacks import is_error, join_multiline
+
+    lines = ["------------------------------ Captured log call -------------------------------",
+             "INFO     app.orders:orders.py:30 placing order 7",
+             "ERROR    app.orders:orders.py:42 payment failed for order 7",
+             "Traceback (most recent call last):",
+             '  File "/src/app/payments.py", line 12, in charge',
+             '    raise TimeoutError("gateway timed out")',
+             "TimeoutError: gateway timed out"]  # fmt: skip
+    header, info, error = (parse_line(e) for e in join_multiline(lines))
+    assert header.fields == {} and not is_error(info)
+    assert is_error(error) and error.message.startswith("payment failed for order 7\n")
+    assert (error.source_file, error.source_line) == ("orders.py", 42)
+    assert error.fields["name"] == "app.orders"
+    # log_cli with a time first
+    live = parse_line("2026-10-28 10:00:01.123 WARNING  root:conftest.py:9 slow")
+    assert (live.message, live.source_line) == ("slow", 9)
+    assert live.timestamp == datetime(2026, 10, 28, 10, 0, 1, 123000, tzinfo=timezone.utc)
+    assert parse_line("ERROR something: else").fields == {}
+
+
 def test_one_line_titles_from_multiline_errors():
     from logsite.backends.base import parse_line
 

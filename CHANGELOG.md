@@ -10,6 +10,9 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
   `` `${a}: ${b}` ``) is no longer matched against messages: it claimed unrelated errors,
   so "logged at" pointed at the wrong line. Templates need 4 letters of fixed text;
   constant messages still match.
+- pytest's log format (`ERROR    app.orders:orders.py:42 ...`, in captured-log sections
+  and live `log_cli` output) is parsed: the level, logger, and the file and line of the
+  log call, so CI output maps to the code without a template match.
 
 ## 0.7.1 (2026-10-24)
 
