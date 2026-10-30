@@ -72,7 +72,8 @@ selector = '{service_name="checkout"}'
 ## Watch production
 
 `logsite watch` checks your logs every 5 minutes, stores every error in your own database,
-and posts to Slack when an error is **new**, **back after a fix**, or **spiking**. No SDK:
+and posts to Slack when an error is **new**, **back after a fix**, or **spiking**, or a
+release made errors worse ([release health](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md)). No SDK:
 it reads the log store you already have.
 
 **Guided setup:** `logsite init` asks for your log store, Slack and database in the terminal,
@@ -115,6 +116,7 @@ See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kub
 | `logsite db backfill --since 30d` | Store errors in your own database (SQLite, Postgres, MySQL, SQL Server, ClickHouse) for instant date-range queries |
 | `logsite errors -i` | Browse the stored errors in the terminal: search, any time range, open one, copy it as an AI prompt |
 | `logsite prompt <id> --copy` | Everything about one stored error (code, when it started, the commits before, what failing requests share) as a prompt for your AI assistant |
+| `logsite release` | Did the last release make errors worse? New, back, spiking and fixed errors, with the suspect commits, and a Slack alert when it's bad |
 | `logsite investigate` | Find the deploy and commit behind an incident |
 | `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
 
@@ -129,6 +131,7 @@ ask "what failed in checkout yesterday after 3pm?" in plain English.
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
 [logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
 [Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
+[Release health](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md) ·
 [Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md) ·
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [AI prompt](https://github.com/rajpaynaik/logsite/blob/main/docs/prompt.md) ·

@@ -48,11 +48,16 @@ Example ``logsite.toml``::
 
     [watch]                          # logsite watch: errors to Slack, as they happen
     every = "5m"
-    alert_on = ["new", "regression", "spike"]
+    alert_on = ["new", "regression", "spike", "release"]
 
     [store]                          # where logsite watch keeps every error
     url_env = "LOGSITE_DATABASE_URL"   # postgresql://...; default: a SQLite file
     retention_days = 90
+
+    [release]                        # logsite release: a release's effect on errors
+    window_hours = 24                # how long after a release to look, at most
+    bad_rate = 3.0                   # errors/hour this many times the hours before: bad
+    bad_count = 10                   # a new or regressed error this many times: bad
 
     [cost]                           # logsite cost, $/mo in the editor
     price_per_gb = 0.50              # what your log store charges per GB ingested
@@ -80,6 +85,7 @@ from .history import HistoryConfig
 from .leaks import LeakConfig
 from .lint import LintConfig
 from .pipeline import PipelineConfig
+from .releases import ReleaseConfig
 from .store import StoreConfig
 from .watch import WatchConfig
 
@@ -105,6 +111,7 @@ class Config:
     store: StoreConfig = field(default_factory=StoreConfig)
     watch: WatchConfig = field(default_factory=WatchConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
+    release: ReleaseConfig = field(default_factory=ReleaseConfig)
     window_hours: float = 24.0
     excludes: list[str] = field(default_factory=list)
 
@@ -195,6 +202,7 @@ def load_config(start: str | Path | None = None) -> Config:
         store=StoreConfig.from_dict(data.get("store", {})),
         watch=WatchConfig.from_dict(data.get("watch", {})),
         export=ExportConfig.from_dict(data.get("export", {})),
+        release=ReleaseConfig.from_dict(data.get("release", {})),
         window_hours=float(data.get("window_hours", 24)),
         excludes=list(data.get("exclude", [])),
     )

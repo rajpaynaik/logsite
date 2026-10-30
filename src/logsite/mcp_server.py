@@ -711,6 +711,26 @@ def build_server(cfg: Config) -> MCPServer:
         return {"id": group["id"], "title": group.get("title"), "hourly": hourly,
                 "total": sum(h["n"] for h in hourly)}  # fmt: skip
 
+    @mcp.tool(annotations=READ_ONLY)
+    def release_health(release: str | None = None) -> dict[str, Any]:
+        """Whether a release made errors worse: its verdict (healthy, degraded, bad), errors
+        per hour before and after it, and each error group that is new, regressed (back),
+        spiking or resolved since, with the release's commits that touched the new ones'
+        code. `release` is a release value from the logs or a git tag; leave it out for the
+        latest."""
+        from . import releases
+
+        s = store()
+        try:
+            rel = releases.find_release(s, cfg.root, release)
+            h = releases.health(s, rel, now=datetime.now(timezone.utc), cfg=cfg.release,
+                                spikes=cfg.watch, root=cfg.root)  # fmt: skip
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        finally:
+            s.close()
+        return releases.to_json(h)
+
     return mcp
 
 

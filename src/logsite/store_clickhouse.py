@@ -275,6 +275,23 @@ class ClickHouseStore:
         )
         return [{"hour": r["hour"], "n": int(r["n"])} for r in rows]
 
+    def releases(self, limit: int = 20) -> list[dict]:
+        rows = self._query(
+            "select release, min(at) as first_at, max(at) as last_at, count() as n"
+            " from error_events final where release is not null group by release"
+            " order by first_at desc limit {n:UInt32}",
+            {"n": int(limit)},
+        )
+        return [{**_clean(r), "n": int(r["n"])} for r in rows]
+
+    def lines(self, since: datetime, until: datetime) -> int | None:
+        rows = self._query(
+            "select sum(lines) as n, count() as counted from line_counts final"
+            " where hour >= {s:DateTime64(6)} and hour < {u:DateTime64(6)}",
+            {"s": _utc(since), "u": _utc(until)},
+        )
+        return int(rows[0]["n"] or 0) if rows and int(rows[0]["counted"] or 0) else None
+
     def counts(self) -> dict[str, int]:
         out = {}
         for t in ("error_groups", "error_events", "line_counts", "alerts"):

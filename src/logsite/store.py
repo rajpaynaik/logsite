@@ -588,6 +588,25 @@ class Store:
                 counts[hour] = counts.get(hour, 0) + 1
         return [{"hour": h, "n": n} for h, n in sorted(counts.items())]
 
+    def releases(self, limit: int = 20) -> list[dict]:
+        """The releases errors were tagged with, the latest first: ``release``,
+        ``first_at`` (its first error: about when it went out), ``last_at`` and ``n``."""
+        rows = self._query(self.dialect.limit(
+            "select release, min(at) as first_at, max(at) as last_at, count(*) as n"
+            " from error_events where release is not null group by release"
+            " order by first_at desc", limit))  # fmt: skip
+        return [{**_clean(r), "n": int(r["n"])} for r in rows]
+
+    def lines(self, since: datetime, until: datetime) -> int | None:
+        """Log lines counted between ``since`` and ``until`` (every level), or None when
+        no hour in that range was counted."""
+        rows = self._query(
+            "select sum(lines) as n, count(*) as counted from line_counts"
+            " where hour >= ? and hour < ?",
+            (self.dialect.ts(since), self.dialect.ts(until)),
+        )
+        return int(rows[0]["n"] or 0) if rows and int(rows[0]["counted"] or 0) else None
+
     def counts(self) -> dict[str, int]:
         return {t: self._query(f"select count(*) as n from {t}")[0]["n"] for t in TABLES}
 

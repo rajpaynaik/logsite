@@ -25,6 +25,7 @@ from .errors import AppFiles, ErrorGroup, group_json, summarize_errors
 from .store import Store, event_row
 
 KINDS = ("new", "regression", "spike")
+ALERT_ON = (*KINDS, "release")  # "release": a release that made errors worse (releases.py)
 BACKFILL = timedelta(hours=24)  # the first check reads this far back, and alerts on nothing
 LABELS = {"new": "new", "regression": "back", "spike": "spiking"}
 
@@ -33,7 +34,7 @@ LABELS = {"new": "new", "regression": "back", "spike": "spiking"}
 class WatchConfig:
     every: str = "5m"  # how often to check
     lookback: str = "15m"  # each check reads this far back; overlaps are stored once
-    alert_on: list[str] = field(default_factory=lambda: list(KINDS))
+    alert_on: list[str] = field(default_factory=lambda: list(ALERT_ON))
     cooldown_minutes: float = 60.0  # per group and reason
     top: int = 5  # error groups per message
     spike_min_count: int = 20  # a spike: at least this many in the window, and
@@ -45,9 +46,9 @@ class WatchConfig:
         if unknown:
             raise ValueError(f"unknown [watch] key(s) {sorted(unknown)}")
         cfg = cls(**dict(data))
-        bad = set(cfg.alert_on) - set(KINDS)
+        bad = set(cfg.alert_on) - set(ALERT_ON)
         if bad:
-            raise ValueError(f"[watch] alert_on: unknown {sorted(bad)} (use {list(KINDS)})")
+            raise ValueError(f"[watch] alert_on: unknown {sorted(bad)} (use {list(ALERT_ON)})")
         return cfg
 
 
@@ -63,6 +64,7 @@ class CheckResult:
     first: bool = False  # the first check: the last day stored, nothing sent
     exported: int = 0  # events appended to the warehouse ([export])
     export_error: str | None = None
+    release: str | None = None  # the release alert sent this time, as text
 
 
 def alert_kind(g: ErrorGroup, watch: WatchConfig) -> str | None:
@@ -127,6 +129,9 @@ def check(
         return CheckResult(window, summary.events, stored, summary.groups, [], first=True,
                            exported=exported, export_error=export_error)  # fmt: skip
 
+    release_sent = (
+        _release_alert(cfg, store, now, send) if "release" in cfg.watch.alert_on else None
+    )
     cooldown = timedelta(minutes=cfg.watch.cooldown_minutes)
     alerts = []
     for g in summary.groups:
@@ -138,7 +143,8 @@ def check(
             continue
         alerts.append((g, kind))
     result = CheckResult(window, summary.events, stored, summary.groups, alerts,
-                         exported=exported, export_error=export_error)  # fmt: skip
+                         exported=exported, export_error=export_error,
+                         release=release_sent)  # fmt: skip
     if not alerts:
         return result
     project = cfg.timeline.service or cfg.root.name
@@ -159,6 +165,28 @@ def check(
     for g, kind in alerts:
         store.record_alert(g.id, kind, result.sent, result.message, now)
     return result
+
+
+def _release_alert(cfg, store: Store, now: datetime, send) -> str | None:
+    """Post the latest release's verdict once it turns degraded or bad. Returns the text."""
+    from . import releases
+
+    try:
+        found = releases.to_alert(store, cfg, now)
+    except ValueError:  # its time is unknown: nothing to judge
+        return None
+    if found is None:
+        return None
+    h, text, slack_text = found
+    channels = []
+    if send is not None and cfg.alerts.slack_webhook:
+        send(cfg.alerts.slack_webhook, {"text": slack_text})
+        channels.append("slack")
+    if send is not None and cfg.alerts.webhook:
+        send(cfg.alerts.webhook, {"text": text, "release": releases.to_json(h)})
+        channels.append("webhook")
+    store.record_alert(releases.alert_key(h.release), h.verdict, channels, text, now)
+    return text
 
 
 @dataclass

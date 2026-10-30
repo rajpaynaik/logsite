@@ -68,6 +68,7 @@ for any other host name are refused, so a web page can't reach it.
 | `error_case` | Everything about error `346fa937` to explain and fix it: the code, how often and where, when it started and the commits just before, past fixes, what the failing requests share, examples. The same as [`logsite prompt`](prompt.md). |
 | `error_occurrences` | The latest occurrences of an error, with their fields, stack traces and trace ids. |
 | `error_trend` | An error per hour: when it started, whether it's rising, whether a fix stopped it. |
+| `release_health` | Is the latest release healthy? Its verdict, errors per hour before and after, and the errors it made new, brought back, spiked or fixed, with suspect commits. The same as [`logsite release`](releases.md). |
 | `production_context` | Before changing `app/checkout.py:42`: which errors are raised, logged or pass through there (and did one come back after a fix?), what its log calls cost, the last commits, lint findings. |
 | `investigate` | What's the outage and what caused it? Incidents with their cause, the deploy and suspect commits, and a `diagnosis`: ranked explanations with evidence for and against, and the next check. |
 | `error_summary` | What's failing in production right now (or since release `v1.4.0`), grouped by cause, and where is it raised? |

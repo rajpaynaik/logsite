@@ -4,6 +4,18 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- **Release health.** `logsite release [REF]` shows what a release did to errors: errors per
+  hour and the error rate before and after it, each error group that is new, regressed,
+  spiking or resolved, the release's commits that touched the code of the new ones, and a
+  verdict (healthy, degraded, bad). `--fail-on bad` exits 1 for a deploy pipeline.
+  `logsite releases` lists the latest releases with their verdicts. Releases come from the
+  release field the logs carry, or from git tags. See [docs/releases.md](docs/releases.md).
+- `logsite watch` posts a release's verdict to Slack once it turns degraded or bad (`"release"`
+  in `[watch] alert_on`, on by default; `[release]` settings).
+- The MCP server has a `release_health` tool.
+
 ## 0.7.2 (2026-10-29)
 
 - A log call whose template is only placeholders and punctuation (`"%s: %s"`,

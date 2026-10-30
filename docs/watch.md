@@ -33,7 +33,7 @@ slack_webhook_env = "SLACK_WEBHOOK_URL"
 
 [watch]
 every = "5m"                         # how often to check
-alert_on = ["new", "regression", "spike"]
+alert_on = ["new", "regression", "spike", "release"]   # release: see release health
 cooldown_minutes = 60                # per error and reason
 
 [store]                              # optional: default is a SQLite file

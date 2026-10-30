@@ -71,6 +71,11 @@ def test_the_store_on_this_database(store_url):
 
         store.write_line_counts(T0, {"app/api.py:88": Usage(10, 2000)}, {})
         store.write_line_counts(T0, {"app/api.py:88": Usage(12, 2400)}, {})  # replaced
+        hour = timedelta(hours=1)
+        assert store.lines(T0, T0 + hour) == 12 and store.lines(T0 + hour, T0 + 2 * hour) is None
+        (release,) = store.releases()
+        assert (release["release"], release["n"]) == ("v1", 6)
+        assert release["first_at"].startswith("2026-10-20 08:00")
         store.set_meta("checked_at", "a")
         store.set_meta("checked_at", "b")
         assert store.get_meta("checked_at") == "b" and store.get_meta("nope") is None

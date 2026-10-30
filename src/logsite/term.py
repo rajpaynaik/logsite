@@ -25,6 +25,7 @@ _CODES = {
     "bold_blue": "1;34",
     "bold_green": "1;32",
     "bold_yellow": "1;33",
+    "bold_magenta": "1;35",
     "code": "92",  # bright green: source lines
     "yours": "1;4;36",  # bold underlined cyan: the project's own code
     "badge_red": "1;97;41",  # white on red: new

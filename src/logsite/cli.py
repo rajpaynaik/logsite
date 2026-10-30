@@ -1120,6 +1120,8 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
                     sent = f"; {len(result.alerts)} to alert, nowhere to send"
                 else:
                     sent = ""
+                if result.release:
+                    sent += f"; {result.release.splitlines()[0]}"
                 if result.export_error:
                     sent += f"; export failed: {result.export_error}"
                 elif result.exported:
@@ -1364,6 +1366,73 @@ def _browse(args: argparse.Namespace, cfg: Config) -> int:
         run(Browser(Source(cfg, store), range_index=start))
     finally:
         store.close()
+    return 0
+
+
+def _release_store(cfg: Config):
+    from .store import open_store
+
+    try:
+        return open_store(cfg)
+    except Exception as exc:
+        sys.exit(f"logsite: can't open the error store: {exc}")
+
+
+def cmd_release(args: argparse.Namespace, cfg: Config) -> int:
+    """One release's effect on errors: new, regressed, spiking and resolved groups."""
+    from . import releases
+
+    if args.window:
+        cfg.release.window_hours = args.window
+    try:
+        at = parse_iso(args.deployed_at) if args.deployed_at else None
+    except ValueError:
+        sys.exit(f"logsite: --deployed-at wants an ISO time, got {args.deployed_at!r}")
+    store = _release_store(cfg)
+    try:
+        try:
+            rel = releases.find_release(store, cfg.root, args.ref, at=at)
+            h = releases.health(store, rel, now=datetime.now(timezone.utc), cfg=cfg.release,
+                                spikes=cfg.watch, root=cfg.root, commits=args.commits)  # fmt: skip
+        except ValueError as exc:
+            sys.exit(f"logsite: {exc}")
+    finally:
+        store.close()
+    if args.format == "json":
+        print(json.dumps(releases.to_json(h), indent=2))
+    else:
+        pal = palette(args.color, sys.stdout)
+        print("\n".join(releases.render(h, pal, report.terminal_width(), limit=args.top)))
+    return 1 if args.fail_on and VERDICT_RANK[h.verdict] >= VERDICT_RANK[args.fail_on] else 0
+
+
+VERDICT_RANK = {"healthy": 0, "degraded": 1, "bad": 2}
+
+
+def cmd_releases(args: argparse.Namespace, cfg: Config) -> int:
+    """The latest releases, one row each, with their verdicts."""
+    from . import releases
+
+    now = datetime.now(timezone.utc)
+    store = _release_store(cfg)
+    try:
+        found = releases.recent_releases(store, cfg.root, limit=args.limit)
+        healths = []
+        for rel in found:
+            try:
+                healths.append(releases.health(store, rel, now=now, cfg=cfg.release,
+                                               spikes=cfg.watch))  # fmt: skip
+            except ValueError:
+                continue  # went out "after now": a clock off somewhere
+    finally:
+        store.close()
+    if args.format == "json":
+        print(json.dumps([releases.to_json(h) for h in healths], indent=2))
+        return 0
+    if not healths:
+        print("No releases yet: errors carry no release field and git has no tags.")
+        return 0
+    print("\n".join(releases.render_list(healths, palette(args.color, sys.stdout))))
     return 0
 
 
@@ -1701,6 +1770,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--step", default="6h", help="query this much at a time (default 6h)")
     p.add_argument("--limit", type=int, default=5000, help="error records per step (5000)")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("release", help="a release's effect on errors, from the error store")
+    p.add_argument("ref", nargs="?", help="a release value or git tag; leave out for the latest")
+    p.add_argument("--window", type=float, help="hours after the release to look at (24)")
+    p.add_argument("--deployed-at", help="when it went out (ISO time), if not its first error")
+    p.add_argument("--commits", type=int, default=1, help="suspect commits per error (1)")
+    p.add_argument("--top", type=int, default=20, help="error groups to list (20)")
+    p.add_argument("--fail-on", choices=["degraded", "bad"],
+                   help="exit 1 at this verdict or worse, e.g. in a deploy pipeline")  # fmt: skip
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_release)
+
+    p = sub.add_parser("releases", help="the latest releases and their verdicts")
+    p.add_argument("--limit", type=int, default=10, help="releases to list (10)")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_releases)
 
     p = sub.add_parser(
         "prompt", help="one stored error as a case file to paste into an AI assistant"
