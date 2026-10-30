@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- No extension changes; released with logsite 0.8.0: release health (`logsite release`, `logsite releases`, a Slack alert for bad releases).
+
 ## 0.7.2
 
 - No extension changes; released with logsite 0.7.2: fixes from CI logs (hclog, pytest and Go test output, slog sources, GitHub Actions annotations) and a wrong "logged at" from templates with no words.
