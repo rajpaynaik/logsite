@@ -86,10 +86,10 @@ def test_new_errors_are_stored_and_sent_once(tmp_path, monkeypatch, store_url):
         + [line(t0 + timedelta(minutes=m), f"charge failed for ORD-{m}", DIV,
                 email="ann@example.com") for m in range(-30, 5, 5)]
     ) + "\n")  # fmt: skip
-    from logsite.store import connect
+    from logsite.store import SCHEMA_VERSION, connect
 
     store = connect(store_url)
-    assert store.schema_version() == 1  # created on first use
+    assert store.schema_version() == SCHEMA_VERSION  # created on first use
     sent: list = []
     first = run(cfg, sites, app, store, t0 + timedelta(minutes=5), sent)
     assert first.first and first.events == 7 and first.stored == 7

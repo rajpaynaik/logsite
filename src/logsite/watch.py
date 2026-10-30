@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 from .backends import LogBackend, TimeRange
 from .errors import AppFiles, ErrorGroup, group_json, summarize_errors
+from .latency import Timing
 from .store import Store, event_row
 
 KINDS = ("new", "regression", "spike")
@@ -271,8 +272,8 @@ def _export(cfg, rows: list[dict], groups: list, now: datetime) -> tuple[int, st
 
 def _line_counts(store: Store, backend: LogBackend, sites: list, now: datetime,
                  limit: int) -> None:  # fmt: skip
-    """Lines and bytes per log call for each hour that ended since the last check (at most
-    a day's worth per round, starting with the last hour on the first)."""
+    """Lines, bytes and timings per log call for each hour that ended since the last check
+    (at most a day's worth per round, starting with the last hour on the first)."""
     hour = now.replace(minute=0, second=0, microsecond=0)
     done = store.get_meta("line_counts_until")
     start = datetime.fromisoformat(done) if done else hour - timedelta(hours=1)
@@ -285,6 +286,12 @@ def _line_counts(store: Store, backend: LogBackend, sites: list, now: datetime,
         except Exception:  # volume is extra; errors are stored without it
             return
         store.write_line_counts(start, usage, by_id)
+        try:  # and so is latency
+            found = backend.timings_by_line(sites, TimeRange(start, end), limit=limit)
+        except Exception:
+            found = {}
+        hourly = {key: Timing.of(values) for key, values in found.items()}
+        store.write_latency(start, {k: t for k, t in hourly.items() if t is not None})
         store.set_meta("line_counts_until", end.isoformat())
         start = end
 

@@ -78,6 +78,17 @@ class LogBackend(ABC):
         spikes are measured as rates."""
         return None
 
+    def timings_by_line(
+        self, sites: Iterable[LogSite], time_range: TimeRange, limit: int = 5000
+    ) -> dict[tuple[str, str], list[float]]:
+        """``{(site id, endpoint): [seconds, …]}`` from the records in ``time_range`` that
+        carry a timing (:mod:`logsite.latency`). The default reads :meth:`query_logs`, so a
+        busy hour is a sample of ``limit`` lines; backends that can filter lines server-side
+        override this."""
+        from ..latency import timings
+
+        return timings(Matcher(sites), self.query_logs(time_range, limit=limit))
+
     def usage_by_line(
         self, sites: Iterable[LogSite], time_range: TimeRange, limit: int = 5000
     ) -> dict[str, Usage]:

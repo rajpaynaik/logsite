@@ -4,6 +4,17 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
+## Unreleased
+
+- **Latency from logs.** `logsite watch` reads the timings log lines already carry
+  (`duration_ms`, `"took": "1.2s"`, `completed in 120ms`, nginx's `request_time`...) once an
+  hour and stores p50, p95, p99 and max per log call and endpoint. `logsite slow` lists what
+  got slower against the window before; `logsite release` gets a `p95 latency` row, and a
+  release whose p95 doubled is degraded. See [docs/latency.md](docs/latency.md).
+- The MCP server has a `slow_calls` tool.
+- The error store's schema goes to version 2 (a `latency` table). It upgrades itself on the
+  next run; `logsite db sql` prints the SQL for a DBA.
+
 ## 0.8.0 (2026-10-29)
 
 - **Release health.** `logsite release [REF]` shows what a release did to errors: errors per

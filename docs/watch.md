@@ -98,9 +98,11 @@ in `ReplacingMergeTree` tables: query them with `FINAL` to see the latest versio
 | `error_groups` | cause: title, root cause, where it was raised and logged, first and last seen, total occurrences |
 | `error_events` | occurrence: time, group, service, release, trace id, message, stack trace, the record's other fields (`jsonb` in Postgres) |
 | `line_counts` | log call per hour: lines and bytes, for volume and cost |
+| `latency` | log call and endpoint per hour: timed calls, p50, p95, p99 and max, in microseconds ([latency](latency.md)) |
 | `alerts` | message sent: the group, the reason, where it went, when |
 
-Events and line counts older than `retention_days` are deleted once a day; groups are kept.
+Events, line counts and latency older than `retention_days` are deleted once a day; groups
+are kept.
 
 ## Query any time range, instantly
 

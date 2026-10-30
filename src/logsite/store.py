@@ -101,6 +101,17 @@ TABLES = {
         "key": ["site", "hour"],
         "indexes": [],
     },
+    # timings per log call and endpoint an hour (latency.py), in whole microseconds; "key" is
+    # a hash of (site, endpoint): the two together are too long for MySQL's key limit
+    "latency": {
+        "columns": [
+            ("key", "key", False), ("hour", "ts", False), ("site", "mid", True),
+            ("endpoint", "mid", True), ("n", "big", True), ("p50_us", "big", True),
+            ("p95_us", "big", True), ("p99_us", "big", True), ("max_us", "big", True),
+        ],
+        "key": ["key", "hour"],
+        "indexes": [("latency_hour", ["hour"])],
+    },
     "alerts": {
         "columns": [
             ("id", "key", False), ("group_id", "key", True), ("kind", "key", True),
@@ -112,7 +123,10 @@ TABLES = {
 }  # fmt: skip
 META = "store_meta"
 # schema version -> the tables it creates (a later version would list its ALTERs)
-MIGRATIONS: dict[int, list[str]] = {1: list(TABLES)}
+MIGRATIONS: dict[int, list[str]] = {
+    1: ["error_groups", "error_events", "line_counts", "alerts"],
+    2: ["latency"],
+}
 SCHEMA_VERSION = max(MIGRATIONS)
 
 
@@ -463,6 +477,18 @@ class Store:
                  for sid, u in usage.items()],
             )  # fmt: skip
 
+    def write_latency(self, hour: datetime, timings: Mapping) -> None:
+        """One hour's timings: ``{(site id, endpoint): latency.Timing}``."""
+        h = self.dialect.ts(hour)
+        with self._tx() as tx:
+            tx.execute("delete from latency where hour = ?", (h,))
+            tx.executemany(
+                "insert into latency (key, hour, site, endpoint, n, p50_us, p95_us, p99_us,"
+                " max_us) values (?,?,?,?,?,?,?,?,?)",
+                [(latency_key(site, ep), h, site[:500], ep[:500], t.n, *_us(t))
+                 for (site, ep), t in timings.items()],
+            )  # fmt: skip
+
     def record_alert(self, group_id: str, kind: str, channels: list[str], message: str,
                      at: datetime) -> None:  # fmt: skip
         with self._tx() as tx:
@@ -495,6 +521,7 @@ class Store:
         with self._tx() as tx:
             n = tx.execute("delete from error_events where at < ?", (cutoff,)).rowcount
             tx.execute("delete from line_counts where hour < ?", (cutoff,))
+            tx.execute("delete from latency where hour < ?", (cutoff,))
         return n
 
     # --- reading (the web page, the API, logsite db status) ---------------------------------
@@ -607,6 +634,18 @@ class Store:
         )
         return int(rows[0]["n"] or 0) if rows and int(rows[0]["counted"] or 0) else None
 
+    def latency(self, since: datetime, until: datetime) -> list[dict]:
+        """Timings per log call and endpoint between ``since`` and ``until``, in seconds:
+        ``site``, ``endpoint``, ``n``, ``p50``, ``p95``, ``p99`` (each hour's, weighted by
+        its calls: percentiles can't be added up exactly) and ``max``."""
+        rows = self._query(
+            "select site, endpoint, sum(n) as n, sum(p50_us * n) as p50, sum(p95_us * n) as p95,"
+            " sum(p99_us * n) as p99, max(max_us) as mx from latency"
+            " where hour >= ? and hour < ? group by site, endpoint",
+            (self.dialect.ts(since), self.dialect.ts(until)),
+        )
+        return [_timing_row(r) for r in rows if int(r["n"] or 0)]
+
     def counts(self) -> dict[str, int]:
         return {t: self._query(f"select count(*) as n from {t}")[0]["n"] for t in TABLES}
 
@@ -694,6 +733,21 @@ def _earliest(a, b) -> datetime | None:
 def _latest(a, b) -> datetime | None:
     a, b = _dt(a), _dt(b)
     return max(x for x in (a, b) if x) if (a or b) else None
+
+
+def latency_key(site: str, endpoint: str) -> str:
+    return hashlib.sha1(f"{site}\x00{endpoint}".encode()).hexdigest()[:32]
+
+
+def _us(t) -> tuple[int, int, int, int]:
+    return tuple(round(x * 1e6) for x in (t.p50, t.p95, t.p99, t.max))  # type: ignore[return-value]
+
+
+def _timing_row(r: dict) -> dict:
+    n = int(r["n"])
+    return {"site": r["site"] or "", "endpoint": r["endpoint"] or "", "n": n,
+            "p50": float(r["p50"]) / n / 1e6, "p95": float(r["p95"]) / n / 1e6,
+            "p99": float(r["p99"]) / n / 1e6, "max": float(r["mx"]) / 1e6}  # fmt: skip
 
 
 def _clean(row: dict) -> dict:

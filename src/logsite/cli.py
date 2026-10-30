@@ -1393,7 +1393,8 @@ def cmd_release(args: argparse.Namespace, cfg: Config) -> int:
         try:
             rel = releases.find_release(store, cfg.root, args.ref, at=at)
             h = releases.health(store, rel, now=datetime.now(timezone.utc), cfg=cfg.release,
-                                spikes=cfg.watch, root=cfg.root, commits=args.commits)  # fmt: skip
+                                spikes=cfg.watch, root=cfg.root, commits=args.commits,
+                                latency=cfg.latency)  # fmt: skip
         except ValueError as exc:
             sys.exit(f"logsite: {exc}")
     finally:
@@ -1421,7 +1422,7 @@ def cmd_releases(args: argparse.Namespace, cfg: Config) -> int:
         for rel in found:
             try:
                 healths.append(releases.health(store, rel, now=now, cfg=cfg.release,
-                                               spikes=cfg.watch))  # fmt: skip
+                                               spikes=cfg.watch, latency=cfg.latency))  # fmt: skip
             except ValueError:
                 continue  # went out "after now": a clock off somewhere
     finally:
@@ -1433,6 +1434,37 @@ def cmd_releases(args: argparse.Namespace, cfg: Config) -> int:
         print("No releases yet: errors carry no release field and git has no tags.")
         return 0
     print("\n".join(releases.render_list(healths, palette(args.color, sys.stdout))))
+    return 0
+
+
+def cmd_slow(args: argparse.Namespace, cfg: Config) -> int:
+    """Log calls and endpoints that got slower, from the timings logsite watch stores."""
+    from . import latency, releases
+
+    if args.hours:
+        cfg.latency.window_hours = args.hours
+    if args.ratio:
+        cfg.latency.ratio = args.ratio
+    end, middle, start = latency.windows(datetime.now(timezone.utc), cfg.latency.window_hours)
+    store = _release_store(cfg)
+    try:
+        found = latency.slower(store, start, middle, end, cfg.latency)
+        timed = store.latency(middle, end)
+        shipped = [r for r in releases.recent_releases(store, cfg.root, limit=20)
+                   if middle <= r.at <= end]  # fmt: skip
+    finally:
+        store.close()
+    if args.format == "json":
+        print(json.dumps(latency.slow_json(found, start, middle, end), indent=2))
+        return 0
+    if not timed:
+        print("No timings stored yet. `logsite watch` stores them from lines with a duration"
+              " (duration_ms=, took 1.2s, ...), once an hour.")  # fmt: skip
+        return 0
+    pal = palette(args.color, sys.stdout)
+    lines = latency.render_slow(found[: args.top], pal, report.terminal_width(),
+                                cfg.latency.window_hours, shipped[::-1])  # fmt: skip
+    print("\n".join(lines))
     return 0
 
 
@@ -1782,6 +1814,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.set_defaults(func=cmd_release)
+
+    p = sub.add_parser("slow", help="log calls and endpoints that got slower, from the logs")
+    p.add_argument("--hours", type=float, help="this long, against as long before (24)")
+    p.add_argument("--ratio", type=float, help="slower: p95 this many times before (2)")
+    p.add_argument("--top", type=int, default=20, help="rows to list (20)")
+    p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+    p.set_defaults(func=cmd_slow)
 
     p = sub.add_parser("releases", help="the latest releases and their verdicts")
     p.add_argument("--limit", type=int, default=10, help="releases to list (10)")

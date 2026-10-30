@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .git import Commit, previous_tag, ref_time, resolve_ref, rev_list, site_history, tags_by_date
+from .latency import LatencyConfig, format_seconds, overall
 from .models import parse_iso
 from .report import _cut, short_class, short_place
 from .term import Palette
@@ -79,6 +80,9 @@ class Health:
     changes: list[Change]
     verdict: str
     commit_count: int | None = None  # commits in the release
+    latency_before: dict | None = None  # every timed call, as latency.overall() gives it
+    latency_after: dict | None = None
+    slower: bool = False  # p95 up [latency] ratio times, over enough calls
 
     @property
     def hours(self) -> float:
@@ -152,7 +156,8 @@ def recent_releases(store, root: str | Path, limit: int = 10) -> list[Release]:
 
 
 def health(store, release: Release, *, now: datetime, cfg: ReleaseConfig, spikes: WatchConfig,
-           root: str | Path | None = None, commits: int = 1) -> Health:  # fmt: skip
+           root: str | Path | None = None, commits: int = 1,
+           latency: LatencyConfig | None = None) -> Health:  # fmt: skip
     """The release's errors against the window before it. With ``root`` and ``commits``,
     new and regressed errors get the release's commits that touched their code."""
     end = min(now, release.at + timedelta(hours=cfg.window_hours))
@@ -203,7 +208,13 @@ def health(store, release: Release, *, now: datetime, cfg: ReleaseConfig, spikes
         changes=changes,
         verdict="healthy",
         commit_count=commit_count,
+        latency_before=overall(store.latency(start, release.at)),
+        latency_after=overall(store.latency(release.at, end)),
     )
+    lc = latency or LatencyConfig()
+    b, a = out.latency_before, out.latency_after
+    out.slower = bool(b and a and min(b["n"], a["n"]) >= lc.min_calls and b["p95"]
+                      and a["p95"] >= lc.ratio * b["p95"])  # fmt: skip
     out.verdict = verdict(out, cfg, spikes)
     return out
 
@@ -211,14 +222,14 @@ def health(store, release: Release, *, now: datetime, cfg: ReleaseConfig, spikes
 def verdict(h: Health, cfg: ReleaseConfig, spikes: WatchConfig) -> str:
     """``bad``: errors up ``bad_rate`` times (and at least ``[watch] spike_min_count`` of
     them), or a new or regressed error ``bad_count`` times; ``degraded``: any new, regressed
-    or spiking error; else ``healthy``."""
+    or spiking error, or p95 latency up ``[latency] ratio`` times; else ``healthy``."""
     worse = [c for c in h.changes if c.status in ("new", "regressed")]
     jump = h.errors_after >= spikes.spike_min_count and h.errors_after >= cfg.bad_rate * max(
         h.errors_before, 1
     )
     if jump or any(c.after >= cfg.bad_count for c in worse):
         return "bad"
-    if worse or any(c.status == "spiking" for c in h.changes):
+    if worse or h.slower or any(c.status == "spiking" for c in h.changes):
         return "degraded"
     return "healthy"
 
@@ -257,6 +268,7 @@ def to_json(h: Health) -> dict:
             "ratio": round(h.ratio, 2) if h.ratio is not None else None,
         },  # fmt: skip
         "lines": {"before": h.lines_before, "after": h.lines_after},
+        "latency": {"before": h.latency_before, "after": h.latency_after, "slower": h.slower},
         "groups": {
             "before": h.groups_before,
             "after": h.groups_after,
@@ -325,6 +337,11 @@ def render(h: Health, pal: Palette, width: int, limit: int = 20) -> list[str]:
          if h.lines_before and h.lines_after else "—"),
         ("Groups", str(h.groups_before), str(h.groups_after), groups or "no change"),
     ]  # fmt: skip
+    b, a = h.latency_before, h.latency_after
+    if b or a:
+        summary.append(("p95 latency", format_seconds(b and b["p95"]),
+                        format_seconds(a and a["p95"]),
+                        _times(a["p95"], b["p95"]) if a and b else "—"))  # fmt: skip
     widths = [max(len(row[c]) for row in summary) for c in range(3)]
     for i, row in enumerate(summary):
         text = (row[0].ljust(widths[0]) + "   " + row[1].rjust(max(widths[1], 6)) + "   "
@@ -409,7 +426,9 @@ def to_alert(store, cfg, now: datetime) -> tuple[Health, str, str] | None:
         hours=cfg.release.window_hours
     ):
         return None
-    h = health(store, rel, now=now, cfg=cfg.release, spikes=cfg.watch, root=cfg.root)
+    h = health(
+        store, rel, now=now, cfg=cfg.release, spikes=cfg.watch, root=cfg.root, latency=cfg.latency
+    )
     if h.verdict == "healthy":
         return None
     key = alert_key(rel)

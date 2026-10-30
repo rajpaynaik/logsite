@@ -724,12 +724,28 @@ def build_server(cfg: Config) -> MCPServer:
         try:
             rel = releases.find_release(s, cfg.root, release)
             h = releases.health(s, rel, now=datetime.now(timezone.utc), cfg=cfg.release,
-                                spikes=cfg.watch, root=cfg.root)  # fmt: skip
+                                spikes=cfg.watch, root=cfg.root, latency=cfg.latency)  # fmt: skip
         except ValueError as exc:
             raise ToolError(str(exc)) from exc
         finally:
             s.close()
         return releases.to_json(h)
+
+    @mcp.tool(annotations=READ_ONLY)
+    def slow_calls(hours: float = 24) -> dict[str, Any]:
+        """What got slower: log calls and endpoints whose p95 latency over the last `hours`
+        is `[latency] ratio` (2) times or more the `hours` before, from the timings the logs
+        carry (duration_ms=, took 1.2s, ...). Each with p50/p95/p99 and calls before and
+        after, slowest jump first."""
+        from . import latency
+
+        end, middle, start = latency.windows(datetime.now(timezone.utc), min(hours, 24 * 30))
+        s = store()
+        try:
+            found = latency.slower(s, start, middle, end, cfg.latency)
+        finally:
+            s.close()
+        return latency.slow_json(found, start, middle, end)
 
     return mcp
 

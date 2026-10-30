@@ -82,6 +82,7 @@ def test_tools_are_read_only(project):
         "error_occurrences",
         "error_trend",
         "release_health",
+        "slow_calls",
     }
     assert all(t.annotations.read_only_hint for t in tools.values())
 

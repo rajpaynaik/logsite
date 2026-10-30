@@ -59,6 +59,11 @@ Example ``logsite.toml``::
     bad_rate = 3.0                   # errors/hour this many times the hours before: bad
     bad_count = 10                   # a new or regressed error this many times: bad
 
+    [latency]                        # logsite slow: timings from the logs
+    window_hours = 24                # this long, against as long before
+    ratio = 2.0                      # slower: p95 this many times the window before
+    min_calls = 100                  # ... over at least this many timed calls
+
     [cost]                           # logsite cost, $/mo in the editor
     price_per_gb = 0.50              # what your log store charges per GB ingested
     price_per_million_events = 0     # per-event indexing charges, if any
@@ -82,6 +87,7 @@ from .alerts import AlertsConfig
 from .cost import CostConfig
 from .export import ExportConfig
 from .history import HistoryConfig
+from .latency import LatencyConfig
 from .leaks import LeakConfig
 from .lint import LintConfig
 from .pipeline import PipelineConfig
@@ -112,6 +118,7 @@ class Config:
     watch: WatchConfig = field(default_factory=WatchConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     release: ReleaseConfig = field(default_factory=ReleaseConfig)
+    latency: LatencyConfig = field(default_factory=LatencyConfig)
     window_hours: float = 24.0
     excludes: list[str] = field(default_factory=list)
 
@@ -203,6 +210,7 @@ def load_config(start: str | Path | None = None) -> Config:
         watch=WatchConfig.from_dict(data.get("watch", {})),
         export=ExportConfig.from_dict(data.get("export", {})),
         release=ReleaseConfig.from_dict(data.get("release", {})),
+        latency=LatencyConfig.from_dict(data.get("latency", {})),
         window_hours=float(data.get("window_hours", 24)),
         excludes=list(data.get("exclude", [])),
     )

@@ -73,6 +73,18 @@ def test_the_store_on_this_database(store_url):
         store.write_line_counts(T0, {"app/api.py:88": Usage(12, 2400)}, {})  # replaced
         hour = timedelta(hours=1)
         assert store.lines(T0, T0 + hour) == 12 and store.lines(T0 + hour, T0 + 2 * hour) is None
+        from logsite.latency import Timing
+
+        store.write_latency(T0, {("app/api.py:88", "POST /checkout"): Timing(100, .1, .5, .9, 2.0),
+                                 ("", ""): Timing(4, .01, .02, .02, .03)})  # fmt: skip
+        store.write_latency(T0 + hour, {("app/api.py:88", "POST /checkout"):
+                                        Timing(300, .2, 1.0, 1.5, 4.0)})  # fmt: skip
+        rows = {(r["site"], r["endpoint"]): r for r in store.latency(T0, T0 + 2 * hour)}
+        checkout = rows[("app/api.py:88", "POST /checkout")]
+        assert checkout["n"] == 400 and checkout["max"] == 4.0
+        assert abs(checkout["p95"] - (100 * 0.5 + 300 * 1.0) / 400) < 1e-6  # weighted
+        assert rows[("", "")]["n"] == 4
+        assert store.latency(T0 + 3 * hour, T0 + 4 * hour) == []
         (release,) = store.releases()
         assert (release["release"], release["n"]) == ("v1", 6)
         assert release["first_at"].startswith("2026-10-20 08:00")
@@ -85,7 +97,7 @@ def test_the_store_on_this_database(store_url):
         assert store.last_alert("g1", "new") == T0 and store.last_alert("g1", "spike") is None
 
         assert store.counts() == {"error_groups": 1, "error_events": 6, "line_counts": 1,
-                                  "alerts": 1}  # fmt: skip
+                                  "latency": 3, "alerts": 1}  # fmt: skip
         assert store.prune(1, T0 + timedelta(days=1, minutes=30)) == 5
     finally:
         store.close()
@@ -101,6 +113,21 @@ def test_ddl_for_each_database(url, words):
     sql = "\n".join(schema_sql(dialect_for(url)))
     for word in words:
         assert word in sql
+
+
+def test_a_version_1_store_gains_the_latency_table(tmp_path):
+    url = f"sqlite:///{tmp_path / 's.db'}"
+    store = connect(url)
+    with store._tx() as tx:
+        tx.ddl("drop table latency")
+    store.set_meta("schema_version", "1")
+    store.close()
+    store = connect(url)  # migrates
+    try:
+        assert store.schema_version() == SCHEMA_VERSION == 2
+        assert store.latency(T0, T0 + timedelta(hours=1)) == []
+    finally:
+        store.close()
 
 
 def test_reserved_words_are_quoted_outside_strings():

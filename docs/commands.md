@@ -27,6 +27,7 @@ logsite errors -i          # browse the stored errors in the terminal: search, t
 logsite prompt ed64f864 --copy   # one stored error as a case file to paste into an AI assistant
 logsite release            # did the latest release make errors worse? (--fail-on bad in a pipeline)
 logsite releases           # the latest releases and their verdicts
+logsite slow               # endpoints and log calls that got slower (p95, from the logs)
 logsite agent -- pytest    # test/build failures grouped by cause + what changed (AI assistants)
 logsite repro --from incident.log --write-test   # a production error as a failing pytest test
 logsite agent --expect 2d27bfe0 -- pytest tests/test_repro_2d27bfe0.py   # does it fail like production?

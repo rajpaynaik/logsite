@@ -173,6 +173,15 @@ class LokiBackend(LogBackend):
         }
         return self.parse_response(self._get("query_range", params))
 
+    def timings_by_line(
+        self, sites: Iterable[LogSite], time_range: TimeRange, limit: int = 5000
+    ) -> dict[tuple[str, str], list[float]]:
+        """Only the lines that may carry a timing come back (a line filter)."""
+        from ..latency import LINE_FILTER, timings
+
+        query = f"{self.selector} |~ {json.dumps(LINE_FILTER)}"
+        return timings(Matcher(sites), self.query_logs(time_range, limit=limit, query=query))
+
     def query_errors(self, time_range: TimeRange, limit: int = 5000) -> list[LogRecord]:
         """A case-insensitive line filter narrows to likely errors server-side; levels and
         tracebacks are then checked client-side. Stack traces that arrive one line per entry

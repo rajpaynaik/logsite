@@ -117,6 +117,7 @@ See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kub
 | `logsite errors -i` | Browse the stored errors in the terminal: search, any time range, open one, copy it as an AI prompt |
 | `logsite prompt <id> --copy` | Everything about one stored error (code, when it started, the commits before, what failing requests share) as a prompt for your AI assistant |
 | `logsite release` | Did the last release make errors worse? New, back, spiking and fixed errors, with the suspect commits, and a Slack alert when it's bad |
+| `logsite slow` | Which endpoints and log calls got slower: p95 and p99 from the timings your logs already carry |
 | `logsite investigate` | Find the deploy and commit behind an incident |
 | `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
 
@@ -132,6 +133,7 @@ ask "what failed in checkout yesterday after 3pm?" in plain English.
 [logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
 [Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
 [Release health](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md) ·
+[Latency](https://github.com/rajpaynaik/logsite/blob/main/docs/latency.md) ·
 [Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md) ·
 [Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
 [AI prompt](https://github.com/rajpaynaik/logsite/blob/main/docs/prompt.md) ·

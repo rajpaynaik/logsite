@@ -17,7 +17,19 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
-from .store import BATCH, SCHEMA_VERSION, _clean, _dt, _earliest, _latest, _need, _safe
+from .store import (
+    BATCH,
+    SCHEMA_VERSION,
+    _clean,
+    _dt,
+    _earliest,
+    _latest,
+    _need,
+    _safe,
+    _timing_row,
+    _us,
+    latency_key,
+)
 
 SCHEMA = [
     """create table if not exists store_meta (
@@ -40,6 +52,10 @@ SCHEMA = [
     site String, hour DateTime64(6, 'UTC'), level Nullable(String), template Nullable(String),
     lines UInt64, bytes UInt64
 ) engine = ReplacingMergeTree order by (site, hour)""",
+    """create table if not exists latency (
+    key String, hour DateTime64(6, 'UTC'), site String, endpoint String, n UInt64,
+    p50_us UInt64, p95_us UInt64, p99_us UInt64, max_us UInt64
+) engine = ReplacingMergeTree order by (key, hour)""",
     """create table if not exists alerts (
     id String, group_id String, kind String, sent_at DateTime64(6, 'UTC'),
     channels String, message String
@@ -154,6 +170,18 @@ class ClickHouseStore:
             column_names=["site", "hour", "level", "template", "lines", "bytes"],
         )  # fmt: skip
 
+    def write_latency(self, hour: datetime, timings: Mapping) -> None:
+        if not timings:
+            return
+        h = _utc(hour)
+        self.client.insert(
+            "latency",
+            [[latency_key(site, ep), h, site[:500], ep[:500], t.n, *_us(t)]
+             for (site, ep), t in timings.items()],
+            column_names=["key", "hour", "site", "endpoint", "n", "p50_us", "p95_us", "p99_us",
+                          "max_us"],
+        )  # fmt: skip
+
     def record_alert(self, group_id: str, kind: str, channels: list[str], message: str,
                      at: datetime) -> None:  # fmt: skip
         self.client.insert(
@@ -186,8 +214,9 @@ class ClickHouseStore:
         if n:
             self.client.command("alter table error_events delete where at < {c:DateTime64(6)}",
                                 parameters={"c": cutoff})  # fmt: skip
-            self.client.command("alter table line_counts delete where hour < {c:DateTime64(6)}",
-                                parameters={"c": cutoff})  # fmt: skip
+            for table in ("line_counts", "latency"):
+                self.client.command(f"alter table {table} delete where hour < {{c:DateTime64(6)}}",
+                                    parameters={"c": cutoff})  # fmt: skip
         return int(n)
 
     # --- reading ------------------------------------------------------------------------
@@ -292,9 +321,19 @@ class ClickHouseStore:
         )
         return int(rows[0]["n"] or 0) if rows and int(rows[0]["counted"] or 0) else None
 
+    def latency(self, since: datetime, until: datetime) -> list[dict]:
+        rows = self._query(
+            "select site, endpoint, sum(n) as n, sum(p50_us * n) as p50, sum(p95_us * n) as p95,"
+            " sum(p99_us * n) as p99, max(max_us) as mx from latency final"
+            " where hour >= {s:DateTime64(6)} and hour < {u:DateTime64(6)}"
+            " group by site, endpoint",
+            {"s": _utc(since), "u": _utc(until)},
+        )
+        return [_timing_row(r) for r in rows if int(r["n"] or 0)]
+
     def counts(self) -> dict[str, int]:
         out = {}
-        for t in ("error_groups", "error_events", "line_counts", "alerts"):
+        for t in ("error_groups", "error_events", "line_counts", "latency", "alerts"):
             final = "" if t == "alerts" else " final"
             out[t] = int(self._query(f"select count() as n from {t}{final}")[0]["n"])
         return out

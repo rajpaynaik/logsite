@@ -9,6 +9,7 @@ from conftest import git
 from logsite.cli import main
 from logsite.config import load_config
 from logsite.errors import ErrorGroup
+from logsite.latency import Timing
 from logsite.models import Usage
 from logsite.releases import ReleaseConfig, find_release, health
 from logsite.store import connect
@@ -82,6 +83,11 @@ def project(tmp_path):
         store.write([g], rows)
     for h in range(12):  # 1,000 lines an hour, before and after
         store.write_line_counts(before + timedelta(hours=h), {"app.py:1": Usage(count=1000)}, {})
+    top = DEPLOY.replace(minute=0, second=0, microsecond=0)
+    for h in range(1, 5):  # p95 200ms in the hours before, 500ms after
+        site = ("payments.py:2", "POST /charge")
+        store.write_latency(top - timedelta(hours=h), {site: Timing(100, 0.1, 0.2, 0.3, 0.4)})
+        store.write_latency(top + timedelta(hours=h), {site: Timing(100, 0.2, 0.5, 0.8, 1.0)})
     store.close()
     return tmp_path
 
@@ -110,6 +116,8 @@ def test_the_latest_release_by_its_errors(project):
     assert h.commit_count == 1
     assert [c.summary for c in h.changes[0].commits] == ["Look rates up directly"]
     assert h.verdict == "bad"  # a new error 12 times
+    assert h.latency_before["p95"] == pytest.approx(0.2)
+    assert h.latency_after["p95"] == pytest.approx(0.5) and h.slower
 
 
 def test_verdicts(project):
@@ -135,6 +143,8 @@ def test_cli_release_table(project, capsys):
     assert out.startswith("Release v1.1 · BAD")
     assert "1 commit since v1.0" in out
     assert "Errors/hour" in out and "Error rate" in out
+    assert next(x for x in out.splitlines() if x.startswith("p95 latency")).split()[2:] == [
+        "200ms", "500ms", "×2.5"]  # fmt: skip
     lines = out.splitlines()
     head = next(i for i, x in enumerate(lines) if "STATUS" in x)
     rows = lines[head + 2 : head + 6]

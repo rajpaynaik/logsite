@@ -57,13 +57,16 @@ before it.
 | `spiking` | At least `[watch] spike_min_count` (20) times, and `spike_ratio` (5) times the window before |
 | `resolved` | In the window before, gone after the release |
 
+When the logs carry timings ([latency](latency.md)), a `p95 latency` row compares them too.
+
 The error rate is errors as a share of all log lines, when `logsite watch` counts them.
 
 **Verdict:**
 
 - **BAD**: errors per hour up `bad_rate` (3) times or more, or a new or regressed error
   `bad_count` (10) times or more;
-- **DEGRADED**: any new, regressed or spiking error;
+- **DEGRADED**: any new, regressed or spiking error, or p95 latency up `[latency] ratio` (2)
+  times over at least `min_calls` (100) timed calls;
 - **HEALTHY**: none of those.
 
 ## In a deploy pipeline
