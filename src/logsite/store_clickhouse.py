@@ -323,13 +323,15 @@ class ClickHouseStore:
 
     def latency(self, since: datetime, until: datetime) -> list[dict]:
         rows = self._query(
-            "select site, endpoint, sum(n) as n, sum(p50_us * n) as p50, sum(p95_us * n) as p95,"
+            # "calls", not "n": ClickHouse would read the n in sum(p50_us * n) as the alias
+            "select site, endpoint, sum(n) as calls, sum(p50_us * n) as p50,"
+            " sum(p95_us * n) as p95,"
             " sum(p99_us * n) as p99, max(max_us) as mx from latency final"
             " where hour >= {s:DateTime64(6)} and hour < {u:DateTime64(6)}"
             " group by site, endpoint",
             {"s": _utc(since), "u": _utc(until)},
         )
-        return [_timing_row(r) for r in rows if int(r["n"] or 0)]
+        return [_timing_row(r) for r in rows if int(r["calls"] or 0)]
 
     def counts(self) -> dict[str, int]:
         out = {}

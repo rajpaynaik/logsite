@@ -639,12 +639,13 @@ class Store:
         ``site``, ``endpoint``, ``n``, ``p50``, ``p95``, ``p99`` (each hour's, weighted by
         its calls: percentiles can't be added up exactly) and ``max``."""
         rows = self._query(
-            "select site, endpoint, sum(n) as n, sum(p50_us * n) as p50, sum(p95_us * n) as p95,"
+            "select site, endpoint, sum(n) as calls, sum(p50_us * n) as p50,"
+            " sum(p95_us * n) as p95,"
             " sum(p99_us * n) as p99, max(max_us) as mx from latency"
             " where hour >= ? and hour < ? group by site, endpoint",
             (self.dialect.ts(since), self.dialect.ts(until)),
         )
-        return [_timing_row(r) for r in rows if int(r["n"] or 0)]
+        return [_timing_row(r) for r in rows if int(r["calls"] or 0)]
 
     def counts(self) -> dict[str, int]:
         return {t: self._query(f"select count(*) as n from {t}")[0]["n"] for t in TABLES}
@@ -744,7 +745,7 @@ def _us(t) -> tuple[int, int, int, int]:
 
 
 def _timing_row(r: dict) -> dict:
-    n = int(r["n"])
+    n = int(r["calls"])
     return {"site": r["site"] or "", "endpoint": r["endpoint"] or "", "n": n,
             "p50": float(r["p50"]) / n / 1e6, "p95": float(r["p95"]) / n / 1e6,
             "p99": float(r["p99"]) / n / 1e6, "max": float(r["mx"]) / 1e6}  # fmt: skip
