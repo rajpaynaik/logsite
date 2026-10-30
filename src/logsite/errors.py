@@ -83,7 +83,8 @@ _VALUES = [
     (re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "<id>"),
     (re.compile(r"\b0x[0-9a-f]+\b", re.I), "<hex>"),
     (re.compile(r"\b[0-9a-f]{16,}\b", re.I), "<id>"),
-    (re.compile(r"'[^']*'|\"[^\"]*\""), "<str>"),
+    # quoted values; an apostrophe inside a word ("couldn't") doesn't open or close one
+    (re.compile(r"(?<!\w)'[^']*'(?!\w)|\"[^\"]*\""), "<str>"),
     # codes of capitals and digits: "OLJCESPC7Z", "REQ0534"
     (re.compile(r"\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,}\b"), "<id>"),
     # names: two or more capitalized words ("Roof Binoculars", "National Park Foundation")

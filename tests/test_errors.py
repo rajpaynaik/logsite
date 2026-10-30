@@ -325,6 +325,9 @@ def test_join_multiline_ends_a_traceback_only_at_an_unindented_exception_line():
 def test_normalize():
     assert normalize("timeout after 3.5s for order 8812") == "timeout after <n>s for order <n>"
     assert normalize("user 'bob' id 4bf92f3577b34da6a3ce929d0e0e4703") == "user <str> id <id>"
+    # an apostrophe isn't a quote: the rest of the message still tells errors apart
+    assert normalize("couldn't load: expected ':'") == "couldn't load: expected <str>"
+    assert normalize("couldn't load: timeout too big") == "couldn't load: timeout too big"
 
 
 def test_app_files_resolve_deployed_paths():

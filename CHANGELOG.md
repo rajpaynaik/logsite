@@ -23,6 +23,9 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 - GitHub Actions' `##[error]` in front of a line no longer hides the error after it.
 - Indexing Python code no longer prints the `SyntaxWarning`s old code raises ("invalid
   escape sequence") over the output.
+- An apostrophe in a word ("couldn't") no longer starts a quoted value, which hid the rest
+  of the message and merged different errors into one group. Messages with one get new
+  group ids, so `watch` reports them as new once.
 
 ## 0.7.1 (2026-10-24)
 
