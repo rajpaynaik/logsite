@@ -4,7 +4,7 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## Unreleased
+## 0.7.2 (2026-10-29)
 
 - A log call whose template is only placeholders and punctuation (`"%s: %s"`,
   `` `${a}: ${b}` ``) is no longer matched against messages: it claimed unrelated errors,
