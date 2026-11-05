@@ -109,36 +109,24 @@ Kubernetes. On Kubernetes (EKS included) it's one Deployment with one replica, c
 ConfigMap, secrets in a Secret, and an IAM role for CloudWatch.
 See [Run on Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md).
 
-## More
+## What else it does
 
-| Command | What it does |
-|---|---|
-| `logsite app` | Set everything up and browse errors in your browser, no terminal needed |
-| `logsite db backfill --since 30d` | Store errors in your own database (SQLite, Postgres, MySQL, SQL Server, ClickHouse) for instant date-range queries |
-| `logsite errors -i` | Browse the stored errors in the terminal: search, any time range, open one, copy it as an AI prompt |
-| `logsite prompt <id> --copy` | Everything about one stored error (code, when it started, the commits before, what failing requests share) as a prompt for your AI assistant |
-| `logsite release` | Did the last release make errors worse? New, back, spiking and fixed errors, with the suspect commits, and a Slack alert when it's bad |
-| `logsite slow` | Which endpoints and log calls got slower: p95 and p99 from the timings your logs already carry |
-| `logsite investigate` | Find the deploy and commit behind an incident |
-| `logsite grafana --store postgres` | A Grafana dashboard on your stored errors |
+- **Fix faster:** [write a failing test](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) from a production error, or turn one
+  into a [prompt for your AI assistant](https://github.com/rajpaynaik/logsite/blob/main/docs/prompt.md).
+- **Check releases:** [`logsite release`](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md) shows whether a release made
+  errors worse, with the suspect commits.
+- **Catch slowdowns:** [`logsite slow`](https://github.com/rajpaynaik/logsite/blob/main/docs/latency.md) shows which endpoints got slower,
+  from timings your logs already carry.
+- **Spend less on logs:** see what [each log call costs](https://github.com/rajpaynaik/logsite/blob/main/docs/cost-and-leaks.md), and
+  [lint](https://github.com/rajpaynaik/logsite/blob/main/docs/lint.md) logging mistakes in your code.
+- **Work where you are:** [VS Code](https://github.com/rajpaynaik/logsite/blob/main/docs/vscode.md), [Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md),
+  [Claude](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) and a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md).
 
-Also: a [GitHub Action](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md),
-a [VS Code extension](https://marketplace.visualstudio.com/items?itemName=rajpaynaik.logsite),
-and a [Claude connector](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) (MCP) so you can
-ask "what failed in checkout yesterday after 3pm?" in plain English.
+## Documentation
 
-## Docs
-
-[Commands](https://github.com/rajpaynaik/logsite/blob/main/docs/commands.md) ·
+Start with [Get started](https://github.com/rajpaynaik/logsite/blob/main/docs/get-started.md), or browse
+[all the docs](https://github.com/rajpaynaik/logsite/blob/main/docs/README.md). Also: [Commands](https://github.com/rajpaynaik/logsite/blob/main/docs/commands.md) ·
 [Configuration](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) ·
-[logsite app](https://github.com/rajpaynaik/logsite/blob/main/docs/app.md) ·
-[Watch production](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) ·
-[Release health](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md) ·
-[Latency](https://github.com/rajpaynaik/logsite/blob/main/docs/latency.md) ·
-[Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md) ·
-[Reproduce an error](https://github.com/rajpaynaik/logsite/blob/main/docs/repro.md) ·
-[AI prompt](https://github.com/rajpaynaik/logsite/blob/main/docs/prompt.md) ·
-[Security](https://github.com/rajpaynaik/logsite/blob/main/docs/security.md) ·
 [Changelog](https://github.com/rajpaynaik/logsite/blob/main/CHANGELOG.md)
 
 Questions and ideas: [Discussions](https://github.com/rajpaynaik/logsite/discussions).
