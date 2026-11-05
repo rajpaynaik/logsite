@@ -4,7 +4,7 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## Unreleased
+## 0.9.0 (2026-11-04)
 
 - **Latency from logs.** `logsite watch` reads the timings log lines already carry
   (`duration_ms`, `"took": "1.2s"`, `completed in 120ms`, nginx's `request_time`...) once an
