@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `p95 180ms` next to a log call's production count when its lines carry a timing (`duration_ms`, `took 1.2s`, ...), and p50/p95/p99/max in its hover. Needs logsite 0.9.0.
+
 ## 0.8.0
 
 - No extension changes; released with logsite 0.8.0: release health (`logsite release`, `logsite releases`, a Slack alert for bad releases).

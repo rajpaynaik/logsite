@@ -52,6 +52,13 @@ Percentiles over several hours are each hour's, weighted by its calls: close, no
 On Loki only the lines that may carry a timing are read; on other log stores a busy hour is
 a sample of up to `--limit` lines.
 
+## Slack
+
+`logsite watch` checks each hour as it ends: an endpoint whose p95 that hour is `ratio` (2)
+times the `alert_against_hours` (24) before it, over `min_calls` (100) timed calls in both,
+is posted with the table above. Each endpoint alerts at most once per `[watch]
+cooldown_minutes`. Turn it off by leaving `"slow"` out of `[watch] alert_on`.
+
 ## Configuration
 
 ```toml
@@ -59,6 +66,7 @@ a sample of up to `--limit` lines.
 window_hours = 24          # this long, against as long before
 ratio = 2.0                # slower: p95 this many times the window before
 min_calls = 100            # ... over at least this many timed calls in each
+alert_against_hours = 24   # watch: each hour against this many hours before it
 ```
 
 ```bash

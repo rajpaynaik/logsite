@@ -20,6 +20,7 @@ from .errors import AppFiles, ErrorGroup, summarize_errors
 from .fixes import structured_rewrite
 from .git import Commit, site_history
 from .index import DEFAULT_EXCLUDES, index_calls, index_project, index_source, iter_python_files
+from .latency import Timing, format_seconds
 from .lint import describe_trend, is_spike, lint_source, lint_volume
 from .models import Diagnostic
 
@@ -59,6 +60,7 @@ class Project:
         self._injected: dict[str, dict[str, list[str]]] = {}  # file -> injected context
         self.raised: dict[tuple[str, int], list[ErrorGroup]] = {}  # (path, line) -> errors
         self.logged: dict[str, list[ErrorGroup]] = {}  # site id -> errors it logged
+        self.timings: dict[str, Timing] = {}  # site id -> its timings in the window
 
     def rel_path(self, fs: str) -> str:
         try:
@@ -97,6 +99,7 @@ class Project:
                 self.previous_counts = backend.count_by_line(sites, current.previous())
                 self._history.clear()
                 self.refresh_errors(backend, sites, current)
+                self.refresh_timings(backend, sites, current)
                 self.counts_ready = True
                 self.ls.workspace_code_lens_refresh(None)
                 for uri in list(self.ls.workspace.text_documents):
@@ -112,6 +115,20 @@ class Project:
                     )
                 )
             self.ls._stop.wait(REFRESH_SECONDS)
+
+    def refresh_timings(self, backend, sites, current: TimeRange) -> None:
+        """How long the operation each log call reports took (latency.py), every endpoint
+        together: p95 shows next to its count."""
+        try:
+            found = backend.timings_by_line(sites, current)
+        except Exception as exc:  # latency is extra: counts still show
+            log.warning("logsite: failed to read timings from %s: %s", backend.name, exc)
+            return
+        by_site: dict[str, list[float]] = {}
+        for (site, _endpoint), values in found.items():
+            if site:
+                by_site.setdefault(site, []).extend(values)
+        self.timings = {sid: t for sid, xs in by_site.items() if (t := Timing.of(xs))}
 
     def refresh_errors(self, backend, sites, current: TimeRange) -> None:
         """Group production errors, so the line that raised one shows how often it did."""
@@ -283,6 +300,9 @@ def code_lens(ls: LogsiteServer, params: types.CodeLensParams) -> list[types.Cod
         before = project.previous_counts.get(site.id, 0)
         if is_spike(n, before, project.cfg.lint):
             title += f" $(arrow-up) {describe_trend(n, before)}"
+        timing = project.timings.get(site.id)
+        if timing is not None:
+            title += f" · p95 {format_seconds(timing.p95)}"
         cost = project.costs.get(site.id)
         if cost is not None:
             title += f" · {format_money(cost.cost_per_month, project.cfg.cost.currency)}/mo"
@@ -364,6 +384,13 @@ def hover(ls: LogsiteServer, params: types.HoverParams) -> types.Hover | None:
         parts.append(f"**logsite**: {n:,} in the last {window} (previous {window}: {before:,})")
         if is_spike(n, before, project.cfg.lint):
             parts[-1] += f", **spiked {describe_trend(n, before)}**"
+        timing = project.timings.get(site.id)
+        if timing is not None:
+            parts.append(
+                f"Took p50 {format_seconds(timing.p50)} · p95 {format_seconds(timing.p95)} · "
+                f"p99 {format_seconds(timing.p99)} · max {format_seconds(timing.max)} "
+                f"({timing.n:,} timed in {window}). What got slower: `logsite slow`"
+            )
         cost = project.costs.get(site.id)
         if cost is not None:
             approx = "≈" if cost.estimated else ""

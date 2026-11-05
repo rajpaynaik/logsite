@@ -26,7 +26,9 @@ from .latency import Timing
 from .store import Store, event_row
 
 KINDS = ("new", "regression", "spike")
-ALERT_ON = (*KINDS, "release")  # "release": a release that made errors worse (releases.py)
+# "release": a release that made errors worse (releases.py); "slow": an endpoint whose p95
+# went up (latency.py)
+ALERT_ON = (*KINDS, "release", "slow")
 BACKFILL = timedelta(hours=24)  # the first check reads this far back, and alerts on nothing
 LABELS = {"new": "new", "regression": "back", "spike": "spiking"}
 
@@ -66,6 +68,7 @@ class CheckResult:
     exported: int = 0  # events appended to the warehouse ([export])
     export_error: str | None = None
     release: str | None = None  # the release alert sent this time, as text
+    slow: str | None = None  # the slowdown alert sent this time, as text
 
 
 def alert_kind(g: ErrorGroup, watch: WatchConfig) -> str | None:
@@ -133,6 +136,7 @@ def check(
     release_sent = (
         _release_alert(cfg, store, now, send) if "release" in cfg.watch.alert_on else None
     )
+    slow_sent = _slow_alert(cfg, store, now, send) if "slow" in cfg.watch.alert_on else None
     cooldown = timedelta(minutes=cfg.watch.cooldown_minutes)
     alerts = []
     for g in summary.groups:
@@ -145,7 +149,7 @@ def check(
         alerts.append((g, kind))
     result = CheckResult(window, summary.events, stored, summary.groups, alerts,
                          exported=exported, export_error=export_error,
-                         release=release_sent)  # fmt: skip
+                         release=release_sent, slow=slow_sent)  # fmt: skip
     if not alerts:
         return result
     project = cfg.timeline.service or cfg.root.name
@@ -187,6 +191,28 @@ def _release_alert(cfg, store: Store, now: datetime, send) -> str | None:
         send(cfg.alerts.webhook, {"text": text, "release": releases.to_json(h)})
         channels.append("webhook")
     store.record_alert(releases.alert_key(h.release), h.verdict, channels, text, now)
+    return text
+
+
+def _slow_alert(cfg, store: Store, now: datetime, send) -> str | None:
+    """Post the endpoints that got slower in the last complete hour. Returns the text."""
+    from . import latency
+
+    found = latency.to_alert(store, cfg, now)
+    if found is None:
+        return None
+    slowdowns, text, slack_text = found
+    channels = []
+    if send is not None and cfg.alerts.slack_webhook:
+        send(cfg.alerts.slack_webhook, {"text": slack_text})
+        channels.append("slack")
+    if send is not None and cfg.alerts.webhook:
+        send(cfg.alerts.webhook, {"text": text, "slower": [
+            {"site": s.site or None, "endpoint": s.endpoint or None, "ratio": round(s.ratio, 2),
+             "before": s.before, "after": s.after} for s in slowdowns]})  # fmt: skip
+        channels.append("webhook")
+    for s in slowdowns:
+        store.record_alert(latency.alert_key(s), "slow", channels, text, now)
     return text
 
 

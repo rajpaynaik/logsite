@@ -72,7 +72,8 @@ selector = '{service_name="checkout"}'
 ## Watch production
 
 `logsite watch` checks your logs every 5 minutes, stores every error in your own database,
-and posts to Slack when an error is **new**, **back after a fix**, or **spiking**, or a
+and posts to Slack when an error is **new**, **back after a fix**, or **spiking**, when an
+endpoint gets [slower](https://github.com/rajpaynaik/logsite/blob/main/docs/latency.md), or a
 release made errors worse ([release health](https://github.com/rajpaynaik/logsite/blob/main/docs/releases.md)). No SDK:
 it reads the log store you already have.
 

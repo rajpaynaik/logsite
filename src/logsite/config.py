@@ -48,7 +48,7 @@ Example ``logsite.toml``::
 
     [watch]                          # logsite watch: errors to Slack, as they happen
     every = "5m"
-    alert_on = ["new", "regression", "spike", "release"]
+    alert_on = ["new", "regression", "spike", "release", "slow"]
 
     [store]                          # where logsite watch keeps every error
     url_env = "LOGSITE_DATABASE_URL"   # postgresql://...; default: a SQLite file
@@ -63,6 +63,7 @@ Example ``logsite.toml``::
     window_hours = 24                # this long, against as long before
     ratio = 2.0                      # slower: p95 this many times the window before
     min_calls = 100                  # ... over at least this many timed calls
+    alert_against_hours = 24         # watch: each hour against this many before it
 
     [cost]                           # logsite cost, $/mo in the editor
     price_per_gb = 0.50              # what your log store charges per GB ingested

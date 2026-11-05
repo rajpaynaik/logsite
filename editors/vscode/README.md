@@ -5,7 +5,7 @@ often, since when, and which log calls make up your bill.**
 
 ```java
 return restTemplate.postForObject(url + "/labels", req, LabelResponse.class);  // ⛔ IllegalStateException 400 (new) in 24h
-log.info("label created shipment={}", shipment.getId());                        // 📈 1.2M in 24h ▲ 8.0x · $42/mo
+log.info("label created shipment={}", shipment.getId());                        // 📈 1.2M in 24h ▲ 8.0x · p95 180ms · $42/mo
 log.warn("legacy rate table used for {}", carrier);                             // no logs in 24h  ← dead code?
 ```
 
@@ -86,6 +86,8 @@ MCP server and the Claude Code plugin. See the
 
 - **Production counts above every log call**: `1.2M in 24h`, with `▲ 8.0x` when a line spiked
   and `no logs in 24h` when it never runs.
+- **How long it took**: `p95 180ms` next to the count when the line carries a timing
+  (`duration_ms`, `took 1.2s`, ...); the hover shows p50, p99 and max.
 - **Cost per line**: `$/mo` next to the count once you set your price per GB.
 - **Hover** for the trend, the cost, and the last commits that changed the code around the call.
 

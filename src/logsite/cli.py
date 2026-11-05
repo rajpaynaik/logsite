@@ -1122,6 +1122,8 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
                     sent = ""
                 if result.release:
                     sent += f"; {result.release.splitlines()[0]}"
+                if result.slow:
+                    sent += f"; {result.slow.splitlines()[0]}"
                 if result.export_error:
                     sent += f"; export failed: {result.export_error}"
                 elif result.exported:

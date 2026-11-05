@@ -129,3 +129,42 @@ def test_watch_stores_an_hours_timings(tmp_path):
     assert (row["site"], row["endpoint"], row["n"]) == ("", "POST /checkout", 20)
     assert row["p50"] == pytest.approx(0.1) and row["p95"] == pytest.approx(0.19)
     assert row["max"] == pytest.approx(0.2)
+
+
+def test_watch_posts_an_hour_that_got_slower(tmp_path):
+    from logsite.config import load_config
+    from logsite.watch import _slow_alert
+
+    (tmp_path / "logsite.toml").write_text(
+        f'[store]\nurl = "sqlite:///{tmp_path / "s.db"}"\n\n[alerts]\nslack_webhook = "x"\n'
+    )
+    cfg = load_config(tmp_path)
+    store = connect(f"sqlite:///{tmp_path / 's.db'}")
+    checkout, health = ("api.py:88", "POST /checkout"), ("", "GET /health")
+    for h in range(2, 26):  # the day before: p95 200ms
+        store.write_latency(
+            NOW - timedelta(hours=h),
+            {
+                checkout: Timing(150, 0.1, 0.2, 0.3, 0.5),
+                health: Timing(150, 0.01, 0.02, 0.03, 0.05),
+            },
+        )
+    # the last hour: checkout 3x slower, health the same
+    slow, same = Timing(150, 0.3, 0.6, 0.9, 1.5), Timing(150, 0.01, 0.02, 0.03, 0.05)
+    store.write_latency(NOW - timedelta(hours=1), {checkout: slow, health: same})
+    sent = []
+    try:
+        text = _slow_alert(cfg, store, NOW + timedelta(minutes=5), lambda u, b: sent.append(b))
+        assert text.startswith(f"{tmp_path.name}: 1 endpoint got slower")
+        assert "Slower in the last hour, against the 24h before" in text
+        assert "200ms → 600ms" in text and "POST /checkout" in text and "GET /health" not in text
+        (body,) = sent
+        assert body["text"].startswith(":snail: ") and "```" in body["text"]
+        # the same hour again: judged already
+        assert _slow_alert(cfg, store, NOW + timedelta(minutes=10), sent.append) is None
+        # the next hour, still slow: within the cooldown
+        store.write_latency(NOW, {checkout: Timing(150, 0.3, 0.6, 0.9, 1.5)})
+        assert _slow_alert(cfg, store, NOW + timedelta(minutes=60), sent.append) is None
+        assert len(sent) == 1
+    finally:
+        store.close()

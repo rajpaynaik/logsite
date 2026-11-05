@@ -11,7 +11,11 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
   hour and stores p50, p95, p99 and max per log call and endpoint. `logsite slow` lists what
   got slower against the window before; `logsite release` gets a `p95 latency` row, and a
   release whose p95 doubled is degraded. See [docs/latency.md](docs/latency.md).
+- `logsite watch` posts an endpoint whose p95 doubled in the last hour, against the day
+  before (`"slow"` in `[watch] alert_on`, on by default).
 - The MCP server has a `slow_calls` tool.
+- In the editor, a log call's code lens shows its p95 next to its count, and its hover the
+  p50, p95, p99 and max (the language server, so VS Code and any LSP editor).
 - The error store's schema goes to version 2 (a `latency` table). It upgrades itself on the
   next run; `logsite db sql` prints the SQL for a DBA.
 

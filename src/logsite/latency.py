@@ -198,6 +198,7 @@ class LatencyConfig:
     window_hours: float = 24.0  # logsite slow: this long, against as long before
     ratio: float = 2.0  # slower: p95 this many times the window before
     min_calls: int = 100  # ... over at least this many timed calls in each window
+    alert_against_hours: float = 24.0  # watch: each hour against this many before it
 
     @classmethod
     def from_dict(cls, data: Mapping) -> LatencyConfig:
@@ -205,6 +206,7 @@ class LatencyConfig:
             window_hours=float(data.get("window_hours", cls.window_hours)),
             ratio=float(data.get("ratio", cls.ratio)),
             min_calls=int(data.get("min_calls", cls.min_calls)),
+            alert_against_hours=float(data.get("alert_against_hours", cls.alert_against_hours)),
         )
 
 
@@ -271,11 +273,16 @@ def slow_json(found: list[Slowdown], start, middle, end) -> dict:
     }
 
 
-def render_slow(found: list[Slowdown], pal, width: int, hours: float, releases=()) -> list[str]:
+def _span(hours: float) -> str:
+    return "hour" if hours == 1 else f"{hours:.0f}h" if hours >= 1 else f"{hours * 60:.0f} min"
+
+
+def render_slow(found: list[Slowdown], pal, width: int, hours: float, releases=(),
+                against: float | None = None) -> list[str]:  # fmt: skip
     from .report import _cut, short_place
 
-    span = f"{hours:.0f}h" if hours >= 1 else f"{hours * 60:.0f} min"
-    lines = [pal.bold(f"Slower in the last {span}, against the {span} before"), ""]
+    span, before = _span(hours), _span(against or hours)
+    lines = [pal.bold(f"Slower in the last {span}, against the {before} before"), ""]
     if not found:
         return lines + [pal.gray("Nothing got slower.")]
     head = ("#", "P95", "P99", "CALLS", "WHERE", "LOG CALL")
@@ -304,3 +311,45 @@ def render_slow(found: list[Slowdown], pal, width: int, hours: float, releases=(
         names = ", ".join(f"{r.name} ({r.at:%b %d %H:%M})" for r in releases)
         lines += ["", pal.gray(f"Released in this window: {names}")]
     return lines
+
+
+# --- watch: an alert when an endpoint gets slower -----------------------------------------
+
+
+def alert_key(s: Slowdown) -> str:
+    from .store import latency_key
+
+    return f"slow:{latency_key(s.site, s.endpoint)}"[:64]
+
+
+def to_alert(store, cfg, now: datetime) -> tuple[list[Slowdown], str, str] | None:
+    """Once per hour, the endpoints whose last complete hour was ``[latency] ratio`` times
+    slower (p95) than the ``alert_against_hours`` before it, leaving out any alerted within
+    ``[watch] cooldown_minutes``: ``(slowdowns, plain text, Slack text)``, or None."""
+    end, middle, _ = windows(now, 1)
+    if store.get_meta("latency_alerted_until") == end.isoformat():
+        return None  # this hour was judged already
+    store.set_meta("latency_alerted_until", end.isoformat())
+    start = middle - timedelta(hours=cfg.latency.alert_against_hours)
+    cooldown = timedelta(minutes=cfg.watch.cooldown_minutes)
+    found = []
+    for s in slower(store, start, middle, end, cfg.latency):
+        last = store.last_alert(alert_key(s), "slow")
+        if last is None or now - last >= cooldown:
+            found.append(s)
+    if not found:
+        return None
+    return found, alert_text(found, cfg, slack=False), alert_text(found, cfg, slack=True)
+
+
+def alert_text(found: list[Slowdown], cfg, *, slack: bool, top: int = 5) -> str:
+    from .term import Palette
+
+    project = cfg.timeline.service or cfg.root.name
+    what = f"{len(found)} endpoint{'s' * (len(found) != 1)} got slower"
+    head = f"{':snail: ' if slack else ''}{f'*{project}*' if slack else project}: {what}"
+    table = render_slow(found[:top], Palette(False), 76, 1,
+                        against=cfg.latency.alert_against_hours)  # fmt: skip
+    body = "\n".join(table).strip("\n")
+    more = "\n`logsite slow` for the rest" if len(found) > top else ""
+    return f"{head}\n```\n{body}\n```{more}" if slack else f"{head}\n\n{body}{more}"
