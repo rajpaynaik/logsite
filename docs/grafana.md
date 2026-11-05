@@ -13,7 +13,8 @@ Loki directly, so it stays live:
   variable you can change) and error lines.
 - **Cost by code line**: every log call, most expensive first, shown with its message
   (`app/api.py:88  info('request %s %s')`) and linked to that line on GitHub, GitLab or
-  Bitbucket at the current commit.
+  Bitbucket. With a release field in the records, a row is one release's log call, and its
+  message and link come from the commit that release ran (see below).
 - **Errors by code line**, compared with the same range just before; the **loudest log
   calls** over time; **recent errors**.
 
@@ -21,6 +22,22 @@ logsite works out the rest from the code and a sample of records: the deployed p
 strip (`/srv/` in `/srv/app/api.py`), the level field, and the link to the code host from
 the git remote. It needs records with file and line fields (as for `aggregate = true`).
 Message templates are baked in, so regenerate it when log calls change.
+
+**Releases and deploys.** A `file:line` can be a different log call in two releases: during a
+rolling deploy, or for a range that spans one, old and new replicas both log from
+`app/api.py:42`. When the records carry their release (`release`, `service.version`,
+`version`, `git_sha`, or the field `--revision-field` names), the dashboard:
+
+- groups every per-line panel by release first, so two calls at one `file:line` are never
+  added together;
+- shows each release's row with the message at that line in the code it ran, and links to
+  that line at its commit (a release `1.4.0` is the git ref `1.4.0` or `v1.4.0`);
+- puts the lines of any other release, or with no release, in a **Cost by code line: unknown
+  release** table, as logged, with no message or link to guess.
+
+It knows the releases in a sample of recent records (up to 10) when it's made: regenerate it
+after a release. Without a release field, messages and links are the current commit's, and
+`logsite grafana` says so; `--ref` pins every link to one commit.
 
 `logsite grafana --generic` writes a version for any project, with the selector, fields and
 code link as dashboard variables instead; it's in

@@ -18,7 +18,14 @@ from .cost import format_bytes, format_money, monthly_costs
 from .deploys import compare_deploy, resolve_deploy
 from .errors import AppFiles, error_window, summarize_errors, summary_json
 from .git import parse_target, resolve_ref, site_history, source_url
-from .grafana import LokiShape, build_dashboard, deployed_prefix, level_field
+from .grafana import (
+    LokiShape,
+    build_dashboard,
+    deployed_prefix,
+    level_field,
+    revision_field,
+    revisions,
+)
 from .index import DEFAULT_EXCLUDES, index_project
 from .leaks import KINDS, find_leaks
 from .lint import RULES, SITUATIONS, describe_trend, find_spikes, is_spike, lint_paths, lint_volume
@@ -912,9 +919,14 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
         level_field=args.level_field or level_field(sample) or "level",
         plain_text=args.level_field is None and level_field(sample) is None and bool(sample),
         prefix=deployed_prefix(sample, sites) if args.strip_prefix is None else args.strip_prefix,
+        revision_field=args.revision_field or (None if args.ref else revision_field(sample)),
     )
     url = args.source_url or source_url(cfg.root)
     ref = args.ref or resolve_ref(cfg.root, "HEAD") or "HEAD"
+    found = []
+    if shape.revision_field:  # each release's lines get the code that release ran
+        excludes = DEFAULT_EXCLUDES | set(cfg.excludes)
+        found = revisions(sample, shape.revision_field, cfg.root, excludes)
     dashboard = build_dashboard(
         sites,
         shape,
@@ -925,6 +937,7 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
         ref=ref,
         uid=args.uid,
         error_groups_url=args.error_groups,
+        revisions=found,
     )
     text = json.dumps(dashboard, indent=2) + "\n"
     if args.output:
@@ -941,6 +954,16 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
     ]
     if shape.prefix:
         notes.append(f"strips {shape.prefix!r} from deployed paths")
+    if found:
+        notes.append(f"releases from {shape.revision_field!r}: "
+                     + ", ".join(f"{r.value} ({r.sha[:8]})" for r in found))  # fmt: skip
+    elif shape.revision_field:
+        notes.append(f"no release in {shape.revision_field!r} that git knows: every line is"
+                     " in the unknown-release table")  # fmt: skip
+    else:
+        notes.append("no release field in the records: messages and links are the current"
+                     " commit's, wrong for lines from older releases (add a release field,"
+                     " or --revision-field)")  # fmt: skip
     notes.append(f"links to {url.split('/blob')[0].split('/-/')[0]}" if url else "no source links")
     where = f"; written to {args.output}" if args.output else ""
     print(f"Grafana dashboard: {'; '.join(notes)}{where}", file=sys.stderr)
@@ -1876,7 +1899,16 @@ def main(argv: list[str] | None = None) -> int:
         "--strip-prefix", help="deployed path prefix to remove, e.g. /srv/ (default: detected)"
     )
     p.add_argument("--source-url", help="link template with {ref}, {path}, {line}")
-    p.add_argument("--ref", help="git ref for source links (default: the current commit)")
+    p.add_argument(
+        "--ref",
+        help="git ref for every source link (default: each release's own"
+        " commit when the records carry a release, else the current commit)",
+    )
+    p.add_argument(
+        "--revision-field",
+        help="the field records keep their release in, as Loki's parser names it"
+        " (default: detected: release, service_version, version, git_sha ...)",
+    )
     p.add_argument(
         "--error-groups",
         metavar="URL",

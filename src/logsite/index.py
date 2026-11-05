@@ -427,6 +427,25 @@ def iter_source_files(
                 yield Path(dirpath) / name
 
 
+def index_revision(root: str | Path, sha: str,
+                   excludes: Iterable[str] = DEFAULT_EXCLUDES) -> list[LogSite]:  # fmt: skip
+    """Like :func:`index_project`, for the code at commit ``sha``, read from git without
+    checking it out: what a release that ran that commit logged from."""
+    from .git import files_at
+    from .lang import EXTENSIONS
+
+    excludes = set(excludes)
+    sites: list[LogSite] = []
+    for path, text in files_at(root, sha).items():
+        dirs = path.split("/")[:-1]
+        if any(d in excludes or d.startswith(".") for d in dirs):
+            continue
+        name = path.rsplit("/", 1)[-1]
+        if name.endswith(tuple(EXTENSIONS)) and not _TEST_FILE.search(name):
+            sites.extend(index_source(text, path))
+    return sites
+
+
 def index_project(root: str | Path, excludes: Iterable[str] = DEFAULT_EXCLUDES) -> list[LogSite]:
     """Index every Python, Java, Go and TypeScript / JavaScript file under ``root``."""
     root = Path(root).resolve()

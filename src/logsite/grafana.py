@@ -31,6 +31,61 @@ class LokiShape:
     level_field: str = "level"
     prefix: str = ""  # deployed path prefix to strip, e.g. "/srv/"
     plain_text: bool = False  # records aren't JSON / logfmt: the level is a word in the line
+    revision_field: str | None = None  # the release each record ran, as Loki's parser names it
+
+
+# Where records keep the release they ran, as store.RELEASE_FIELDS and two more
+REVISION_FIELDS = ("release", "service.version", "version", "app_version", "git_sha",
+                   "revision", "commit")  # fmt: skip
+MAX_REVISIONS = 10  # releases with their own messages and links; the rest count as unknown
+
+
+@dataclass(frozen=True)
+class Revision:
+    """A release seen in the logs, the commit it ran and that commit's log calls: a record
+    of this release at ``file:line`` came from the call at that line in this code."""
+
+    value: str  # as the records carry it, e.g. "1.4.0"
+    sha: str
+    sites: tuple[LogSite, ...]
+
+
+def revision_field(records: Iterable[LogRecord]) -> str | None:
+    """The field the records keep their release in (Loki's parser name: ``service_version``
+    for ``service.version``), or None."""
+    from .context import _keys
+
+    found: Counter[str] = Counter()
+    for r in records:
+        keys = {k for k, v in _keys(r.fields) if v not in (None, "")}
+        key = next((k for k in REVISION_FIELDS if k in keys), None)
+        if key:
+            found[key] += 1
+    return found.most_common(1)[0][0].replace(".", "_") if found else None
+
+
+def revisions(records: Iterable[LogRecord], field: str, root, excludes,
+              limit: int = MAX_REVISIONS) -> list[Revision]:  # fmt: skip
+    """The releases in ``records``' ``field`` (``service_version``), most common first,
+    that git can name (``1.4.0`` as the ref ``1.4.0`` or ``v1.4.0``), each with its code's
+    log calls. A release git can't name stays unknown: its lines have no source to show."""
+    from .context import _keys
+    from .git import resolve_ref
+    from .index import index_revision
+
+    seen: Counter[str] = Counter()
+    for r in records:
+        value = next((v for k, v in _keys(r.fields) if k.replace(".", "_") == field), None)
+        if value not in (None, "") and "`" not in str(value) and '"' not in str(value):
+            seen[str(value)] += 1
+    out = []
+    for value, _ in seen.most_common():
+        if len(out) >= limit:
+            break
+        sha = resolve_ref(root, value) or resolve_ref(root, f"v{value}")
+        if sha:
+            out.append(Revision(value, sha, tuple(index_revision(root, sha, excludes))))
+    return out
 
 
 def deployed_prefix(records: Iterable[LogRecord], sites: Iterable[LogSite]) -> str:
@@ -71,17 +126,36 @@ def _q(s: str) -> str:
 
 
 class Queries:
-    def __init__(self, shape: LokiShape) -> None:
+    def __init__(self, shape: LokiShape, revisions: Iterable[Revision] = ()) -> None:
         self.s = shape
+        self.revisions = list(revisions)
         f, line = shape.file_field, shape.line_field
         file_expr = f".{f}"
         if shape.prefix:
             file_expr = f"trimPrefix {_q(shape.prefix)} .{f}"
+        labels = (
+            f"logsite_file=`{{{{ {file_expr} }}}}`, logsite_line=`{{{{ .{line} }}}}`, "
+            f"logsite_site=`{{{{ {file_expr} }}}}:{{{{ .{line} }}}}`"
+        )
+        self.group = "logsite_site, logsite_file, logsite_line"
+        rev = shape.revision_field
+        if rev and self.revisions:
+            # the commit each release ran, chosen per record: links and messages follow it
+            ref = (
+                "".join(
+                    f"{{{{ {'if' if i == 0 else 'else if'} eq .{rev} {_q(r.value)} }}}}{r.sha}"
+                    for i, r in enumerate(self.revisions)
+                )
+                + "{{ end }}"
+            )
+            labels += (
+                f", logsite_rev=`{{{{ .{rev} }}}}`, logsite_ref=`{ref}`, "
+                f"logsite_key=`{{{{ .{rev} }}}} {{{{ {file_expr} }}}}:{{{{ .{line} }}}}`"
+            )
+            self.group = f"logsite_rev, logsite_ref, logsite_key, {self.group}"
         self.located = (
             f"{shape.selector} | {shape.parser} | __error__=`` | {f}!=`` | {line}!=`` "
-            f"| label_format logsite_file=`{{{{ {file_expr} }}}}`, "
-            f"logsite_line=`{{{{ .{line} }}}}`, "
-            f"logsite_site=`{{{{ {file_expr} }}}}:{{{{ .{line} }}}}`"
+            f"| label_format {labels}"
         )
         self.errors = (
             f"{shape.selector} |~ {_q(PLAIN_ERROR)}"
@@ -90,15 +164,20 @@ class Queries:
             f"| {shape.level_field}=~{_q(ERROR_LEVELS)}"
         )
 
-    def by_site(self, fn: str, extra: str = "") -> str:
-        return (
-            "sum by (logsite_site, logsite_file, logsite_line) "
-            f"({fn}({self.located}{extra} [$__range]))"
-        )
+    @property
+    def by_revision(self) -> bool:
+        return "logsite_rev" in self.group
 
-    def monthly_cost(self) -> str:
+    def by_site(self, fn: str, extra: str = "", known: bool | None = True) -> str:
+        """``fn`` per log call (and release, with revisions): ``known`` keeps the releases
+        with a commit, ``False`` the others (no release, or one git can't name)."""
+        if self.by_revision and known is not None:
+            extra = f" | logsite_ref{'!=' if known else '='}``{extra}"
+        return f"sum by ({self.group}) ({fn}({self.located}{extra} [$__range]))"
+
+    def monthly_cost(self, known: bool | None = True) -> str:
         return (
-            f"{self.by_site('bytes_over_time')} * {SECONDS_PER_MONTH} / $__range_s "
+            f"{self.by_site('bytes_over_time', known=known)} * {SECONDS_PER_MONTH} / $__range_s "
             f"/ 1000000000 * $price_per_gb"
         )
 
@@ -143,13 +222,18 @@ def _stat(pid: int, title: str, expr: str, unit: str, x: int, desc: str) -> dict
     }
 
 
-def _site_mappings(sites: Iterable[LogSite]) -> list[dict]:
+def _site_mappings(sites: Iterable[LogSite], revisions: Iterable[Revision] = ()) -> list[dict]:
+    """``file:line`` -> its message, or with ``revisions`` ``"<release> file:line"`` -> the
+    message at that line in that release's code."""
+    pairs = [(f"{r.value} {s.id}", s) for r in revisions for s in r.sites] or [
+        (s.id, s) for s in sites
+    ]
     options = {}
-    for s in list(sites)[:MAX_MAPPINGS]:
-        template = s.template.replace("\n", " ")
+    for key, s in pairs[:MAX_MAPPINGS]:
+        template = (s.template or "").replace("\n", " ")
         if len(template) > 90:
             template = template[:89] + "…"
-        options[s.id] = {"text": f"{s.id}  {s.level}({template!r})"}
+        options[key] = {"text": f"{s.id}  {s.level}({template!r})"}
     return [{"type": "value", "options": options}] if options else []
 
 
@@ -171,6 +255,8 @@ def _renamed(name: str, title: str, unit: str | None = None) -> dict:
 
 
 def _site_link(source_url: str | None, ref: str) -> list[dict]:
+    """The link to a row's log call at ``ref``: a commit, or ``${__data.fields.logsite_ref}``
+    for the commit of the row's own release."""
     if not source_url:
         return []
     url = source_url.format(
@@ -400,6 +486,55 @@ BUILTIN_ANNOTATIONS = {
 }
 
 
+def unknown_revision_panel(pid: int, y: int, q: Queries, unit: str, known: list[str]) -> dict:
+    """Cost of the lines whose release isn't one the dashboard knows the code of: no release
+    field, or a release made after the dashboard (or one git can't name). Their ``file:line``
+    may be a different call in today's code, so they get no message and no link."""
+    return {
+        "id": pid,
+        "type": "table",
+        "title": "Cost by code line: unknown release",
+        "description": (
+            "Lines with no release, or a release this dashboard doesn't know the code of "
+            f"(it knows {', '.join(known)}). Their file:line may be another call in today's "
+            "code, so they're shown as logged, without a message or link. Regenerate the "
+            "dashboard to give a new release its own rows."
+        ),
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": y},
+        "datasource": {"type": "loki", "uid": "${datasource}"},
+        "targets": [
+            _target("cost", q.monthly_cost(known=False)),
+            _target("bytes", q.by_site("bytes_over_time", known=False)),
+            _target("lines", q.by_site("count_over_time", known=False)),
+        ],
+        "transformations": [
+            {"id": "merge", "options": {}},
+            {"id": "sortBy", "options": {"sort": [{"field": "Value #cost", "desc": True}]}},
+        ],
+        "fieldConfig": {
+            "defaults": {"custom": {"align": "auto"}},
+            "overrides": [
+                {
+                    "matcher": {"id": "byName", "options": "logsite_rev"},
+                    "properties": [
+                        {"id": "displayName", "value": "Release"},
+                        {
+                            "id": "mappings",
+                            "value": [{"type": "value", "options": {"": {"text": "(none)"}}}],
+                        },
+                    ],
+                },  # fmt: skip
+                _renamed("logsite_site", "File:line (as logged)"),
+                *_hidden("logsite_key", "logsite_file", "logsite_line", "logsite_ref", "Time"),
+                _renamed("Value #cost", "Est. / month", unit),
+                _renamed("Value #bytes", "Volume in range", "decbytes"),
+                _renamed("Value #lines", "Lines in range", "short"),
+            ],
+        },
+        "options": {"showHeader": True, "footer": {"show": False}},
+    }
+
+
 def build_dashboard(
     sites: Iterable[LogSite],
     shape: LokiShape,
@@ -412,25 +547,40 @@ def build_dashboard(
     uid: str | None = None,
     generic: bool = False,
     error_groups_url: str | None = None,
+    revisions: Iterable[Revision] = (),
 ) -> dict:
     """The dashboard for ``sites``, or with ``generic`` one for any project, whose shape and
-    code links are dashboard variables (``shape`` and ``source_url`` are then ignored)."""
+    code links are dashboard variables (``shape`` and ``source_url`` are then ignored).
+
+    With ``revisions`` (and ``shape.revision_field``), each row is a release's log call: its
+    message and link come from the code that release ran, not from ``ref``, so a range that
+    spans a deploy shows each release's own call at a ``file:line``. Lines of releases not
+    in ``revisions`` get a table of their own, without messages or links."""
     sites = list(sites)
     if generic:
-        shape, sites = GENERIC_SHAPE, []
+        shape, sites, revisions = GENERIC_SHAPE, [], ()
         source_url = "${{repo_url}}/{path}#L{line}"
-    q = Queries(shape)
+    revisions = list(revisions)
+    q = Queries(shape, revisions)
     unit = "currencyUSD" if currency == "$" else f"prefix:{currency}"
-    link = _site_link(source_url, ref)
+    if q.by_revision:
+        link = _site_link(source_url, "${__data.fields.logsite_ref}")
+        call, mappings = "logsite_key", _site_mappings(sites, revisions)
+        plumbing = ("logsite_site", "logsite_file", "logsite_line", "logsite_ref", "Time")
+    else:
+        link = _site_link(source_url, ref)
+        call, mappings = "logsite_site", _site_mappings(sites)
+        plumbing = ("logsite_file", "logsite_line", "Time")
     site_column = {
-        "matcher": {"id": "byName", "options": "logsite_site"},
+        "matcher": {"id": "byName", "options": call},
         "properties": [
             {"id": "displayName", "value": "Log call"},
-            {"id": "mappings", "value": _site_mappings(sites)},
+            {"id": "mappings", "value": mappings},
             {"id": "custom.width", "value": 560},
             *([{"id": "links", "value": link}] if link else []),
         ],
     }
+    release_column = [_renamed("logsite_rev", "Release")] if q.by_revision else []
     sel = shape.selector
 
     panels = [
@@ -471,9 +621,17 @@ def build_dashboard(
             "id": 5,
             "type": "table",
             "title": "Cost by code line",
-            "description": "Every log call by what it writes, most expensive first. Click a "
-            "row's log call to open it in the code. Generated by logsite from the code: "
-            "regenerate after big changes so new log calls show their message.",
+            "description": (
+                "Every log call of every release by what it writes, most expensive first. A "
+                "row's message and link come from the code that release ran, so a range "
+                "across a deploy shows each release's own call. Releases logsite didn't see "
+                "when it made this dashboard are in the table below: regenerate it after a "
+                "release."
+                if q.by_revision
+                else "Every log call by what it writes, most expensive first. Click a "
+                "row's log call to open it in the code. Generated by logsite from the code: "
+                "regenerate after big changes so new log calls show their message."
+            ),
             "gridPos": {"h": 12, "w": 24, "x": 0, "y": 4},
             "datasource": {"type": "loki", "uid": "${datasource}"},
             "targets": [
@@ -489,7 +647,8 @@ def build_dashboard(
                 "defaults": {"custom": {"align": "auto"}},
                 "overrides": [
                     site_column,
-                    *_hidden("logsite_file", "logsite_line", "Time"),
+                    *release_column,
+                    *_hidden(*plumbing),
                     _renamed("Value #cost", "Est. / month", unit),
                     _renamed("Value #bytes", "Volume in range", "decbytes"),
                     _renamed("Value #lines", "Lines in range", "short"),
@@ -531,7 +690,8 @@ def build_dashboard(
                             for p in site_column["properties"]
                         ],
                     },  # fmt: skip
-                    *_hidden("logsite_file", "logsite_line", "Time"),
+                    *release_column,
+                    *_hidden(*plumbing),
                     _renamed("Value #now", "Errors in range", "short"),
                     _renamed("Value #before", "Range before", "short"),
                 ],
@@ -548,9 +708,12 @@ def build_dashboard(
             "targets": [
                 _target(
                     "A",
-                    f"topk(10, sum by (logsite_site) (bytes_rate({q.located} [$__auto])))",
+                    f"topk(10, sum by ({'logsite_rev, ' if q.by_revision else ''}logsite_site) "
+                    f"(bytes_rate({q.located} [$__auto])))",
                     instant=False,
-                    legend="{{logsite_site}}",
+                    legend="{{logsite_rev}} {{logsite_site}}"
+                    if q.by_revision
+                    else "{{logsite_site}}",
                 )
             ],
             "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
@@ -566,6 +729,12 @@ def build_dashboard(
             "options": {"showTime": True, "wrapLogMessage": True, "sortOrder": "Descending"},
         },
     ]
+
+    if q.by_revision:  # the lines no known release's code can explain, apart
+        for panel in panels:
+            if panel["gridPos"]["y"] >= 16:
+                panel["gridPos"]["y"] += 8
+        panels.insert(5, unknown_revision_panel(11, 16, q, unit, [r.value for r in revisions]))
 
     price = {
         "name": "price_per_gb",

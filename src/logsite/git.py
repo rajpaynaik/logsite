@@ -72,6 +72,44 @@ def parse_log(output: str) -> list[Commit]:
     return commits
 
 
+def files_at(root: str | Path, sha: str) -> dict[str, str]:
+    """Every text file in commit ``sha``, by path, read in one ``git cat-file --batch``."""
+    listing = _git(root, "ls-tree", "-r", "-z", sha)  # "<mode> blob <object>\t<path>"
+    if not listing:
+        return {}
+    objects = []
+    for entry in listing.split("\0"):
+        meta, _, path = entry.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3 and parts[1] == "blob":
+            objects.append((parts[2], path))
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "--batch"],
+            input="".join(f"{obj}\n" for obj, _ in objects).encode(),
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    out, data, pos = {}, proc.stdout, 0
+    for _obj, path in objects:
+        end = data.index(b"\n", pos)
+        header = data[pos:end].split()
+        if len(header) < 3:  # "<obj> missing"
+            pos = end + 1
+            continue
+        size = int(header[2])
+        blob = data[end + 1 : end + 1 + size]
+        pos = end + 1 + size + 1  # the blob, then a newline
+        try:
+            out[path] = blob.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return out
+
+
 def _git(root: str | Path, *args: str) -> str | None:
     """stdout of ``git -C root <args>``, or None if git is missing or the command fails."""
     try:

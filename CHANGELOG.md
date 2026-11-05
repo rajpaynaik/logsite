@@ -16,6 +16,12 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 - The MCP server has a `slow_calls` tool.
 - In the editor, a log call's code lens shows its p95 next to its count, and its hover the
   p50, p95, p99 and max (the language server, so VS Code and any LSP editor).
+- **The cost dashboard follows releases.** `logsite grafana` reads the release records carry
+  (`release`, `service.version`, `version`, `git_sha`, or `--revision-field`) and groups
+  every per-line panel by it. Each release's row shows the message at that `file:line` in the
+  code it ran, and links to it at that commit, so a range across a deploy no longer shows an
+  old release's line as today's call. Lines of other releases, or none, get their own table
+  without a message or link.
 - The error store's schema goes to version 2 (a `latency` table). It upgrades itself on the
   next run; `logsite db sql` prints the SQL for a DBA.
 
