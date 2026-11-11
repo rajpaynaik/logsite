@@ -240,6 +240,14 @@ def render_text(e: Explanation) -> str:
     return "\n".join(lines)
 
 
+def render_slack(e: Explanation) -> str:
+    """The same for Slack: a headline, the details in a code block, the run's link."""
+    title = e.causes[0].group.title if len(e.causes) == 1 else f"{len(e.causes)} causes"
+    link = f" · <{e.run_url}|open the run>" if e.run_url else ""
+    body = render_text(e).split("\n", 1)[1].strip("\n") if e.causes else "no error to read"
+    return f":red_circle: *{e.job}* failed: {title}{link}\n```\n{body}\n```"
+
+
 _STYLE = """<meta charset="utf-8"><style>
 .ls{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:900px}
 .ls h2{font-size:20px;margin:4px 0 12px}.ls h3{font-size:16px;margin:18px 0 6px}

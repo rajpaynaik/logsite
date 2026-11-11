@@ -13,6 +13,9 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
   tasks and the commit. It signs in as the job's own identity: no token. With a history table
   it says whether a cause is new for the job and which runs failed the same way, and keeps
   every failure for SQL. See [docs/databricks.md](docs/databricks.md).
+- **A Databricks job's failure, in seconds.** `logsite alert-server` takes a job's failure
+  webhook at `/databricks`, explains the run and posts it to Slack, instead of waiting for
+  `logsite watch`'s next check.
 - **Databricks for platform teams.** `type = "databricks"` reads failed job runs through the Jobs API: each
   failed task's error and stack trace, the job and task, a link to the run, and the commit it
   ran. They're grouped like any errors and mapped to your repository, from Git folders

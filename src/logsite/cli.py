@@ -971,6 +971,22 @@ def cmd_grafana(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def _databricks_explainer(cfg: Config):
+    """``run id -> (text, Slack text)`` with the ``[backend]``'s workspace, or None."""
+    if cfg.backend.get("type") != "databricks":
+        return None
+    from . import databricks
+    from .backends.databricks import Api
+
+    api = Api(cfg.backend.get("host") or "", cfg.backend.get("token"))
+
+    def explain(run_id: int) -> tuple[str, str]:
+        e = databricks.explain_run(api, run_id)
+        return databricks.render_text(e), databricks.render_slack(e)
+
+    return explain
+
+
 def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
     import time
 
@@ -1035,6 +1051,7 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         trace_field=cfg.timeline.field_name,
         send=dry_run if args.dry_run else post_json,
         events=history_events if cfg.history.enabled else None,
+        explain_run=_databricks_explainer(cfg),
     )
     server = make_server(args.host, args.port, enricher, token)
     host, port = server.server_address[:2]
@@ -1044,6 +1061,12 @@ def cmd_alert_server(args: argparse.Namespace, cfg: Config) -> int:
         "  Grafana: Alerting → Contact points → Webhook, "
         f"URL http://<this host>:{port}/grafana/alert"
         + (", Authorization header: Bearer <your token>" if token else "")
+        + (
+            f"\n  Databricks: a job's failure webhook, URL http://<this host>:{port}/databricks"
+            + ("?token=<your token>" if token else "")
+            if enricher.explain_run
+            else ""
+        )
         + f"\n  sends to: {', '.join(targets) or 'nobody (returns the summary only)'}"
         + (" (dry run: printed, not sent)" if args.dry_run else ""),
         file=sys.stderr,

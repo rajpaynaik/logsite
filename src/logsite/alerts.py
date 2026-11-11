@@ -439,8 +439,10 @@ class Enricher:
 
     def __init__(self, cfg: AlertsConfig, summarize, *, code_line=None, code_url=None,
                  trace_field: str = "trace_id", send=post_json, now=None,
-                 events=None) -> None:  # fmt: skip
+                 events=None, explain_run=None) -> None:  # fmt: skip
         self.cfg = cfg
+        # run id -> (text, Slack text): a failed Databricks job run, explained (databricks.py)
+        self.explain_run = explain_run
         self.events = events  # (start, end) -> history events, for Grafana annotations
         self.summarize = summarize
         self.code_line, self.code_url = code_line, code_url
@@ -516,6 +518,26 @@ class Enricher:
             )
         return results
 
+    def handle_databricks(self, payload: Mapping[str, Any]) -> dict:
+        """A Databricks job's failure notification (a webhook destination): explain the run
+        and send it. Other events (a run that started, or succeeded) are skipped."""
+        event = str(payload.get("event_type") or "")
+        run = payload.get("run") if isinstance(payload.get("run"), dict) else {}
+        run_id = run.get("run_id")
+        if event != "jobs.on_failure" or not str(run_id or "").isdigit():
+            return {"event": event, "skipped": True}
+        if self.explain_run is None:
+            raise ValueError('set [backend] type = "databricks" to explain Databricks runs')
+        text, slack_text = self.explain_run(int(run_id))
+        sent = []
+        if self.cfg.slack_webhook:
+            self.send(self.cfg.slack_webhook, {"text": slack_text})
+            sent.append("slack")
+        if self.cfg.webhook:
+            self.send(self.cfg.webhook, {"event": event, "run_id": int(run_id), "text": text})
+            sent.append("webhook")
+        return {"event": event, "run_id": int(run_id), "sent": sent, "text": text}
+
     def _same_cause(self, alert: Alert, summary: dict) -> dict | None:
         """The earlier message about this alert's cause, if it's recent; else remember this
         one as the first. One incident firing ten alerts sends one report."""
@@ -586,7 +608,8 @@ def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> 
                 self._reply(502, {"error": f"couldn't query the backend: {exc}"})
 
         def do_POST(self):  # noqa: N802
-            if urlparse(self.path).path not in ("/grafana/alert", "/alert"):
+            path = urlparse(self.path).path
+            if path not in ("/grafana/alert", "/alert", "/databricks"):
                 return self._reply(404, {"error": "not found"})
             if not self._authorized():
                 return self._reply(401, {"error": "missing or wrong token"})
@@ -597,6 +620,14 @@ def make_server(host: str, port: int, enricher: Enricher, token: str | None) -> 
                 payload = json.loads(self.rfile.read(length) or b"{}")
             except json.JSONDecodeError:
                 return self._reply(400, {"error": "body is not JSON"})
+            if path == "/databricks":
+                try:
+                    return self._reply(200, enricher.handle_databricks(payload))
+                except ValueError as exc:
+                    return self._reply(400, {"error": str(exc)})
+                except Exception as exc:
+                    log.exception("couldn't explain the Databricks run")
+                    return self._reply(502, {"error": f"couldn't explain the run: {exc}"})
             try:
                 results = enricher.handle(payload)
             except Exception as exc:

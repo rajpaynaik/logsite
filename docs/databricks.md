@@ -1,4 +1,4 @@
-# Databricks
+# Databricks (beta)
 
 When a Databricks job fails, logsite shows why on the failed run's page in Databricks: the
 cause, the line of your code that raised it, the tasks it failed and the commit. No command
@@ -109,7 +109,25 @@ jobs = ["nightly-etl", "orders-sync"]    # optional: leave out to watch every jo
 
 See [Watch production](watch.md) for where to run it.
 
+### In seconds: a job's failure webhook
+
+`logsite watch` hears about a failure at its next check. For seconds instead, let Databricks
+call logsite when a job fails:
+
+1. Run `logsite alert-server` with the Databricks `[backend]` above and a Slack webhook in
+   `[alerts]`, somewhere Databricks can reach over HTTPS. Set a token
+   (`[alerts] token_env`).
+2. In Databricks: **Settings → Notifications → Notification destinations → Add**, type
+   **Webhook**, URL `https://<your alert-server>/databricks?token=<your token>`.
+3. In each job: **Job notifications → Add → On failure →** that destination.
+
+When the job fails, logsite explains the run as the logsite task does, and posts it to Slack
+(or `[alerts] webhook`). Other events, such as a run starting, are ignored.
+
 ## Not yet
 
+- **Beta.** The notebooks and the failure webhook are tested against the Jobs API's
+  documented shapes, not yet in a live workspace. Tell us in
+  [Discussions](https://github.com/rajpaynaik/logsite/discussions) if a step doesn't match.
 - A ready-made dashboard to import. The queries above are the start of one.
 - Errors that don't fail a job, in driver or executor logs.

@@ -168,3 +168,43 @@ def test_the_notebooks_are_python_and_use_what_exists(name):
             module = __import__(node.module, fromlist=["x"])
             for alias in node.names:
                 assert hasattr(module, alias.name), f"{node.module}.{alias.name}"
+
+
+def test_a_failure_webhook_reaches_slack_in_seconds():
+    """A job's failure notification (a webhook destination) at alert-server's /databricks."""
+    import threading
+
+    from test_alerts import call
+
+    from logsite.alerts import AlertsConfig, Enricher, make_server
+
+    sent = []
+
+    def explain(run_id):
+        e = dbx.explain_run(FakeApi(API), run_id)
+        return dbx.render_text(e), dbx.render_slack(e)
+
+    cfg = AlertsConfig(slack_webhook="https://hooks.slack.example/x")
+    enricher = Enricher(cfg, None, send=lambda url, body: sent.append(body), explain_run=explain)
+    srv = make_server("127.0.0.1", 0, enricher, token="t0ken")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/databricks"
+    job = {"job_id": "11", "name": "nightly-etl"}
+    failure = {"event_type": "jobs.on_failure", "workspace_id": "123",
+               "run": {"run_id": "900"}, "job": job}  # fmt: skip
+    try:
+        assert call(url, failure)[0] == 401  # the token, as for Grafana's alerts
+        status, body = call(url, failure, token="t0ken")
+        assert status == 200 and body["sent"] == ["slack"] and body["run_id"] == 900
+        (slack,) = sent
+        assert slack["text"].startswith(":red_circle: *nightly-etl* failed: 2 causes")
+        assert "<https://dbx.example/#job/11/run/900|open the run>" in slack["text"]
+        assert "raised at   src/udfs.py:3  in parse" in slack["text"]
+        started = {**failure, "event_type": "jobs.on_start"}
+        assert call(url, started, token="t0ken")[1]["skipped"] is True
+        assert len(sent) == 1
+        enricher.explain_run = None  # no [backend] type = "databricks"
+        status, body = call(url, failure, token="t0ken")
+        assert status == 400 and 'type = "databricks"' in body["error"]
+    finally:
+        srv.shutdown()
