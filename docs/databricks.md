@@ -1,5 +1,7 @@
 # Databricks (beta)
 
+![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=for-the-badge&logo=databricks&logoColor=white)
+
 When a Databricks job fails, logsite shows why on the failed run's page in Databricks: the
 cause, the line of your code that raised it, the tasks it failed and the commit. No command
 line, no server, no token.

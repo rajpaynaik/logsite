@@ -7,14 +7,41 @@
 
 **Your logs say something broke. logsite tells you which line of your code, and writes a test that proves it.**
 
-It reads the logs you already have (a file, Loki, OpenSearch, CloudWatch, Sentry,
-OpenTelemetry, or failed Databricks jobs), groups thousands of stack traces into a few causes,
-and points each one at your line of code. No SDK, nothing to add to your services. Works with Python, Java, Go,
-TypeScript and JavaScript.
+It reads the logs you already have, and failed Databricks jobs, groups thousands of stack
+traces into a few causes, and points each one at your line of code. No SDK, nothing to add to
+your services.
 
 ```bash
 pip install logsite
 ```
+
+## Works with
+
+**Reads errors from**
+
+[![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md)
+[![Loki](https://img.shields.io/badge/Loki-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
+[![OpenSearch](https://img.shields.io/badge/OpenSearch-005EB8?style=for-the-badge&logo=opensearch&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
+[![CloudWatch](https://img.shields.io/badge/CloudWatch-FF4F8B?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
+[![Sentry](https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/sentry.md)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-425CC7?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/opentelemetry.md)
+
+**Shows them in**
+
+[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
+[![VS Code](https://img.shields.io/badge/VS%20Code-007ACC?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/vscode.md)
+[![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
+[![Slack](https://img.shields.io/badge/Slack-4A154B?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md)
+
+**In code written in**
+
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
+[![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
+[![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
+[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
 
 ## Try it
 
@@ -64,10 +91,22 @@ To read from your log store, add a `logsite.toml`:
 
 ```toml
 [backend]
-type = "loki"                        # or "opensearch", "cloudwatch", "sentry", "file"
+type = "loki"                        # or "opensearch", "cloudwatch", "sentry", "databricks", "file"
 url = "http://localhost:3100"
 selector = '{service_name="checkout"}'
 ```
+
+## Databricks
+
+[![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md)
+
+When a Databricks job fails, the failed run explains itself, right in Databricks: the cause,
+the line of your code that raised it, the tasks it failed and the commit. Spark's
+`Py4JJavaError` is unwrapped to the real error in your UDF.
+
+No command line, no server, no token: import two notebooks, tick your jobs, **Run all**.
+Platform teams can watch every job from outside instead, with Slack alerts in seconds. See
+[Databricks](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md) (beta).
 
 ## Watch production
 
