@@ -45,7 +45,8 @@ To read straight from your log store instead, run:
 logsite init
 ```
 
-It asks where your logs are (Loki, OpenSearch, CloudWatch, Sentry or a file), tests the
+It asks where your logs are (Loki, OpenSearch, CloudWatch, Sentry, Databricks or a file),
+tests the
 connection, and saves the answer in `logsite.toml`. After that, `logsite errors` reads the
 last 24 hours on its own.
 

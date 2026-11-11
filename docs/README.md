@@ -55,7 +55,8 @@ comes from. No SDK, nothing to add to your services.
 ## Your log store
 
 logsite reads a log file, [Loki](configuration.md), OpenSearch, CloudWatch,
-[Sentry](sentry.md) and [OpenTelemetry](opentelemetry.md), in
+[Sentry](sentry.md), [OpenTelemetry](opentelemetry.md) and failed
+[Databricks](databricks.md) jobs, in
 [Python, Java, Go, TypeScript and JavaScript](languages.md).
 
 ## Reference

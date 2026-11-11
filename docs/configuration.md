@@ -97,6 +97,14 @@ token_env = "SENTRY_AUTH_TOKEN"
 ```
 
 ```toml
+[backend]
+type = "databricks"                  # failed job runs; see docs/databricks.md
+host = "https://adb-1234567890123456.7.azuredatabricks.net"
+token_env = "DATABRICKS_TOKEN"       # Can View on the jobs
+# jobs = ["nightly-etl"]             # only these jobs; default every job
+```
+
+```toml
 [history]                           # the history store: see docs/history.md
 enabled = true
 # path = "/var/lib/logsite/history.db"   # default: ~/.local/share/logsite/history/

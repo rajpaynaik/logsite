@@ -68,6 +68,11 @@ BACKENDS: dict[str, dict] = {
     "file": {"label": "A log file (or OpenTelemetry export)", "fields": [
         ("path", "Path to the log file", "text", True, "/var/log/app/app.log"),
     ]},
+    "databricks": {"label": "Databricks (failed job runs)", "fields": [
+        ("host", "Workspace URL", "text", True, "https://adb-1234567890123456.7.azuredatabricks.net"),
+        ("token", "Access token (Can View on the jobs)", "secret", True, ""),
+        ("jobs", "Only these jobs (comma-separated)", "text", False, "nightly-etl, orders-sync"),
+    ]},
 }  # fmt: skip
 
 

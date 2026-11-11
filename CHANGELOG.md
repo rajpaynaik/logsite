@@ -4,8 +4,16 @@ logsite follows [semantic versioning](https://semver.org). Before 1.0, a minor v
 (0.x.0) can change commands, config or JSON output; a patch version (0.x.y) doesn't.
 The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
-## 0.9.0 (2026-11-04)
+## 0.9.0 (2026-11-10)
 
+- **Databricks.** `type = "databricks"` reads failed job runs through the Jobs API: each
+  failed task's error and stack trace, the job and task, a link to the run, and the commit it
+  ran. They're grouped like any errors and mapped to your repository, from Git folders
+  (`/Workspace/Repos/...`) and asset bundles alike, so `logsite errors`, `watch` (with Slack),
+  `release` and the MCP server work on Databricks jobs. `logsite init` and `logsite app` offer
+  it. See [docs/databricks.md](docs/databricks.md).
+- Spark's `Py4JJavaError` is a wrapper now: an executor's error nested in it (a failed UDF)
+  is the cause, raised at the UDF's line, not at the driver's `saveAsTable`.
 - **Latency from logs.** `logsite watch` reads the timings log lines already carry
   (`duration_ms`, `"took": "1.2s"`, `completed in 120ms`, nginx's `request_time`...) once an
   hour and stores p50, p95, p99 and max per log call and endpoint. `logsite slow` lists what

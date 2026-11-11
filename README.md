@@ -7,9 +7,9 @@
 
 **Your logs say something broke. logsite tells you which line of your code, and writes a test that proves it.**
 
-It reads the logs you already have (a file, Loki, OpenSearch, CloudWatch, Sentry or
-OpenTelemetry), groups thousands of stack traces into a few causes, and points each one at
-your line of code. No SDK, nothing to add to your services. Works with Python, Java, Go,
+It reads the logs you already have (a file, Loki, OpenSearch, CloudWatch, Sentry,
+OpenTelemetry, or failed Databricks jobs), groups thousands of stack traces into a few causes,
+and points each one at your line of code. No SDK, nothing to add to your services. Works with Python, Java, Go,
 TypeScript and JavaScript.
 
 ```bash

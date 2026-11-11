@@ -1,5 +1,6 @@
 from .base import LogBackend, TimeRange, parse_line
 from .cloudwatch import CloudWatchBackend
+from .databricks import DatabricksBackend
 from .file import FileBackend
 from .loki import LokiBackend
 from .opensearch import OpenSearchBackend
@@ -7,6 +8,7 @@ from .sentry import SentryBackend
 
 __all__ = [
     "CloudWatchBackend",
+    "DatabricksBackend",
     "FileBackend",
     "LogBackend",
     "LokiBackend",
@@ -76,7 +78,16 @@ def _build(kind: str, cfg: dict) -> LogBackend:
             cfg.get("token"),
             url=cfg.get("url", "https://sentry.io"),
         )
+    if kind == "databricks":
+        jobs = cfg.get("jobs")
+        return DatabricksBackend(
+            cfg["host"],
+            cfg.get("token"),
+            jobs=[j.strip() for j in jobs.split(",") if j.strip()]
+            if isinstance(jobs, str)
+            else jobs,
+        )
     raise ValueError(
         f"unknown backend type: {kind!r} (supported: file, loki, opensearch, elasticsearch, "
-        "cloudwatch, sentry)"
+        "cloudwatch, sentry, databricks)"
     )

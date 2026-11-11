@@ -168,10 +168,15 @@ def parse_traceback(text: str) -> list[Exc]:
         line = raw.rstrip()
         stripped = line.strip()
         if stripped.endswith((TRACEBACK_START, TRACEBACK_HEAD)):
+            # A traceback inside the last exception's message (Spark's "Py4JJavaError: ...
+            # PythonException: Traceback ..." from an executor) is that exception's cause:
+            # Python prints a cause first, Spark nests it after.
+            nested = (stripped != TRACEBACK_START and stripped.endswith(TRACEBACK_START)
+                      and chain and chain[-1].type and done)  # fmt: skip
             current, done = Exc(type=""), False
             ipython = not stripped.endswith(":")
             indent = line[: len(line) - len(line.lstrip())]
-            chain.append(current)
+            chain.insert(len(chain) - 1, current) if nested else chain.append(current)
             continue
         if current is None or done:
             if current and stripped.startswith(_DJANGO_VALUE) and not current.message:

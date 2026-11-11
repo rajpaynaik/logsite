@@ -36,6 +36,7 @@ WRAPPERS = {
     "InvocationTargetException", "ExecutionException", "CompletionException",
     "UncheckedExecutionException", "NestedServletException", "ExceptionInInitializerError",
     "UncheckedIOException",
+    "Py4JJavaError",  # PySpark: "the JVM side failed"; the cause is the Spark or UDF error
 }  # fmt: skip
 _JDK_INTERNALS = ("sun.", "jdk.", "com.sun.")
 # "2026-10-14 10:00:05,123 ERROR " at the start of a plain-text line: noise in a title.
