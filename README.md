@@ -17,31 +17,14 @@ pip install logsite
 
 ## Works with
 
-**Reads errors from**
+**Reads errors from**<br>
+<img src="https://cdn.simpleicons.org/databricks/FF3621" height="18" alt="">&nbsp;[Databricks](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/grafana/F46800" height="18" alt="">&nbsp;[Loki](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/opensearch/2D86D9" height="18" alt="">&nbsp;[OpenSearch](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) &nbsp;&nbsp; <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/amazonwebservices/amazonwebservices-plain-wordmark.svg" height="18" alt="">&nbsp;[CloudWatch](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/sentry/7E6AD9" height="18" alt="">&nbsp;[Sentry](https://github.com/rajpaynaik/logsite/blob/main/docs/sentry.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/opentelemetry/F5A800" height="18" alt="">&nbsp;[OpenTelemetry](https://github.com/rajpaynaik/logsite/blob/main/docs/opentelemetry.md)
 
-[![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md)
-[![Loki](https://img.shields.io/badge/Loki-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
-[![OpenSearch](https://img.shields.io/badge/OpenSearch-005EB8?style=for-the-badge&logo=opensearch&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
-[![CloudWatch](https://img.shields.io/badge/CloudWatch-FF4F8B?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/configuration.md)
-[![Sentry](https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/sentry.md)
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-425CC7?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/opentelemetry.md)
+**Shows them in**<br>
+<img src="https://cdn.simpleicons.org/grafana/F46800" height="18" alt="">&nbsp;[Grafana](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md) &nbsp;&nbsp; <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/vscode/vscode-original.svg" height="18" alt="">&nbsp;[VS Code](https://github.com/rajpaynaik/logsite/blob/main/docs/vscode.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/claude/D97757" height="18" alt="">&nbsp;[Claude](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md) &nbsp;&nbsp; <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/slack/slack-original.svg" height="18" alt="">&nbsp;[Slack](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/githubactions/2088FF" height="18" alt="">&nbsp;[GitHub Actions](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/kubernetes/326CE5" height="18" alt="">&nbsp;[Kubernetes](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md)
 
-**Shows them in**
-
-[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/grafana.md)
-[![VS Code](https://img.shields.io/badge/VS%20Code-007ACC?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/vscode.md)
-[![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/mcp.md)
-[![Slack](https://img.shields.io/badge/Slack-4A154B?style=for-the-badge)](https://github.com/rajpaynaik/logsite/blob/main/docs/watch.md)
-[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/github-action.md)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/kubernetes.md)
-
-**In code written in**
-
-[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
-[![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
-[![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
-[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
+**In code written in**<br>
+<img src="https://cdn.simpleicons.org/python/3776AB" height="18" alt="">&nbsp;[Python](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/openjdk/ED8B00" height="18" alt="">&nbsp;[Java](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/go/00ADD8" height="18" alt="">&nbsp;[Go](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/typescript/3178C6" height="18" alt="">&nbsp;[TypeScript](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md) &nbsp;&nbsp; <img src="https://cdn.simpleicons.org/javascript/F0DB4F" height="18" alt="">&nbsp;[JavaScript](https://github.com/rajpaynaik/logsite/blob/main/docs/languages.md)
 
 ## Try it
 
@@ -98,7 +81,7 @@ selector = '{service_name="checkout"}'
 
 ## Databricks
 
-[![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/rajpaynaik/logsite/blob/main/docs/databricks.md)
+<img src="https://cdn.simpleicons.org/databricks/FF3621" height="40" alt="Databricks">
 
 When a Databricks job fails, the failed run explains itself, right in Databricks: the cause,
 the line of your code that raised it, the tasks it failed and the commit. Spark's
