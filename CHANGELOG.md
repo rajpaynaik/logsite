@@ -6,7 +6,14 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## 0.9.0 (2026-11-10)
 
-- **Databricks.** `type = "databricks"` reads failed job runs through the Jobs API: each
+- **Databricks, without a command line.** Two notebooks to import
+  (`integrations/databricks`): in `logsite_setup`, tick the jobs and Run all. Each gets a
+  `logsite` task that runs only when another task failed, and shows on the run's page why:
+  each cause with the line of your code (from the trace's workspace paths), the code, the
+  tasks and the commit. It signs in as the job's own identity: no token. With a history table
+  it says whether a cause is new for the job and which runs failed the same way, and keeps
+  every failure for SQL. See [docs/databricks.md](docs/databricks.md).
+- **Databricks for platform teams.** `type = "databricks"` reads failed job runs through the Jobs API: each
   failed task's error and stack trace, the job and task, a link to the run, and the commit it
   ran. They're grouped like any errors and mapped to your repository, from Git folders
   (`/Workspace/Repos/...`) and asset bundles alike, so `logsite errors`, `watch` (with Slack),

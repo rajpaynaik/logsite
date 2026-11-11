@@ -32,27 +32,64 @@ PAGE = 25  # runs per request: the Jobs API's limit
 LONGEST_RUN = timedelta(days=2)  # runs that started this long before a window can end in it
 
 
-class DatabricksBackend(LogBackend):
-    name = "databricks"
+class Api:
+    """The workspace's REST API with a token: ``get(path, **params)`` and ``post(path, body)``."""
 
-    def __init__(self, host: str, token: str | None, jobs: list[str] | None = None,
-                 timeout: float = 30.0) -> None:  # fmt: skip
+    def __init__(self, host: str, token: str | None, timeout: float = 30.0) -> None:
         if not token:
             raise ValueError(
                 "the databricks backend needs a token: set token_env, e.g. DATABRICKS_TOKEN"
             )
         host = host.strip().rstrip("/")
         self.host = host if host.startswith("http") else f"https://{host}"
-        self.jobs = list(jobs or [])
         self.timeout = timeout
         self.headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
-        self._outputs: dict[int, dict] = {}  # task run id -> its output: a run doesn't change
 
-    def _get(self, path: str, **params) -> dict:
+    def get(self, path: str, **params) -> dict:
         query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
         req = urllib.request.Request(f"{self.host}{path}?{query}", headers=self.headers)
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             return json.load(resp)
+
+    def post(self, path: str, body: dict) -> dict:
+        headers = {**self.headers, "Content-Type": "application/json"}
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(f"{self.host}{path}", data=data, headers=headers)
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            return json.loads(resp.read() or b"{}")
+
+
+class SdkApi:
+    """The same, through the Databricks SDK's client: in a notebook or job it signs in as
+    whoever runs it, so no token is set up (``WorkspaceClient()``)."""
+
+    def __init__(self, client=None) -> None:
+        if client is None:
+            from databricks.sdk import WorkspaceClient  # on every Databricks runtime
+
+            client = WorkspaceClient()
+        self.client = client
+
+    def get(self, path: str, **params) -> dict:
+        query = {k: v for k, v in params.items() if v is not None}
+        return self.client.api_client.do("GET", path, query=query) or {}
+
+    def post(self, path: str, body: dict) -> dict:
+        return self.client.api_client.do("POST", path, body=body) or {}
+
+
+class DatabricksBackend(LogBackend):
+    name = "databricks"
+
+    def __init__(self, host: str | None = None, token: str | None = None,
+                 jobs: list[str] | None = None, timeout: float = 30.0, *,
+                 api=None) -> None:  # fmt: skip
+        self.api = api or Api(host or "", token, timeout)
+        self.jobs = list(jobs or [])
+        self._outputs: dict[int, dict] = {}  # task run id -> its output: a run doesn't change
+
+    def _get(self, path: str, **params) -> dict:
+        return self.api.get(path, **params)
 
     def job_ids(self) -> list[int | None]:
         """The ids of the jobs named in ``jobs``, or ``[None]`` for every job."""

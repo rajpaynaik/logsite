@@ -51,6 +51,8 @@ comes from. No SDK, nothing to add to your services.
 - [**Claude and other AI assistants**](mcp.md): ask about production in plain English.
 - [**Claude Code**](claude-code.md): the same, inside Claude Code.
 - [**GitHub Action**](github-action.md): a pull request for each new production error.
+- [**Databricks**](databricks.md): a failed job explains itself on its run's page, set up
+  from a notebook, no command line.
 
 ## Your log store
 
