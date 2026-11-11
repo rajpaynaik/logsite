@@ -9,7 +9,7 @@ comes from. No SDK, nothing to add to your services.
 
 - [**Errors**](errors.md): thousands of errors grouped into a few causes, each with the
   line that raised it and the line that logged it.
-- [**Incidents**](errors.md#incidents): the errors behind an outage, linked to the deploy and
+- [**Incidents**](incidents.md): the errors behind an outage, linked to the deploy and
   the commit that likely caused it.
 - [**Following a request**](timeline.md): every log line of one request, across services, in
   order.
@@ -46,8 +46,11 @@ comes from. No SDK, nothing to add to your services.
 ## Where you work
 
 - [**VS Code**](vscode.md): production counts, cost, latency and errors above each line of code.
-- [**Grafana**](grafana.md): dashboards for cost and errors, error summaries in alerts, and
-  rules that drop noisy logs before you pay for them.
+- [**Grafana**](grafana.md): dashboards for what each line of code costs and which are
+  failing.
+- [**Alerts**](alerts.md): when a Grafana alert fires, Slack gets the error, the line of
+  code and the likely cause with it.
+- [**Alloy rules**](alloy.md): drop or sample noisy log lines before you pay to store them.
 - [**Claude and other AI assistants**](mcp.md): ask about production in plain English.
 - [**Claude Code**](claude-code.md): the same, inside Claude Code.
 - [**GitHub Action**](github-action.md): a pull request for each new production error.
@@ -66,5 +69,6 @@ logsite reads a log file, [Loki](configuration.md), OpenSearch, CloudWatch,
 - [Commands](commands.md): every command, one line each.
 - [Configuration](configuration.md): every setting in `logsite.toml`.
 - [How it works](how-it-works.md): how logsite gets from a log line to your code.
+- [Benchmark](benchmark.md): known incidents, and what logsite answers for each.
 - [Data flow and security](security.md): what logsite reads, stores and sends.
 - [Roadmap](roadmap.md): what's coming next.

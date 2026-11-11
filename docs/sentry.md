@@ -6,7 +6,7 @@ through what it does for errors from logs, against the code at your commit:
 
 - [`logsite repro`](repro.md): a failing test for a Sentry error, checked to fail the same way
 - the [GitHub Action](github-action.md): a draft pull request with that test for each new error
-- [incidents](errors.md) linked with the deploy and commits before them, and [history](history.md)
+- [incidents](incidents.md) linked with the deploy and commits before them, and [history](history.md)
 - `logsite about`, the editor and the MCP server: what production says about a line, before you change it
 
 ## Set it up

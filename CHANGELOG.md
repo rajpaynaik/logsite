@@ -6,6 +6,13 @@ The VS Code extension has [its own changelog](editors/vscode/CHANGELOG.md).
 
 ## 0.9.0 (2026-11-10)
 
+- **Docs, simpler.** A [docs home](docs/README.md) by what you want to do, and
+  [Get started](docs/get-started.md). Long pages are split: [errors](docs/errors.md),
+  [incidents](docs/incidents.md) and the [benchmark](docs/benchmark.md); the
+  [Grafana dashboards](docs/grafana.md), [alerts](docs/alerts.md) and
+  [Alloy rules](docs/alloy.md).
+- The release signs the Grafana plugin when `GRAFANA_ACCESS_POLICY_TOKEN` is set, and shows
+  its SHA1 for grafana.com's update form.
 - **Databricks, without a command line.** Two notebooks to import
   (`integrations/databricks`): in `logsite_setup`, tick the jobs and Run all. Each gets a
   `logsite` task that runs only when another task failed, and shows on the run's page why:

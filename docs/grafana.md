@@ -1,144 +1,77 @@
-# Grafana, alerts and Alloy
+# Grafana
 
-### Dashboard: cost and errors per code line
+logsite adds three things to Grafana:
+
+- **Dashboards:** what each line of your code costs in logs, and which lines are failing.
+  This page.
+- **[Alerts that explain themselves](alerts.md):** when a Grafana alert fires, Slack gets the
+  error, the line of code and the likely cause with it.
+- **[Alloy rules](alloy.md):** drop or sample noisy log lines before you pay to store them.
+
+## The cost and errors dashboard
 
 ```bash
 logsite grafana --uid checkout-logs -o dashboard.json
 ```
 
-Import it in Grafana (Dashboards → New → Import) and pick your Loki data source. It queries
-Loki directly, so it stays live:
+In Grafana, choose **Dashboards → New → Import** and pick your Loki data source. The
+dashboard queries Loki directly, so it stays live:
 
-- **Totals**: volume, lines, estimated cost per month (the price per GB is a dashboard
-  variable you can change) and error lines.
-- **Cost by code line**: every log call, most expensive first, shown with its message
-  (`app/api.py:88  info('request %s %s')`) and linked to that line on GitHub, GitLab or
-  Bitbucket. With a release field in the records, a row is one release's log call, and its
-  message and link come from the commit that release ran (see below).
-- **Errors by code line**, compared with the same range just before; the **loudest log
-  calls** over time; **recent errors**.
+- **Totals:** volume, lines, estimated cost per month and error lines. The price per GB is
+  a variable you can change.
+- **Cost by code line:** every log call, most expensive first, with its message
+  (`app/api.py:88  info('request %s %s')`) and a link to that line on GitHub, GitLab or
+  Bitbucket.
+- **Errors by code line**, against the same range just before; the **loudest log calls**
+  over time; and **recent errors**.
 
-logsite works out the rest from the code and a sample of records: the deployed path prefix to
-strip (`/srv/` in `/srv/app/api.py`), the level field, and the link to the code host from
-the git remote. It needs records with file and line fields (as for `aggregate = true`).
-Message templates are baked in, so regenerate it when log calls change.
+logsite works out the rest from your code and a sample of records: the path prefix to strip
+(`/srv/` in `/srv/app/api.py`), the level field, and the code host from your git remote.
+Records need file and line fields. Messages are built into the dashboard, so regenerate it
+when log calls change.
 
-**Releases and deploys.** A `file:line` can be a different log call in two releases: during a
-rolling deploy, or for a range that spans one, old and new replicas both log from
-`app/api.py:42`. When the records carry their release (`release`, `service.version`,
-`version`, `git_sha`, or the field `--revision-field` names), the dashboard:
+### Releases and deploys
 
-- groups every per-line panel by release first, so two calls at one `file:line` are never
-  added together;
-- shows each release's row with the message at that line in the code it ran, and links to
-  that line at its commit (a release `1.4.0` is the git ref `1.4.0` or `v1.4.0`);
-- puts the lines of any other release, or with no release, in a **Cost by code line: unknown
-  release** table, as logged, with no message or link to guess.
+During a rolling deploy, or over a time range that spans one, old and new replicas both log
+from `app/api.py:42`, and that line can be a different log call in each release. When records
+carry their release (`release`, `service.version`, `version`, `git_sha`, or a field you name
+with `--revision-field`), the dashboard:
 
-It knows the releases in a sample of recent records (up to 10) when it's made: regenerate it
-after a release. Without a release field, messages and links are the current commit's, and
-`logsite grafana` says so; `--ref` pins every link to one commit.
+- groups every per-line panel by release first, so two different calls at one `file:line`
+  are never added together;
+- shows each release's row with the message from the code that release ran, linked to that
+  line at its commit (release `1.4.0` is the git ref `1.4.0` or `v1.4.0`);
+- puts lines from any other release, or with no release, in a separate **Cost by code line:
+  unknown release** table, with no message or link to guess.
 
-`logsite grafana --generic` writes a version for any project, with the selector, fields and
-code link as dashboard variables instead; it's in
-[`integrations/grafana`](../integrations/grafana) for the grafana.com catalog.
+It knows the releases in a sample of recent records (up to 10), so regenerate it after a
+release. Without a release field, messages and links come from the current commit, and
+`logsite grafana` warns you. `--ref` pins every link to one commit.
 
-### Alerts: the error summary in the notification
+### For any project
 
-When a Grafana alert fires, `logsite alert-server` sends an evidence report with it: what
-failed, the exact error as it was logged, the line of code that raised it, what followed, and
-the likely cause with the evidence for it and what to check first. Whoever is on call sees it
-in Slack next to the page, without opening a single stack trace:
+`logsite grafana --generic` writes a version with the selector, fields and code link as
+dashboard variables. It's in [`integrations/grafana`](../integrations/grafana), for the
+grafana.com catalog.
 
-```
-🔴 xyz job failed: the shipping-label job is failing (firing since 01:55 UTC)
-732 error(s) in 2 group(s), 2 new · Open in Grafana · Silence
-
-1. What failed: java.lang.IllegalStateException: Shipping label request failed for shipment 88121
-    366 error(s) since 01:52 UTC (732 with what followed) · back after a fix
-    Root cause: java.net.SocketTimeoutException: Read timed out (thrown in java.net)
-    Raised at: src/main/java/com/example/shipping/CarrierApiClient.java:58 in requestLabel()  `return restTemplate.postForObject(carrierUrl + "/labels", request, LabelResponse.class);`
-    From the log (latest, 02:52 UTC):
-      2026-10-19 02:52:00 ERROR [shipping] [traceId=tr-00480] c.e.s.ShipmentEventListener : label failed
-      java.lang.IllegalStateException: Shipping label request failed for shipment 88121
-          at com.example.shipping.CarrierApiClient.requestLabel(CarrierApiClient.java:58)
-      Caused by: org.springframework.web.client.ResourceAccessException: I/O error on POST request for "https://carrier.example.com/labels": Read timed out
-      Caused by: java.net.SocketTimeoutException: Read timed out
-    Then: Record processing failed topic=shipment-events offset=<n> · 366 — same requests (366 shared trace id(s))
-    Seen before: 2026-08-05 → 2026-09-03
-    Likely cause (strong evidence): The change in v1.4: 60b67447 Lower carrier read timeout to 3s
-      • v1.4 was deployed 4 min before the errors started
-      • 60b67447 changed the lines around src/main/java/com/example/shipping/CarrierApiClient.java:58, where it's raised
-      • the error wasn't there in the window before
-      • it was fixed before (an earlier release) and came back: the change may undo that fix
-    Or: A dependency failing: SocketTimeoutException from the service requestLabel() calls
-    Check first: read `git show 60b67447 -- src/main/java/com/example/shipping/CarrierApiClient.java`; revert it (or roll back) in staging and see whether the error stops
-    Example run: `logsite trace tr-00480`
-```
-
-That's a dry run of `alert-server` with a real Grafana 13 webhook payload, on the shipping
-example (a fix in v1.3, undone in v1.4). In Slack the log excerpt is a code block, the code
-location links to the line in your repository, and the labels are bold.
-
-- **From the log** is the latest occurrence as logged: the message, each exception in the
-  chain, and the frame of yours where it was raised; library frames are left out and values
-  are masked like everywhere else.
-- **Likely cause** comes from the same ranking as `logsite investigate --report` (a change,
-  traffic, or a failing dependency); when the evidence doesn't point anywhere, it says
-  "unclear" instead of guessing.
-- **One incident, many alerts:** when several alerts fire for the same cause within
-  `dedupe_minutes` (30), the first gets the report and each of the others one line, "same
-  cause as … · now also in checkout-service · 8 alerts for this incident so far".
-- Up to two incidents per alert; other failing groups are listed under **Also failing**.
-  Without an incident (only steady errors), the message lists the top groups instead.
-- With PagerDuty, add the webhook next to PagerDuty in the same contact point: the page goes
-  out as usual and the report lands in Slack at the same time.
-
-1. Run it next to your checkout (it reads the code to tell your frames from library ones):
-
-   ```bash
-   export LOGSITE_ALERT_TOKEN=$(openssl rand -hex 16) SLACK_WEBHOOK_URL=https://hooks.slack.com/...
-   logsite alert-server --host 0.0.0.0 --port 8085
-   ```
-
-2. In Grafana: **Alerting → Contact points → Add → Webhook**, URL
-   `http://<logsite host>:8085/grafana/alert`, **Authorization header** scheme `Bearer`,
-   credentials = the token. Route your alerts' notification policy to it (it can sit next to
-   your existing Slack / PagerDuty contact point).
-
-For each firing alert, logsite summarizes from `lookback_minutes` before it started until now,
-compared with the same span just before, narrowed to the alerted service with the alert's
-labels (`selector_labels`, for Loki). It posts to `slack_webhook` and/or `webhook` (the
-summary as JSON) and returns it in the response. `GET /errors?from=&to=` serves the same
-summary for any range (Grafana's `${__from}` / `${__to}` work), for an "Error groups" panel.
-
-```toml
-[alerts]
-slack_webhook_env = "SLACK_WEBHOOK_URL"
-# webhook = "https://example.com/hooks/logsite"   # gets {alert, labels, text, summary}
-token_env = "LOGSITE_ALERT_TOKEN"   # required unless it only listens on localhost
-lookback_minutes = 30
-top = 3                             # groups per alert
-selector_labels = ["service_name"]  # alert labels that narrow the Loki selector
-dedupe_minutes = 30                 # alerts with the same cause: one report, then one line each
-```
-
-#### The logsite data source (Grafana plugin)
+## The logsite data source (Grafana plugin)
 
 The [logsite data source plugin](../integrations/grafana-plugin/) puts logsite under
-**Connections** in Grafana, like Loki: you set the alert-server's URL and token once, and
-panels pick what to show from a list. It replaces the Infinity setup below, and it comes with
-a **logsite errors** dashboard (the data source's **Dashboards** tab):
+**Connections** in Grafana, like Loki. You set `logsite alert-server`'s URL and token once,
+then panels pick what to show from a list:
 
-- **Summary**: errors, groups, new groups and incidents, for stat panels
-- **Error groups**: the table below, with the code links and the history columns
-- **Incidents**: the cause first, the deploy, the suspect commit, the most likely
-  explanation and what to check first
-- **Ranked explanations**: each incident's explanations with the evidence for and against
-- **History events**: first seen / gone / came back, as annotations
+| | Shows |
+|---|---|
+| **Summary** | Errors, groups, new groups and incidents, for stat panels |
+| **Error groups** | Errors grouped by cause, with code links and history |
+| **Incidents** | The cause, the deploy, the suspect commit, and what to check first |
+| **Ranked explanations** | Each incident's explanations, with the evidence for and against |
+| **History events** | First seen, gone and came back, as annotations |
 
-Grafana keeps the token on its server and adds it to each request; the browser never sees
-it. Until the plugin is in the Grafana catalog, install it from the release's
+It comes with a **logsite errors** dashboard, on the data source's **Dashboards** tab.
+Grafana keeps the token on its server, so the browser never sees it.
+
+**Installing it:** until the plugin is in Grafana's catalog, unzip the release's
 `rajpaynaik-logsite-datasource-<version>.zip` into Grafana's plugins directory and allow it
 unsigned:
 
@@ -147,14 +80,13 @@ unsigned:
 allow_loading_unsigned_plugins = rajpaynaik-logsite-datasource
 ```
 
-Grafana Cloud and other managed Grafana instances load only plugins signed by Grafana Labs,
-so there it needs the catalog version.
+Grafana Cloud and other managed Grafana load only plugins signed by Grafana Labs, so they
+need the catalog version.
 
-#### The same summary on the dashboard
+## Error groups on the cost dashboard
 
-`logsite grafana --error-groups http://<logsite host>:8085` adds an **Error groups** panel at
-the top of the dashboard: errors grouped by cause for the dashboard's time range, so whoever
-opens Grafana from the alert sees it first.
+`logsite grafana --error-groups http://<logsite host>:8085` adds an **Error groups** panel
+at the top of the dashboard: errors grouped by cause for the dashboard's time range.
 
 | Trend | Count | Error | Root cause | Raised at | Code | Logged at |
 |---|---|---|---|---|---|---|
@@ -162,9 +94,9 @@ opens Grafana from the alert sees it first.
 | new | 640 | Retry failed for order ORD-&lt;n&gt; | | | | OrderService.java:170 |
 
 "Raised at" and "Logged at" link to the code. The panel reads `logsite alert-server`'s
-`/errors` through the free [Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/)
-data source plugin. Install it, then add an Infinity data source with the token as a header,
-so it never appears in a dashboard:
+`/errors` through the free
+[Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/) data
+source. Add one with the token as a header, so it never appears in a dashboard:
 
 ```yaml
 # provisioning/datasources/logsite.yaml (or the same fields in the UI)
@@ -179,97 +111,21 @@ datasources:
       httpHeaderValue1: Bearer <LOGSITE_ALERT_TOKEN>
 ```
 
-Pick it in the dashboard's **logsite (Infinity)** variable. The panel is opt-in, so the
-catalog dashboard doesn't require the plugin.
+Then pick it in the dashboard's **logsite (Infinity)** variable. The panel is optional, so
+the catalog dashboard doesn't need the plugin.
 
-#### History in the dashboard
+### History in the dashboard
 
-With the [history store](history.md), the panel also says which errors are back after a fix
-and since when each one has been around:
+With the [history store](history.md), the panel also shows which errors came back after a
+fix, and how long each has been around:
 
 | Trend | Count | Error | History | … | First seen | Fixed before by |
 |---|---|---|---|---|---|---|
 | back | 660 | IllegalStateException: Shipping label request failed | ↩ back, gone after v1.3 | … | 2026-08-03 | 41bdce40 Retry carrier timeouts with backoff (v1.3) |
 | new | 40 | KeyError: 'zone' | first time ever | … | 2026-10-18 | |
 
-The dashboard also gets a **logsite history** annotation (toggle at the top): red markers
-on the time graphs where an error was first seen, where it went away and where it came back.
-Hovering one shows, for example, *came back: IllegalStateException: Shipping label request
-failed · was gone 2026-09-03, fixed by 41bdce40 Retry carrier timeouts with backoff*. It
-reads `/history/events` and uses your Infinity data source (Grafana doesn't run annotations
-through a data source variable; with several Infinity data sources, pick one in the
-dashboard's annotation settings).
-
-#### Running it for a team: one container
-
-`alert-server` serves the panel, the annotations and the alert messages; with
-`--sync-every 15m` it also keeps the history filled. In a container, with your repository
-mounted (for code lines and the commits that fixed an error) and the history on a volume:
-
-```bash
-docker build -t logsite integrations/docker
-docker run -d -p 8085:8085 \
-  -v "$PWD:/repo:ro" -v logsite-history:/data \
-  -e LOGSITE_ALERT_TOKEN=<shared secret> logsite
-```
-
-or `docker compose -f integrations/docker/compose.yaml up -d` from the repository. The image
-runs `logsite alert-server --host 0.0.0.0 --sync-every 15m` with `LOGSITE_HISTORY=/data/history.db`;
-backfill once with `docker exec <container> logsite --config-dir /repo sync --backfill 30d`.
-
-### Alloy rules: drop or sample noisy lines before they're shipped
-
-```bash
-logsite pipeline --max-per-window 100000 --drop-level debug -o logsite.alloy
-```
-
-writes a Grafana Alloy `loki.process` component with one rule per log call, sized from real
-volume and priced like `logsite cost`:
-
-```alloy
-  // app/api.py:88  info('request %s %s')
-  // keep 1% (9,100,000 per 24h, over 100,000): saves 3.4 TB/month ($1,706)
-  stage.match {
-    selector = "{logsite_site=~\"(.*/)?app/api[.]py:88\"} !~ \"(?i)(error|exception|traceback|critical|fatal)\""
-
-    stage.sampling {
-      rate                = 0.011
-      drop_counter_reason = "logsite"
-    }
-  }
-```
-
-- Rules come from `[pipeline]` (`drop`, `sample`) and from volume: lines above
-  `max_per_window` are sampled down to it, and lines at a `drop_levels` level are dropped.
-- **Only `trace`, `debug`, `info`, `notice` and `success` log calls can get a rule.** The
-  level written in the code is checked before anything is scored or sorted, and nothing in
-  the config can override it: warning and error lines, a level set at runtime
-  (`log.log(level, …)`) and unknown levels are skipped, each with the reason.
-- Every rule also skips lines that look like errors (`error`, `exception`, `traceback`,
-  `critical`, `fatal`), for a call that logs an error at runtime anyway.
-- Lines are matched by the file and line fields records carry, through a temporary label
-  that's removed before anything reaches Loki. Records without them are matched by message
-  (`match = "template"`, with your stream `selector`); messages with too little fixed text
-  get no rule.
-- logsite only writes the file. It never applies rules to Alloy, and the MCP server has no
-  tool that writes config: review the file, then deploy it yourself.
-- Wire it in with `forward_to = [loki.process.logsite.receiver]` in your source; logs go on
-  to `forward_to` in `[pipeline]` (default `loki.write.default.receiver`).
-
-Checked against Alloy 1.20 and Loki: of 2,530 lines, the noisy line was kept at 1 in 10, the
-debug line dropped, and all 30 error lines kept.
-
-`--multiline` also joins each stack trace into one entry before the rules run, so Loki
-(and logsite) see whole exceptions: see [stack traces split into lines](errors.md#stack-traces-split-into-lines-loki).
-
-```toml
-[pipeline]
-drop = ["app/health.py:12"]
-sample = { "app/api.py:88" = 0.01 }   # keep 1 in 100
-max_per_window = 100000
-drop_levels = ["debug"]
-multiline = true                    # join stack traces into one entry (--multiline)
-# match = "auto"                    # location | template
-# selector = '{app="checkout"}'     # template rules: the stream as Alloy sees it
-# forward_to = "loki.write.default.receiver"
-```
+A **logsite history** annotation (toggle it at the top) puts red markers on the time graphs
+where an error was first seen, went away, and came back. Hovering one shows, for example,
+*came back: IllegalStateException: Shipping label request failed · was gone 2026-09-03,
+fixed by 41bdce40 Retry carrier timeouts with backoff*. It reads `/history/events` through
+your Infinity data source. With several, pick one in the dashboard's annotation settings.
