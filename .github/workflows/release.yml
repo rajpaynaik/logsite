@@ -4,6 +4,8 @@
 # - PyPI: add a trusted publisher for this repo, workflow "release.yml", environment "pypi".
 # - VS Code Marketplace: repository secret VSCE_PAT (Azure DevOps token, Marketplace: Manage).
 # - Open VSX (optional, for VSCodium / Cursor / Windsurf): repository secret OVSX_PAT.
+# - Grafana plugin signature (optional, for the plugin catalog): repository secret
+#   GRAFANA_ACCESS_POLICY_TOKEN, an access policy token with the plugins:write scope.
 # A store whose credentials aren't set is skipped; nothing else is affected.
 name: Release
 on:
@@ -48,10 +50,20 @@ jobs:
         run: npm ci && npx vsce package -o ../../dist/
       - name: Grafana plugin (versioned on its own, in its package.json)
         working-directory: integrations/grafana-plugin
+        env:
+          GRAFANA_ACCESS_POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
         run: |
           npm ci && npm run build
+          if [ -n "$GRAFANA_ACCESS_POLICY_TOKEN" ]; then
+            npx --yes @grafana/sign-plugin@latest   # writes dist/MANIFEST.txt
+          else
+            echo "::notice::GRAFANA_ACCESS_POLICY_TOKEN isn't set: the plugin zip is unsigned"
+          fi
           id=rajpaynaik-logsite-datasource
-          mv dist "$id" && zip -qr "../../dist/$id-$(node -p "require('./package.json').version").zip" "$id"
+          zip="$id-$(node -p "require('./package.json').version").zip"
+          mv dist "$id" && zip -qr "../../dist/$zip" "$id"
+          # what grafana.com's "Submit update" form asks for
+          echo "Grafana plugin \`$zip\` SHA1: \`$(sha1sum "../../dist/$zip" | cut -d' ' -f1)\`" >> "$GITHUB_STEP_SUMMARY"
       - name: Install the wheel, for the SBOM
         run: python -m venv /tmp/logsite-env && /tmp/logsite-env/bin/pip install dist/*.whl
       - name: SBOM of the package and its dependencies

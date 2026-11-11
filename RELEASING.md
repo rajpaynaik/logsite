@@ -24,6 +24,18 @@ runs [`release.yml`](.github/workflows/release.yml), which does all of it.
    - Sign in at <https://open-vsx.org>, sign the publisher agreement, create the namespace
      `rajpaynaik` (`npx ovsx create-namespace rajpaynaik -p <token>`), and an access token.
    - Save it as the repository secret `OVSX_PAT`.
+4. **Grafana plugin signature** (optional, for the Grafana plugin catalog):
+   - On grafana.com: **My Account → Access Policies → Create access policy**, realm your
+     org, scope **plugins:write**; add a token to it.
+   - Save it as the repository secret `GRAFANA_ACCESS_POLICY_TOKEN`. Without it the plugin
+     zip is built unsigned.
+
+## A Grafana plugin update
+
+The plugin has its own version, in `integrations/grafana-plugin/package.json`. To send
+Grafana an update: bump it (and its CHANGELOG), cut a release, then on grafana.com **My
+Plugins → Submit update** with the zip's URL from the GitHub release, the source URL, and the
+SHA1 the release run prints in its summary.
 
 A store without credentials is skipped with a warning; the rest of the release still runs.
 
